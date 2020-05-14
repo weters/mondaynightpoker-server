@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mondaynightpoker-server
+  labels:
+    app: mondaynightpoker-server
+spec:
+  selector:
+    matchLabels:
+      app: mondaynightpoker-server
+  template:
+    metadata:
+      labels:
+        app: mondaynightpoker-server
+    spec:
+      imagePullSecrets:
+        - name: github
+      containers:
+        - name: mondaynightpoker-server
+          image: docker.pkg.github.com/weters/mondaynightpoker-server/mondaynightpoker-server:latest
+          readinessProbe:
+            httpGet:
+              port: 5000
+              path: /health
+          livenessProbe:
+            httpGet:
+              port: 5000
+              path: /health
+          volumeMounts:
+            - mountPath: /app/.keys
+              name: keys
+          env:
+            - name: PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mondaynightpoker-server-config
+                  key: pg_dsn
+
+      volumes:
+        - name: keys
+          secret:
+            secretName: mondaynightpoker-server-keys
