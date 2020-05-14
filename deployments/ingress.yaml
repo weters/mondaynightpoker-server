@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: mondaynightpoker-server
+  labels:
+    app: mondaynightpoker-server
+spec:
+  tls:
+    - hosts:
+        - api.monday-night.poker
+      secretName: tls-mondaynightpoker
+  rules:
+    - host: api.monday-night.poker
+      http:
+        paths:
+          - backend:
+              serviceName: mondaynightpoker-server
+              servicePort: 5000

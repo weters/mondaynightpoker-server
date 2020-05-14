@@ -1,0 +1,80 @@
+on:
+  - push
+env:
+  IMAGE: docker.pkg.github.com/weters/mondaynightpoker-server/mondaynightpoker-server
+jobs:
+  ci:
+    name: 'CI'
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: tqx2fQuHZGEtEdy58QPL
+    services:
+      postgres:
+        image: postgres:9.4
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+        with:
+          'go-version': '1.13'
+      - run: go mod download
+      - run: go run ./cmd/migrate
+        name: Run Migrations
+        env:
+          PG_DSN: postgres://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/postgres?sslmode=disable
+      - run: go test -v -covermode=atomic ./...
+        name: Run Tests
+        env:
+          PG_DSN: postgres://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/postgres?sslmode=disable
+  cd:
+    name: 'CD'
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Fetch Tags
+        run: git fetch --tags
+
+      - name: Set Version
+        run: echo "::set-env name=VERSION::$(git describe --always)"
+
+      - name: Docker Log In
+        run:  echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+
+      - name: Docker Build
+        run: |
+          docker build \
+            --build-arg version=$VERSION \
+            -t $IMAGE:$VERSION \
+            .
+          docker tag $IMAGE:$VERSION $IMAGE:latest
+
+      - name: Docker Push
+        run: |
+          docker push $IMAGE:$VERSION
+          docker push $IMAGE:latest
+
+      - name: Kubernetes Deploy
+        uses: actions-hub/kubectl@master
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        with:
+          args: set image deploy mondaynightpoker-server mondaynightpoker-server=${{ env.IMAGE }}:${{ env.VERSION }} --record
+
+      - name: Kubernetes Rollout Status
+        uses: actions-hub/kubectl@master
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        with:
+          args: rollout status deploy mondaynightpoker-server
