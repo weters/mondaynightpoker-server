@@ -30,6 +30,9 @@ type Dealer struct {
 	execInRunLoopWithClients chan func([]*Client)
 	stateChanged             chan state
 	close                    chan bool
+
+	// note: this must only be manipulated within the run loop
+	logMessages []*playable.LogMessage
 }
 
 // NewDealer creates a new dealer object
@@ -75,7 +78,14 @@ func (d *Dealer) runLoop() {
 
 	log.WithField("uuid", d.table.UUID).Debug("creating dealer run loop")
 	for {
+		var logChan chan []*playable.LogMessage
+		if d.game != nil {
+			logChan = d.game.LogChan()
+		}
+
 		select {
+		case messages := <-logChan:
+			d.sendLogMessages(messages)
 		case s := <-d.stateChanged:
 			switch s {
 			case stateClientEvent:
@@ -114,6 +124,12 @@ func (d *Dealer) AddClient(client *Client) {
 
 	d.stateChanged <- stateClientEvent
 	d.execInRunLoop <- func() {
+		client.Send <- &playable.Response{
+			Key:     "allLogs",
+			Value:   "",
+			Data:    d.logMessages,
+		}
+
 		if d.game == nil {
 			return
 		}
@@ -173,6 +189,17 @@ func (d *Dealer) sendGameData() {
 		}
 
 		client.Send <- data
+	}
+}
+
+func (d *Dealer) sendLogMessages(messages []*playable.LogMessage) {
+	d.addLogMessages(messages)
+	for client := range d.clients {
+		client.Send <- &playable.Response{
+			Key:     "logs",
+			Value:   "",
+			Data:    messages,
+		}
 	}
 }
 
@@ -298,7 +325,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				return
 			}
 
-			playerTable, err  := player.GetPlayerTable(context.Background(), c.table)
+			playerTable, err := player.GetPlayerTable(context.Background(), c.table)
 			if err != nil {
 				c.Send <- newErrorResponse(msg.Context, err)
 				return

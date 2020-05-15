@@ -2,6 +2,7 @@ package bourre
 
 import (
 	"errors"
+	"mondaynightpoker-server/pkg/playable"
 )
 
 // Result contain the results from a completed game of bourré
@@ -19,6 +20,7 @@ type Result struct {
 	NewPot        int
 
 	table       string
+	logChan     chan []*playable.LogMessage
 	playerOrder map[*Player]int
 	idToPlayer  map[int64]*Player
 }
@@ -73,6 +75,7 @@ func (r *Result) NewGame() (*Game, error) {
 	g.idToPlayer = r.idToPlayer
 	g.parentResult = r
 	g.table = r.table
+	g.logChan = r.logChan
 
 	return g, nil
 }

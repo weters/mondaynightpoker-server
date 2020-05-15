@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"time"
 )
 
 const playersLimit = 8
@@ -52,6 +53,8 @@ type Game struct {
 	winningCardPlayed     *playedCard
 	roundWinnerCalculated bool
 
+	logChan chan []*playable.LogMessage
+
 	// done will be set after the game is over and the user's have stated they want to proceed
 	done bool
 }
@@ -59,6 +62,11 @@ type Game struct {
 // Name returns "bourre"
 func (g *Game) Name() string {
 	return "bourre"
+}
+
+// LogChan returns a channel for sending log messages
+func (g *Game) LogChan() chan []*playable.LogMessage {
+	return g.logChan
 }
 
 // Action performs an action
@@ -81,6 +89,12 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		if message.Cards == nil {
+			g.sendLogMessages(newLogMessage(player.PlayerID, "{} folded"))
+		} else {
+			g.sendLogMessages(newLogMessage(player.PlayerID, "{} discarded %d", len(message.Cards)))
+		}
+
 		return playable.OK(), true, nil
 	case "replaceDiscards":
 		log.Debug("replaceDiscards triggered")
@@ -88,6 +102,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		g.sendLogMessages(newLogMessage(0, "Dealer replaced discards"))
 		return playable.OK(), true, nil
 	case "playCard":
 		if len(message.Cards) != 1 {
@@ -99,6 +114,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		g.sendLogMessages(newLogMessage(player.PlayerID, "{} played the %s", message.Cards[0]))
 		return playable.OK(), true, nil
 	case "nextRound":
 		log.Debug("nextRound triggered")
@@ -106,11 +122,32 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		g.sendLogMessages(newLogMessage(0, "Next round started"))
 		return playable.OK(), true, nil
 	case "done":
 		res := g.result
 		if res == nil {
 			return nil, false, errors.New("done cannot be called yet")
+		}
+
+		messages := make([]*playable.LogMessage, 0)
+
+		if res.WinningAmount > 0 {
+			messages = append(messages, newLogMessage(res.Winners[0].PlayerID, "{} won %d¢", res.WinningAmount))
+		} else {
+			messages = append(messages, newLogMessageWithPlayers(res.Winners, "{} tied for most tricks"))
+		}
+
+		if len(res.PaidPot) > 0 {
+			messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} pays the pot of %d¢", res.OldPot))
+		}
+
+		if len(res.PaidAnte) > 0 {
+			messages = append(messages, newLogMessageWithPlayers(res.PaidAnte, "{} pays the ante of %d¢", res.Ante))
+		}
+
+		if len(res.Booted) > 0 {
+			messages = append(messages, newLogMessageWithPlayers(res.Booted, "{} was booted"))
 		}
 
 		log.Debug("done triggered")
@@ -125,12 +162,17 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 				return nil, false, err
 			}
 
+			messages = append(messages, newLogMessage(0, "Another game is required"))
+
 			*g = *game
 		} else {
 			log.Debug("game is done")
 			g.done = true
+
+			messages = append(messages, newLogMessage(0, "The game ends"))
 		}
 
+		g.sendLogMessages(messages...)
 		return playable.OK(), true, nil
 
 	default:
@@ -199,12 +241,15 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 
 	pot := opts.InitialPot
 
+	messages := make([]*playable.LogMessage, 0)
+
 	ids := make([]int64, 0, len(players))
 	playerOrder := make(map[*Player]int)
 	for order, player := range players {
 		// if initial pot is > 0, that means we are working off of a previous game. In that case,
 		// we already took care of the players who need to ante
 		if opts.InitialPot == 0 {
+			messages = append(messages, newLogMessage(player.PlayerID, "{} paid the %d¢ ante", opts.Ante))
 			pot += opts.Ante
 			player.balance -= opts.Ante
 		}
@@ -230,14 +275,20 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 		}
 	}
 
-	return &Game{
+	g := &Game{
 		deck:           d,
 		pot:            pot,
 		ante:           opts.Ante,
 		playerOrder:    playerOrder,
 		foldedPlayers:  foldedPlayersMap,
 		playerDiscards: make(map[*Player][]*deck.Card),
-	}, nil
+		logChan:        make(chan []*playable.LogMessage, 256),
+	}
+
+	messages = append(messages, newLogMessage(0, "New game of Bourré started with a pot of %d¢", pot))
+	g.sendLogMessages(messages...)
+
+	return g, nil
 }
 
 // Deal will deal five cards to each player and select the bourré card
@@ -263,10 +314,12 @@ func (g *Game) Deal() error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"game": "bourre",
-		"table": g.table,
+		"game":      "bourre",
+		"table":     g.table,
 		"trumpCard": trumpCard,
 	}).Debug("trump card")
+	
+	g.sendLogMessages(newLogMessage(0, "The trump card is %s", trumpCard))
 
 	g.trumpCard = trumpCard
 	return nil
@@ -696,6 +749,7 @@ func (g *Game) NextRound() error {
 		return ErrRoundNotOver
 	}
 
+	g.sendLogMessages(newLogMessage(g.winningCardPlayed.player.PlayerID, "{} won the trick with the %s", g.winningCardPlayed.card))
 	g.roundWinnerCalculated = false
 	g.winningCardPlayed = nil
 	g.cardsPlayed = []*playedCard{}
@@ -743,4 +797,29 @@ func (g *Game) GetCurrentTurn() *Player {
 // IsPlayersTurn returns true if the player can play a card
 func (g *Game) IsPlayersTurn(p *Player) bool {
 	return g.GetCurrentTurn() == p
+}
+
+func (g *Game) sendLogMessages(msg ...*playable.LogMessage) {
+	g.logChan <- msg
+}
+
+func newLogMessage(playerID int64, format string, a ...interface{}) *playable.LogMessage {
+	return &playable.LogMessage{
+		PlayerIDs: []int64{playerID},
+		Message:   fmt.Sprintf(format, a...),
+		Time:      time.Now(),
+	}
+}
+
+func newLogMessageWithPlayers(players []*Player, format string, a ...interface{}) *playable.LogMessage {
+	ids := make([]int64, len(players))
+	for i, player := range players {
+		ids[i] = player.PlayerID
+	}
+
+	return &playable.LogMessage{
+		PlayerIDs: ids,
+		Message:   fmt.Sprintf(format, a...),
+		Time:      time.Now(),
+	}
 }

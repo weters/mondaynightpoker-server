@@ -44,6 +44,7 @@ func TestResult_NewGame(t *testing.T) {
 		NewPot:      50,
 		playerOrder: playerOrder,
 		idToPlayer:  idToPlayer,
+		logChan:     g.logChan,
 	}
 
 	g, err = r.NewGame()
