@@ -29,9 +29,11 @@ type Playable interface {
 // LogMessage is the format a game should send log messages in
 // If PlayerID is null, assume it's a general statement, otherwise the message will be sent like "{player} did X, Y, Z"
 type LogMessage struct {
-	PlayerIDs []int64   `json:"playerIds"`
-	Message   string    `json:"message"`
-	Time      time.Time `json:"time"`
+	UUID      string       `json:"uuid"`
+	PlayerIDs []int64      `json:"playerIds"`
+	Cards     []*deck.Card `json:"cards"`
+	Message   string       `json:"message"`
+	Time      time.Time    `json:"time"`
 }
 
 // Response is a container to determine who gets the specified message

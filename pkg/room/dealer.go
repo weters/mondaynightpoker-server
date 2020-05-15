@@ -3,11 +3,13 @@ package room
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/bourre"
 	"mondaynightpoker-server/pkg/table"
 	"sync"
+	"time"
 )
 
 type state int
@@ -298,6 +300,15 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		d.execInRunLoop <- func() {
 			d.game = nil
 			d.stateChanged <- stateGameEnded
+			d.sendLogMessages([]*playable.LogMessage{
+				{
+					UUID:      uuid.New().String(),
+					PlayerIDs: []int64{c.player.ID},
+					Cards:     nil,
+					Message:   "{} ended the game early",
+					Time:      time.Now(),
+				},
+			})
 		}
 
 		c.Send <- playable.OK(msg.Context)
