@@ -3,6 +3,7 @@ package bourre
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
@@ -90,9 +91,9 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		if message.Cards == nil {
-			g.sendLogMessages(newLogMessage(player.PlayerID, "{} folded"))
+			g.sendLogMessages(newLogMessage(player.PlayerID, nil, "{} folded"))
 		} else {
-			g.sendLogMessages(newLogMessage(player.PlayerID, "{} discarded %d", len(message.Cards)))
+			g.sendLogMessages(newLogMessage(player.PlayerID, nil, "{} discarded %d", len(message.Cards)))
 		}
 
 		return playable.OK(), true, nil
@@ -102,7 +103,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
-		g.sendLogMessages(newLogMessage(0, "Dealer replaced discards"))
+		g.sendLogMessages(newLogMessage(0, nil, "Dealer replaced discards"))
 		return playable.OK(), true, nil
 	case "playCard":
 		if len(message.Cards) != 1 {
@@ -114,7 +115,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
-		g.sendLogMessages(newLogMessage(player.PlayerID, "{} played the %s", message.Cards[0]))
+		g.sendLogMessages(newLogMessage(player.PlayerID, message.Cards[0], "{} played a card"))
 		return playable.OK(), true, nil
 	case "nextRound":
 		log.Debug("nextRound triggered")
@@ -122,7 +123,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
-		g.sendLogMessages(newLogMessage(0, "Next round started"))
+		g.sendLogMessages(newLogMessage(0, nil, "Next round started"))
 		return playable.OK(), true, nil
 	case "done":
 		res := g.result
@@ -133,7 +134,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		messages := make([]*playable.LogMessage, 0)
 
 		if res.WinningAmount > 0 {
-			messages = append(messages, newLogMessage(res.Winners[0].PlayerID, "{} won %d¢", res.WinningAmount))
+			messages = append(messages, newLogMessage(res.Winners[0].PlayerID, nil, "{} won %d¢", res.WinningAmount))
 		} else {
 			messages = append(messages, newLogMessageWithPlayers(res.Winners, "{} tied for most tricks"))
 		}
@@ -162,14 +163,14 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 				return nil, false, err
 			}
 
-			messages = append(messages, newLogMessage(0, "Another game is required"))
+			messages = append(messages, newLogMessage(0, nil, "Another game is required"))
 
 			*g = *game
 		} else {
 			log.Debug("game is done")
 			g.done = true
 
-			messages = append(messages, newLogMessage(0, "The game ends"))
+			messages = append(messages, newLogMessage(0, nil, "The game ends"))
 		}
 
 		g.sendLogMessages(messages...)
@@ -249,7 +250,7 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 		// if initial pot is > 0, that means we are working off of a previous game. In that case,
 		// we already took care of the players who need to ante
 		if opts.InitialPot == 0 {
-			messages = append(messages, newLogMessage(player.PlayerID, "{} paid the %d¢ ante", opts.Ante))
+			messages = append(messages, newLogMessage(player.PlayerID, nil, "{} paid the %d¢ ante", opts.Ante))
 			pot += opts.Ante
 			player.balance -= opts.Ante
 		}
@@ -285,7 +286,7 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 		logChan:        make(chan []*playable.LogMessage, 256),
 	}
 
-	messages = append(messages, newLogMessage(0, "New game of Bourré started with a pot of %d¢", pot))
+	messages = append(messages, newLogMessage(0, nil, "New game of Bourré started with a pot of %d¢", pot))
 	g.sendLogMessages(messages...)
 
 	return g, nil
@@ -318,8 +319,8 @@ func (g *Game) Deal() error {
 		"table":     g.table,
 		"trumpCard": trumpCard,
 	}).Debug("trump card")
-	
-	g.sendLogMessages(newLogMessage(0, "The trump card is %s", trumpCard))
+
+	g.sendLogMessages(newLogMessage(0, trumpCard, "The trump card has been selected"))
 
 	g.trumpCard = trumpCard
 	return nil
@@ -749,7 +750,7 @@ func (g *Game) NextRound() error {
 		return ErrRoundNotOver
 	}
 
-	g.sendLogMessages(newLogMessage(g.winningCardPlayed.player.PlayerID, "{} won the trick with the %s", g.winningCardPlayed.card))
+	g.sendLogMessages(newLogMessage(g.winningCardPlayed.player.PlayerID, g.winningCardPlayed.card, "{} won the trick"))
 	g.roundWinnerCalculated = false
 	g.winningCardPlayed = nil
 	g.cardsPlayed = []*playedCard{}
@@ -803,9 +804,15 @@ func (g *Game) sendLogMessages(msg ...*playable.LogMessage) {
 	g.logChan <- msg
 }
 
-func newLogMessage(playerID int64, format string, a ...interface{}) *playable.LogMessage {
+func newLogMessage(playerID int64, card *deck.Card, format string, a ...interface{}) *playable.LogMessage {
+	var cards []*deck.Card
+	if card != nil {
+		cards = append(cards, card)
+	}
 	return &playable.LogMessage{
+		UUID:      uuid.New().String(),
 		PlayerIDs: []int64{playerID},
+		Cards:     cards,
 		Message:   fmt.Sprintf(format, a...),
 		Time:      time.Now(),
 	}
@@ -818,6 +825,7 @@ func newLogMessageWithPlayers(players []*Player, format string, a ...interface{}
 	}
 
 	return &playable.LogMessage{
+		UUID:      uuid.New().String(),
 		PlayerIDs: ids,
 		Message:   fmt.Sprintf(format, a...),
 		Time:      time.Now(),
