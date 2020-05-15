@@ -96,11 +96,18 @@ func (t *Table) Reload(ctx context.Context) error {
 	return nil
 }
 
-// GetPlayersShifted returns all the players at the table with the players shifted by the number of games
-func (t *Table) GetPlayersShifted(ctx context.Context) ([]*PlayerTable, error) {
+// GetActivePlayersShifted returns all the active players at the table with the players shifted by the number of games
+func (t *Table) GetActivePlayersShifted(ctx context.Context) ([]*PlayerTable, error) {
 	players, err := t.GetPlayers(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	activePlayers := make([]*PlayerTable, 0, len(players))
+	for _, player := range players {
+		if player.Active {
+			activePlayers = append(activePlayers, player)
+		}
 	}
 
 	count, err := t.GetGamesCount(ctx)
@@ -108,13 +115,13 @@ func (t *Table) GetPlayersShifted(ctx context.Context) ([]*PlayerTable, error) {
 		return nil, err
 	}
 
-	offset := int(count % int64(len(players)))
+	offset := int(count % int64(len(activePlayers)))
 	if offset == 0 {
 		return players, nil
 	}
 
-	tail := players[offset:]
-	head := players[:offset]
+	tail := activePlayers[offset:]
+	head := activePlayers[:offset]
 	return append(tail, head...), nil
 }
 
