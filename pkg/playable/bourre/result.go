@@ -1,7 +1,6 @@
 package bourre
 
 import (
-	"errors"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -29,9 +28,6 @@ type Result struct {
 func (r *Result) ShouldContinue() bool {
 	return r.NewPot > 0
 }
-
-// ErrCannotCreateGame happens when you try to create a new game from a result when there's no pot
-var ErrCannotCreateGame = errors.New("cannot create a new game from an existing game")
 
 // NewGame can be called if a bourré round ends and there's still a live pot
 func (r *Result) NewGame() (*Game, error) {

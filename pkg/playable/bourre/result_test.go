@@ -2,7 +2,6 @@ package bourre
 
 import (
 	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/playable"
 	"testing"
 )
 
@@ -45,7 +44,6 @@ func TestResult_NewGame(t *testing.T) {
 		NewPot:      50,
 		playerOrder: playerOrder,
 		idToPlayer:  idToPlayer,
-		logChan: make(chan []*playable.LogMessage, 256),
 	}
 
 	g, err = r.NewGame()

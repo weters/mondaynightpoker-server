@@ -13,8 +13,8 @@ func TestPlayer_PlayCard(t *testing.T) {
 		hand: cardsFromString("2c,3c,4c,5c"),
 	}
 
-	assert.Equal(t, ErrCardNotInPlayersHand, p.PlayCard(cardFromString("8c")))
-	assert.NoError(t, p.PlayCard(cardFromString("3c")))
+	assert.Equal(t, ErrCardNotInPlayersHand, p.playerDidPlayCard(cardFromString("8c")))
+	assert.NoError(t, p.playerDidPlayCard(cardFromString("3c")))
 	assert.Equal(t, "2c,4c,5c", cardsToString(p.hand))
 }
 
