@@ -1,6 +1,9 @@
 package playable
 
-import "mondaynightpoker-server/pkg/deck"
+import (
+	"mondaynightpoker-server/pkg/deck"
+	"time"
+)
 
 // Playable is a game that can be played
 type Playable interface {
@@ -18,6 +21,17 @@ type Playable interface {
 
 	// Name returns the name of the game
 	Name() string
+
+	// LogChan should return a channel that a game will send log messages to
+	LogChan() chan []*LogMessage
+}
+
+// LogMessage is the format a game should send log messages in
+// If PlayerID is null, assume it's a general statement, otherwise the message will be sent like "{player} did X, Y, Z"
+type LogMessage struct {
+	PlayerIDs []int64   `json:"playerIds"`
+	Message   string    `json:"message"`
+	Time      time.Time `json:"time"`
 }
 
 // Response is a container to determine who gets the specified message
@@ -32,11 +46,11 @@ type Response struct {
 // OK returns a generic success response
 func OK(ctx ...string) *Response {
 	res := &Response{
-		Key:     "status",
-		Value:   "OK",
+		Key:   "status",
+		Value: "OK",
 	}
 
-	if len(ctx) == 1{
+	if len(ctx) == 1 {
 		res.Context = ctx[0]
 	}
 
