@@ -3,12 +3,12 @@ package mux
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 )
@@ -27,11 +27,21 @@ func Test_authRouter(t *testing.T) {
 	var errObj errorResponse
 	assertGet(t, ts, "/test", &errObj, 401)
 	assert.Equal(t, "Unauthorized", errObj.Message)
+	
+	// test bad user ID
+	token, _ := jwt.Sign(0)
+	errObj = errorResponse{}
+	assertGet(t, ts, "/test", &errObj, 401, token)
+	assert.Equal(t, "Unauthorized", errObj.Message)
 
-	player, _ := table.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
-	token, _ := jwt.Sign(player.ID)
+	// test bad JWT
+	errObj = errorResponse{}
+	assertGet(t, ts, "/test", &errObj, 401, "foobar")
+	assert.Equal(t, "Unauthorized", errObj.Message)
 
 	// test using auth header
+	player, _ := table.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
+	token, _ = jwt.Sign(player.ID)
 	var str string
 	resp := assertGet(t, ts, "/test", &str, 200, token)
 	assert.Equal(t, "OK", str)
