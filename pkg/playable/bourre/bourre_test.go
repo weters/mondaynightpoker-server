@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
 	"regexp"
 	"strconv"
 	"strings"
@@ -547,6 +548,7 @@ func setupGame(trump string, playerHands []string) (*Game, []*Player) {
 		trumpCard:      trumpCard,
 		playerDiscards: make(map[*Player][]*deck.Card),
 		foldedPlayers: make(map[*Player]bool),
+		logChan: make(chan []*playable.LogMessage, 256),
 	}, players
 }
 
