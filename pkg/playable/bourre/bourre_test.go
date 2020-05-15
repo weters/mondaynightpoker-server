@@ -5,7 +5,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"mondaynightpoker-server/pkg/deck"
-	"mondaynightpoker-server/pkg/playable"
 	"regexp"
 	"strconv"
 	"strings"
@@ -69,33 +68,33 @@ func TestGameLogic(t *testing.T) {
 
 	game.roundNo++ // bypass trade-in round
 
-	assert.NoError(t, game.PlayCard(players[0], players[0].hand[0]))                  // 10 of hearts
-	assert.Equal(t, ErrIsNotPlayersTurn, game.PlayCard(players[0], players[0].hand[0])) // 10 of hearts
+	assert.NoError(t, game.playerDidPlayCard(players[0], players[0].hand[0]))                    // 10 of hearts
+	assert.Equal(t, ErrIsNotPlayersTurn, game.playerDidPlayCard(players[0], players[0].hand[0])) // 10 of hearts
 	assert.Equal(t, deck.Card{Rank: 10, Suit: deck.Hearts}, *game.winningCardPlayed.card)
 
-	assert.Equal(t, ErrCardNotInPlayersHand, game.PlayCard(players[1], players[0].hand[0])) // not in hand
-	assert.Equal(t, ErrPlayOnSuit, game.PlayCard(players[1], players[1].hand[1]))           // K of Spades
-	assert.NoError(t, game.PlayCard(players[1], players[1].hand[0]))                      // 9 of Hearts (losing)
+	assert.Equal(t, ErrCardNotInPlayersHand, game.playerDidPlayCard(players[1], players[0].hand[0])) // not in hand
+	assert.Equal(t, ErrPlayOnSuit, game.playerDidPlayCard(players[1], players[1].hand[1]))           // K of Spades
+	assert.NoError(t, game.playerDidPlayCard(players[1], players[1].hand[0]))                        // 9 of Hearts (losing)
 	assert.Equal(t, deck.Card{Rank: 10, Suit: deck.Hearts}, *game.winningCardPlayed.card)
 
-	assert.Equal(t, ErrPlayToWinOnSuit, game.PlayCard(players[2], players[2].hand[1])) // 7 of Hearts
-	assert.NoError(t, game.PlayCard(players[2], players[2].hand[0]))                 // Q of Hearts
+	assert.Equal(t, ErrPlayToWinOnSuit, game.playerDidPlayCard(players[2], players[2].hand[1])) // 7 of Hearts
+	assert.NoError(t, game.playerDidPlayCard(players[2], players[2].hand[0]))                   // Q of Hearts
 	assert.Equal(t, deck.Card{Rank: 12, Suit: deck.Hearts}, *game.winningCardPlayed.card)
 
-	assert.Equal(t, ErrPlayTrump, game.PlayCard(players[3], players[3].hand[0])) // A of Clubs
-	assert.NoError(t, game.PlayCard(players[3], players[3].hand[1]))           // 8 of Spades (winning)
+	assert.Equal(t, ErrPlayTrump, game.playerDidPlayCard(players[3], players[3].hand[0])) // A of Clubs
+	assert.NoError(t, game.playerDidPlayCard(players[3], players[3].hand[1]))             // 8 of Spades (winning)
 	assert.Equal(t, deck.Card{Rank: 8, Suit: deck.Spades}, *game.winningCardPlayed.card)
 
-	assert.Equal(t, ErrPlayOnSuit, game.PlayCard(players[4], players[4].hand[1])) // 9 of Spades
-	assert.NoError(t, game.PlayCard(players[4], players[4].hand[0]))            // A of Hearts
+	assert.Equal(t, ErrPlayOnSuit, game.playerDidPlayCard(players[4], players[4].hand[1])) // 9 of Spades
+	assert.NoError(t, game.playerDidPlayCard(players[4], players[4].hand[0]))              // A of Hearts
 	assert.Equal(t, deck.Card{Rank: 8, Suit: deck.Spades}, *game.winningCardPlayed.card)
 
-	assert.Equal(t, ErrPlayToWinOnTrump, game.PlayCard(players[5], players[5].hand[1])) // 2 of Spades
-	assert.NoError(t, game.PlayCard(players[5], players[5].hand[0]))                  // 10 of Spades
+	assert.Equal(t, ErrPlayToWinOnTrump, game.playerDidPlayCard(players[5], players[5].hand[1])) // 2 of Spades
+	assert.NoError(t, game.playerDidPlayCard(players[5], players[5].hand[0]))                    // 10 of Spades
 	assert.Equal(t, deck.Card{Rank: 10, Suit: deck.Spades}, *game.winningCardPlayed.card)
 
-	assert.Equal(t, ErrPlayOnSuit, game.PlayCard(players[6], players[6].hand[1])) // 2 of Diamonds
-	assert.NoError(t, game.PlayCard(players[6], players[6].hand[0]))            // 2 of Hearts
+	assert.Equal(t, ErrPlayOnSuit, game.playerDidPlayCard(players[6], players[6].hand[1])) // 2 of Diamonds
+	assert.NoError(t, game.playerDidPlayCard(players[6], players[6].hand[0]))              // 2 of Hearts
 	assert.Equal(t, deck.Card{Rank: 10, Suit: deck.Spades}, *game.winningCardPlayed.card)
 }
 
@@ -109,26 +108,26 @@ func TestProperOrder(t *testing.T) {
 
 	game.roundNo++ // bypass trade-in round
 
-	err := game.PlayCard(players[1], players[1].hand[0])
+	err := game.playerDidPlayCard(players[1], players[1].hand[0])
 	assert.Equal(t, ErrIsNotPlayersTurn, err)
 
 	// this won't actually be done
 	game.roundNo++
-	err = game.PlayCard(players[1], players[1].hand[0])
+	err = game.playerDidPlayCard(players[1], players[1].hand[0])
 	assert.NoError(t, err)
 
-	err = game.PlayCard(players[1], players[1].hand[0])
+	err = game.playerDidPlayCard(players[1], players[1].hand[0])
 	assert.Equal(t, ErrIsNotPlayersTurn, err, "ensure there's no double play")
 
-	assert.NoError(t, game.PlayCard(players[2], players[2].hand[0]))
-	assert.NoError(t, game.PlayCard(players[3], players[3].hand[0]))
-	assert.Equal(t, ErrRoundNotOver, game.NextRound())
+	assert.NoError(t, game.playerDidPlayCard(players[2], players[2].hand[0]))
+	assert.NoError(t, game.playerDidPlayCard(players[3], players[3].hand[0]))
+	assert.Equal(t, ErrRoundNotOver, game.nextRound())
 
-	assert.NoError(t, game.PlayCard(players[0], players[0].hand[0]))
+	assert.NoError(t, game.playerDidPlayCard(players[0], players[0].hand[0]))
 
-	assert.Error(t, ErrRoundIsOver, game.PlayCard(players[1], players[1].hand[0]))
+	assert.Error(t, ErrRoundIsOver, game.playerDidPlayCard(players[1], players[1].hand[0]))
 
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	assert.Equal(t, 1, players[3].winCount)
 }
 
@@ -148,23 +147,23 @@ func TestGame_PlayerDiscards(t *testing.T) {
 	}
 
 	game.roundNo++
-	assert.Equal(t, ErrTradeInRoundIsOver, game.PlayerDiscards(players[0], h(0, 3)))
+	assert.Equal(t, ErrTradeInRoundIsOver, game.playerDidDiscard(players[0], h(0, 3)))
 
 	game.roundNo = 0
 
-	assert.Equal(t, ErrIsNotPlayersTurn, game.PlayerDiscards(players[1], []*deck.Card{}))
-	assert.EqualError(t, game.PlayerDiscards(players[0], h(0, 4)), "you cannot draw 4 cards, the max for you is 3")
-	assert.NoError(t, game.PlayerDiscards(players[0], h(0, 3)))
-	assert.NoError(t, game.PlayerDiscards(players[1], h(1, 2)))
-	assert.NoError(t, game.PlayerDiscards(players[2], nil))
-	assert.NoError(t, game.PlayerDiscards(players[3], h(3, 3)))
-	assert.EqualError(t, game.PlayerDiscards(players[4], h(4, 4)), "you cannot draw 4 cards, the max for you is 3")
-	assert.NoError(t, game.PlayerDiscards(players[4], h(4, 3)))
-	assert.EqualError(t, game.PlayerDiscards(players[5], h(5, 5)), "you cannot draw 5 cards, the max for you is 4")
-	assert.NoError(t, game.PlayerDiscards(players[5], h(5, 4)))
-	assert.EqualError(t, game.PlayerDiscards(players[6], h(6, 5)), "you cannot draw 5 cards, the max for you is 4")
-	assert.NoError(t, game.PlayerDiscards(players[6], h(6, 4)))
-	assert.Equal(t, ErrRoundIsOver, game.PlayerDiscards(players[0], h(0, 3)))
+	assert.Equal(t, ErrIsNotPlayersTurn, game.playerDidDiscard(players[1], []*deck.Card{}))
+	assert.EqualError(t, game.playerDidDiscard(players[0], h(0, 4)), "you cannot draw 4 cards, the max for you is 3")
+	assert.NoError(t, game.playerDidDiscard(players[0], h(0, 3)))
+	assert.NoError(t, game.playerDidDiscard(players[1], h(1, 2)))
+	assert.NoError(t, game.playerDidDiscard(players[2], nil))
+	assert.NoError(t, game.playerDidDiscard(players[3], h(3, 3)))
+	assert.EqualError(t, game.playerDidDiscard(players[4], h(4, 4)), "you cannot draw 4 cards, the max for you is 3")
+	assert.NoError(t, game.playerDidDiscard(players[4], h(4, 3)))
+	assert.EqualError(t, game.playerDidDiscard(players[5], h(5, 5)), "you cannot draw 5 cards, the max for you is 4")
+	assert.NoError(t, game.playerDidDiscard(players[5], h(5, 4)))
+	assert.EqualError(t, game.playerDidDiscard(players[6], h(6, 5)), "you cannot draw 5 cards, the max for you is 4")
+	assert.NoError(t, game.playerDidDiscard(players[6], h(6, 4)))
+	assert.Equal(t, ErrRoundIsOver, game.playerDidDiscard(players[0], h(0, 3)))
 
 	assert.False(t, players[0].folded)
 	assert.False(t, players[1].folded)
@@ -190,16 +189,16 @@ func TestGame_ReplaceDiscard(t *testing.T) {
 	game.deck.Cards = cardsFromString("12c,13c,14c,12d,13d,14d,12h,13h,14h,12s,13s")
 
 	rand.Seed(0) // consistent test
-	assert.Equal(t, ErrRoundNotOver, game.ReplaceDiscards())
-	assert.NoError(t, game.PlayerDiscards(players[0], cardsFromString("2c,3c,4c"))) // gets 12,13,14 of clubs
-	assert.NoError(t, game.PlayerDiscards(players[1], cardsFromString("2d,3d,4d"))) // gets 12,13,14 of diamonds
-	assert.NoError(t, game.PlayerDiscards(players[2], cardsFromString("2h,3h")))    // gets 12,13 of hearts
-	assert.NoError(t, game.PlayerDiscards(players[3], cardsFromString("2s,3s")))    // gets 14 of hearts, 12 of spades
-	assert.NoError(t, game.PlayerDiscards(players[4], cardsFromString("7c,8c,9c"))) // gets 12,13 of spades, random, random
-	assert.NoError(t, game.PlayerDiscards(players[5], []*deck.Card{}))              // no trade
-	assert.NoError(t, game.PlayerDiscards(players[6], cardsFromString("7h")))       // gets random
-	assert.NoError(t, game.PlayerDiscards(players[7], nil))                         // bails
-	assert.NoError(t, game.ReplaceDiscards())
+	assert.Equal(t, ErrRoundNotOver, game.replaceDiscards())
+	assert.NoError(t, game.playerDidDiscard(players[0], cardsFromString("2c,3c,4c"))) // gets 12,13,14 of clubs
+	assert.NoError(t, game.playerDidDiscard(players[1], cardsFromString("2d,3d,4d"))) // gets 12,13,14 of diamonds
+	assert.NoError(t, game.playerDidDiscard(players[2], cardsFromString("2h,3h")))    // gets 12,13 of hearts
+	assert.NoError(t, game.playerDidDiscard(players[3], cardsFromString("2s,3s")))    // gets 14 of hearts, 12 of spades
+	assert.NoError(t, game.playerDidDiscard(players[4], cardsFromString("7c,8c,9c"))) // gets 12,13 of spades, random, random
+	assert.NoError(t, game.playerDidDiscard(players[5], []*deck.Card{}))              // no trade
+	assert.NoError(t, game.playerDidDiscard(players[6], cardsFromString("7h")))       // gets random
+	assert.NoError(t, game.playerDidDiscard(players[7], nil))                         // bails
+	assert.NoError(t, game.replaceDiscards())
 
 	assert.Equal(t, "5c,6c,12c,13c,14c", cardsToString(players[0].hand))
 	assert.Equal(t, "5d,6d,12d,13d,14d", cardsToString(players[1].hand))
@@ -232,38 +231,38 @@ func TestGame_FullGame_TwoTwoOne(t *testing.T) {
 
 	playCard := createPlayCardFunc(t, game, players)
 
-	assert.Equal(t, ErrTradeInRoundInProgress, game.PlayCard(players[0], players[0].hand[0]))
-	assert.NoError(t, game.PlayerDiscards(players[0], []*deck.Card{}))
-	assert.NoError(t, game.PlayerDiscards(players[1], []*deck.Card{}))
-	assert.NoError(t, game.PlayerDiscards(players[2], []*deck.Card{}))
-	assert.NoError(t, game.ReplaceDiscards())
+	assert.Equal(t, ErrTradeInRoundInProgress, game.playerDidPlayCard(players[0], players[0].hand[0]))
+	assert.NoError(t, game.playerDidDiscard(players[0], []*deck.Card{}))
+	assert.NoError(t, game.playerDidDiscard(players[1], []*deck.Card{}))
+	assert.NoError(t, game.playerDidDiscard(players[2], []*deck.Card{}))
+	assert.NoError(t, game.replaceDiscards())
 
 	// round 1
 	playCard(0, 0)
 	playCard(1, 0)
 	playCard(2, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 2
 	playCard(1, 0)
 	playCard(2, 0)
 	playCard(0, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 3
 	playCard(2, 0)
 	playCard(0, 0)
 	playCard(1, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 4
 	playCard(0, 0)
 	playCard(1, 0)
 	playCard(2, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 5
 	playCard(1, 0)
 	playCard(2, 0)
 	playCard(0, 0)
 	assert.Nil(t, game.result)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 
 	res := game.result
 	assert.NotNil(t, res)
@@ -306,27 +305,27 @@ func TestGame_FullGame_WithWinner(t *testing.T) {
 	playCard(0, 0)
 	playCard(1, 0)
 	playCard(2, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 2
 	playCard(1, 0)
 	playCard(2, 0)
 	playCard(0, 3) // player has to play their bourré card
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 3
 	playCard(2, 0)
 	playCard(0, 0)
 	playCard(1, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 4
 	playCard(0, 0)
 	playCard(1, 0)
 	playCard(2, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 5
 	playCard(1, 0)
 	playCard(2, 0)
 	playCard(0, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 
 	res := game.result
 	assert.NotNil(t, res)
@@ -368,23 +367,23 @@ func TestGame_FullGame_WithGameEnding(t *testing.T) {
 	// round 1
 	playCard(0, 0)
 	playCard(1, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 2
 	playCard(1, 0)
 	playCard(0, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 3
 	playCard(0, 0)
 	playCard(1, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 4
 	playCard(1, 0)
 	playCard(0, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 	// round 5
 	playCard(0, 0)
 	playCard(1, 0)
-	assert.NoError(t, game.NextRound())
+	assert.NoError(t, game.nextRound())
 
 	res := game.result
 	assert.NotNil(t, res)
@@ -417,29 +416,29 @@ func TestGame_EndGame_TwoPlayer_CleanWipe(t *testing.T) {
 	players[1].balance = -25
 
 	playCard := createPlayCardFunc(t, game, players)
-	_ = game.PlayerDiscards(players[0], []*deck.Card{})
-	_ = game.PlayerDiscards(players[1], []*deck.Card{})
-	_ = game.ReplaceDiscards()
+	_ = game.playerDidDiscard(players[0], []*deck.Card{})
+	_ = game.playerDidDiscard(players[1], []*deck.Card{})
+	_ = game.replaceDiscards()
 
 	playCard(0, 0)
 	playCard(1, 0)
-	_ = game.NextRound()
+	_ = game.nextRound()
 
 	playCard(1, 0)
 	playCard(0, 0)
-	_ = game.NextRound()
+	_ = game.nextRound()
 
 	playCard(0, 0)
 	playCard(1, 0)
-	_ = game.NextRound()
+	_ = game.nextRound()
 
 	playCard(1, 0)
 	playCard(0, 0)
-	_ = game.NextRound()
+	_ = game.nextRound()
 
 	playCard(0, 0)
 	playCard(1, 0)
-	_ = game.NextRound()
+	_ = game.nextRound()
 
 	res := game.result
 	assert.NotNil(t, res)
@@ -461,17 +460,17 @@ func TestGame_EndGame_NeedsOne(t *testing.T) {
 		"2h,3h,4h,5h,7h",
 	})
 
-	assert.NoError(t, game.PlayerDiscards(players[0], nil))
-	assert.Equal(t, ErrLastPlayerMustPlay, game.PlayerDiscards(players[1], nil))
-	assert.NoError(t, game.PlayerDiscards(players[1], []*deck.Card{}))
-	assert.NoError(t, game.ReplaceDiscards())
+	assert.NoError(t, game.playerDidDiscard(players[0], nil))
+	assert.Equal(t, ErrLastPlayerMustPlay, game.playerDidDiscard(players[1], nil))
+	assert.NoError(t, game.playerDidDiscard(players[1], []*deck.Card{}))
+	assert.NoError(t, game.replaceDiscards())
 	assert.True(t, game.canGameEnd())
 }
 
 func createPlayCardFunc(t *testing.T, game *Game, players []*Player) func(player, card int) {
 	t.Helper()
 	return func(player, card int) {
-		assert.NoError(t, game.PlayCard(players[player], players[player].hand[card]))
+		assert.NoError(t, game.playerDidPlayCard(players[player], players[player].hand[card]))
 	}
 }
 
@@ -548,24 +547,23 @@ func setupGame(trump string, playerHands []string) (*Game, []*Player) {
 		trumpCard:      trumpCard,
 		playerDiscards: make(map[*Player][]*deck.Card),
 		foldedPlayers: make(map[*Player]bool),
-		logChan: make(chan []*playable.LogMessage, 256),
 	}, players
 }
 
 func TestGame_IsRoundOver(t *testing.T) {
 	game, players := setupGame("14s", []string{"2c,3c,4c,5c,6c", "2d,3d,4d,5d,6d"})
-	assert.False(t, game.IsRoundOver())
-	_ = game.PlayerDiscards(players[0], []*deck.Card{})
-	_ = game.PlayerDiscards(players[1], []*deck.Card{})
-	assert.True(t, game.IsRoundOver())
-	assert.NoError(t, game.ReplaceDiscards())
-	assert.False(t, game.IsRoundOver())
+	assert.False(t, game.isRoundOver())
+	_ = game.playerDidDiscard(players[0], []*deck.Card{})
+	_ = game.playerDidDiscard(players[1], []*deck.Card{})
+	assert.True(t, game.isRoundOver())
+	assert.NoError(t, game.replaceDiscards())
+	assert.False(t, game.isRoundOver())
 
-	assert.NoError(t, game.PlayCard(players[0], players[0].hand[0]))
-	assert.NoError(t, game.PlayCard(players[1], players[1].hand[0]))
-	assert.True(t, game.IsRoundOver())
-	assert.NoError(t, game.NextRound())
-	assert.False(t, game.IsRoundOver())
+	assert.NoError(t, game.playerDidPlayCard(players[0], players[0].hand[0]))
+	assert.NoError(t, game.playerDidPlayCard(players[1], players[1].hand[0]))
+	assert.True(t, game.isRoundOver())
+	assert.NoError(t, game.nextRound())
+	assert.False(t, game.isRoundOver())
 }
 
 func TestGame_Name(t *testing.T) {
@@ -575,5 +573,5 @@ func TestGame_Name(t *testing.T) {
 func TestGame_NextRound(t *testing.T) {
 	game := &Game{}
 	game.roundNo = 6
-	assert.Equal(t, ErrRoundNotOver, game.NextRound())
+	assert.Equal(t, ErrRoundNotOver, game.nextRound())
 }

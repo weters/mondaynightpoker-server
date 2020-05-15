@@ -74,7 +74,7 @@ func (g *Game) getGameState() *GameState {
 	var currentTurn int64
 	// if we have results, the game is over, thus no current turn
 	if g.result == nil {
-		if player := g.GetCurrentTurn(); player != nil {
+		if player := g.getCurrentTurn(); player != nil {
 			currentTurn = player.PlayerID
 		}
 	}
@@ -94,7 +94,7 @@ func (g *Game) getGameState() *GameState {
 		Ante:          g.ante,
 		Pot:           g.pot,
 		Round:         g.roundNo,
-		IsRoundOver:   g.IsRoundOver(),
+		IsRoundOver:   g.isRoundOver(),
 		IsGameOver:    g.result != nil,
 		CurrentTurn:   currentTurn,
 	}

@@ -12,23 +12,9 @@ import (
 
 const playersLimit = 8
 
-// ErrLastPlayerMustPlay prevents the last player left from folding
-var ErrLastPlayerMustPlay = errors.New("everyone else folded, so you must play")
-
-// ErrNotEnoughActivePlayers is an error when there are not at least two active players
-var ErrNotEnoughActivePlayers = errors.New("need at least two players to continue")
-
-// ErrTradeInRoundInProgress happens if a player tries to play a card before the trade-in round is complete
-var ErrTradeInRoundInProgress = errors.New("the trade-in round is not complete")
-
-// ErrTradeInRoundIsOver happens if trade are attempted during the game play
-var ErrTradeInRoundIsOver = errors.New("the trade-in round is over")
-
-// PlayerCountError is an error on the number of players in the game
-type PlayerCountError int
-
-func (p PlayerCountError) Error() string {
-	return fmt.Sprintf("expected 2–%d players, got %d", playersLimit, p)
+type playedCard struct {
+	card   *deck.Card
+	player *Player
 }
 
 // Game is a game of bourré
@@ -86,7 +72,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	switch message.Action {
 	case "discard":
 		log.WithField("cards", message.Cards).Debug("player discards")
-		if err := g.PlayerDiscards(player, message.Cards); err != nil {
+		if err := g.playerDidDiscard(player, message.Cards); err != nil {
 			return nil, false, err
 		}
 
@@ -99,19 +85,19 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return playable.OK(), true, nil
 	case "replaceDiscards":
 		log.Debug("replaceDiscards triggered")
-		if err := g.ReplaceDiscards(); err != nil {
+		if err := g.replaceDiscards(); err != nil {
 			return nil, false, err
 		}
 
 		g.sendLogMessages(newLogMessage(0, nil, "Dealer replaced discards"))
 		return playable.OK(), true, nil
-	case "playCard":
+	case "playerDidPlayCard":
 		if len(message.Cards) != 1 {
 			return nil, false, fmt.Errorf("expected to get 1 card, got %d", len(message.Cards))
 		}
 
 		log.WithField("card", message.Cards[0]).Debug("play card")
-		if err := g.PlayCard(player, message.Cards[0]); err != nil {
+		if err := g.playerDidPlayCard(player, message.Cards[0]); err != nil {
 			return nil, false, err
 		}
 
@@ -119,7 +105,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return playable.OK(), true, nil
 	case "nextRound":
 		log.Debug("nextRound triggered")
-		if err := g.NextRound(); err != nil {
+		if err := g.nextRound(); err != nil {
 			return nil, false, err
 		}
 
@@ -326,9 +312,6 @@ func (g *Game) Deal() error {
 	return nil
 }
 
-// ErrCannotDiscardTheSameCard is an error when user has the same card in the/1186 discard array
-var ErrCannotDiscardTheSameCard = errors.New("you cannot discard the same card")
-
 func (g *Game) maxDraw(player *Player) int {
 	pos := g.playerOrder[player]
 	if len(g.playerOrder) > 5 && pos < 5 {
@@ -338,18 +321,18 @@ func (g *Game) maxDraw(player *Player) int {
 	return 4
 }
 
-// PlayerDiscards determines which cards to discard
+// playerDidDiscard determines which cards to discard
 // If discards is nil, the player elects to fold
-func (g *Game) PlayerDiscards(player *Player, discards []*deck.Card) error {
-	if !g.IsTradeInRound() {
+func (g *Game) playerDidDiscard(player *Player, discards []*deck.Card) error {
+	if !g.isTradeInRound() {
 		return ErrTradeInRoundIsOver
 	}
 
-	if g.IsRoundOver() {
+	if g.isRoundOver() {
 		return ErrRoundIsOver
 	}
 
-	if g.GetCurrentTurn() != player {
+	if g.getCurrentTurn() != player {
 		return ErrIsNotPlayersTurn
 	}
 
@@ -396,8 +379,8 @@ func (g *Game) PlayerDiscards(player *Player, discards []*deck.Card) error {
 	return nil
 }
 
-// ReplaceDiscards will replace the discarded cards with fresh ones
-func (g *Game) ReplaceDiscards() error {
+// replaceDiscards will replace the discarded cards with fresh ones
+func (g *Game) replaceDiscards() error {
 	if len(g.playerDiscards) != len(g.playerOrder) {
 		return ErrRoundNotOver
 	}
@@ -430,7 +413,7 @@ func (g *Game) ReplaceDiscards() error {
 		}
 
 		for _, card := range discards {
-			if err := player.PlayCard(card); err != nil {
+			if err := player.playerDidPlayCard(card); err != nil {
 				panic(err)
 			}
 
@@ -463,15 +446,6 @@ func (g *Game) ReplaceDiscards() error {
 func (g *Game) canGameEnd() bool {
 	return g.roundNo == 6 || len(g.playerOrder) == 1
 }
-
-// ErrGameIsOver is an error when an action is attempted on an ended game
-var ErrGameIsOver = errors.New("game is over")
-
-// ErrGameNotOver is an error when someone tries to end the game and it's not over yet
-var ErrGameNotOver = errors.New("game is not over")
-
-// ErrGameIsImmutable happens when a change is attempted after the game has finalized
-var ErrGameIsImmutable = errors.New("game is over and no more changes can be made")
 
 // buildResults calculates the final results and stores it in the "results" attribute
 func (g *Game) buildResults() error {
@@ -566,8 +540,8 @@ func (g *Game) buildResults() error {
 	return nil
 }
 
-// IsTradeInRound returns true if the trade in round is in progress
-func (g *Game) IsTradeInRound() bool {
+// isTradeInRound returns true if the trade in round is in progress
+func (g *Game) isTradeInRound() bool {
 	return g.roundNo == 0
 }
 
@@ -580,46 +554,17 @@ func (g *Game) getFoldedPlayers() []*Player {
 	return players
 }
 
-type playedCard struct {
-	card   *deck.Card
-	player *Player
-}
-
-// ErrRoundNotOver is an error when the round is not over yet
-var ErrRoundNotOver = errors.New("the round is not over")
-
-// ErrRoundIsOver is an error when cards beyond the round are played
-var ErrRoundIsOver = errors.New("the round is over")
-
-// ErrIsNotPlayersTurn is returned when it's not the player's turn
-var ErrIsNotPlayersTurn = errors.New("not player's turn")
-
-// ErrCardNotInPlayersHand happens when the player tries to play a card they don't have
-var ErrCardNotInPlayersHand = errors.New("card is not in player's hand")
-
-// ErrPlayToWinOnSuit happens when the player doesn't play a winning on-suit card
-var ErrPlayToWinOnSuit = errors.New("player has a higher on-suit card")
-
-// ErrPlayToWinOnTrump happens when the player doesn't play a winning trump card
-var ErrPlayToWinOnTrump = errors.New("player has a higher trump card")
-
-// ErrPlayOnSuit happens when a player has a suit of the lead suit and plays an off-suit card
-var ErrPlayOnSuit = errors.New("player has an on-suit card")
-
-// ErrPlayTrump happens if a player has a trump card and tries to play a non-trump, non lead
-var ErrPlayTrump = errors.New("player has a trump card")
-
-// PlayCard plays the card for the player
-func (g *Game) PlayCard(player *Player, card *deck.Card) error {
-	if g.IsTradeInRound() {
+// playerDidPlayCard plays the card for the player
+func (g *Game) playerDidPlayCard(player *Player, card *deck.Card) error {
+	if g.isTradeInRound() {
 		return ErrTradeInRoundInProgress
 	}
 
-	if g.IsRoundOver() {
+	if g.isRoundOver() {
 		return ErrRoundIsOver
 	}
 
-	if !g.IsPlayersTurn(player) {
+	if !g.isPlayersTurn(player) {
 		return ErrIsNotPlayersTurn
 	}
 
@@ -685,7 +630,7 @@ func (g *Game) PlayCard(player *Player, card *deck.Card) error {
 
 	// this should not happen as we already checked these cases.
 	// just one more safeguard just in case
-	if err := player.PlayCard(card); err != nil {
+	if err := player.playerDidPlayCard(card); err != nil {
 		panic(err)
 	}
 
@@ -709,13 +654,9 @@ func (g *Game) PlayCard(player *Player, card *deck.Card) error {
 	return nil
 }
 
-func (g *Game) shouldCalculateRoundWinner() bool {
-	return len(g.cardsPlayed) == len(g.playerOrder)
-}
-
-// IsRoundOver returns true if the round is over
-func (g *Game) IsRoundOver() bool {
-	if g.IsTradeInRound() {
+// isRoundOver returns true if the round is over
+func (g *Game) isRoundOver() bool {
+	if g.isTradeInRound() {
 		return len(g.playerDiscards) >= len(g.playerOrder)
 	}
 
@@ -724,7 +665,7 @@ func (g *Game) IsRoundOver() bool {
 
 // calculateRoundWinner is called after the last card in a round has been played
 func (g *Game) calculateRoundWinner() error {
-	if !g.IsRoundOver() {
+	if !g.isRoundOver() {
 		return ErrRoundNotOver
 	}
 
@@ -744,8 +685,8 @@ func (g *Game) calculateRoundWinner() error {
 	return nil
 }
 
-// NextRound puts the game in a state for the next round
-func (g *Game) NextRound() error {
+// nextRound puts the game in a state for the next round
+func (g *Game) nextRound() error {
 	if !g.roundWinnerCalculated {
 		return ErrRoundNotOver
 	}
@@ -767,19 +708,23 @@ func (g *Game) NextRound() error {
 	return nil
 }
 
+func (g *Game) shouldCalculateRoundWinner() bool {
+	return len(g.cardsPlayed) == len(g.playerOrder)
+}
+
 func (g *Game) shouldBuildResults() bool {
 	return g.roundNo == 6
 }
 
-// GetCurrentTurn returns the current player
+// getCurrentTurn returns the current player
 // If it's the end of the round, return nil
-func (g *Game) GetCurrentTurn() *Player {
-	if g.IsRoundOver() {
+func (g *Game) getCurrentTurn() *Player {
+	if g.isRoundOver() {
 		return nil
 	}
 
 	var index int
-	if g.IsTradeInRound() {
+	if g.isTradeInRound() {
 		index = len(g.playerDiscards)
 	} else {
 		// -1 because round 0 is the trade-in-round
@@ -795,13 +740,15 @@ func (g *Game) GetCurrentTurn() *Player {
 	panic("could not get current turn")
 }
 
-// IsPlayersTurn returns true if the player can play a card
-func (g *Game) IsPlayersTurn(p *Player) bool {
-	return g.GetCurrentTurn() == p
+// isPlayersTurn returns true if the player can play a card
+func (g *Game) isPlayersTurn(p *Player) bool {
+	return g.getCurrentTurn() == p
 }
 
 func (g *Game) sendLogMessages(msg ...*playable.LogMessage) {
-	g.logChan <- msg
+	if g.logChan != nil {
+		g.logChan <- msg
+	}
 }
 
 func newLogMessage(playerID int64, card *deck.Card, format string, a ...interface{}) *playable.LogMessage {

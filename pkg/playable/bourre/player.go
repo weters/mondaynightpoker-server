@@ -47,8 +47,8 @@ func (p *Player) HasCard(card *deck.Card) bool {
 	return false
 }
 
-// PlayCard removes the card from the player's hand
-func (p *Player) PlayCard(card *deck.Card) error {
+// playerDidPlayCard removes the card from the player's hand
+func (p *Player) playerDidPlayCard(card *deck.Card) error {
 	hand := make([]*deck.Card, 0)
 	found := false
 	for _, c := range p.hand {
