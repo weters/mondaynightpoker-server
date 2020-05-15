@@ -39,6 +39,11 @@ func Test_getTable(t *testing.T) {
 	assert.Equal(t, 2, len(tables))
 	assert.Equal(t, tbl2.UUID, tables[0].UUID)
 	assert.Equal(t, tbl4.UUID, tables[1].UUID)
+
+	// bad pagination
+	var err errorResponse
+	assertGet(t, ts, "/table?start=-1", &err, 400, j2)
+	assert.Equal(t, "start cannot be less than zero", err.Message)
 }
 
 func Test_postTable(t *testing.T) {
@@ -57,6 +62,11 @@ func Test_postTable(t *testing.T) {
 	assertPost(t, ts, "/table", postTablePayload{Name: "Test"}, &tbl, 201, j)
 	assert.Equal(t, "Test", tbl.Name)
 	assert.NotEmpty(t, tbl.UUID)
+
+	// require valid name
+	var err errorResponse
+	assertPost(t, ts, "/table", postTablePayload{Name: "Te"}, &err, 400, j)
+	assert.Equal(t, "name must be three or more characters", err.Message)
 }
 
 func Test_postTableUUIDJoin(t *testing.T) {
