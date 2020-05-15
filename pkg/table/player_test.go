@@ -148,3 +148,20 @@ func player() *Player {
 
 	return player
 }
+
+func TestPlayer_Save(t *testing.T) {
+	newEmail := util.RandomEmail()
+
+	p := player()
+	p.Email = newEmail
+	p.IsSiteAdmin = true
+	p.DisplayName = "New Display Name"
+
+	assert.NoError(t, p.Save(cbg))
+
+	p1, _ := GetPlayerByID(cbg, p.ID)
+	assert.Equal(t, newEmail, p1.Email)
+	assert.Equal(t, true, p.IsSiteAdmin)
+	assert.Equal(t, "New Display Name", p.DisplayName)
+	assert.True(t, p1.Updated.After(p1.Created))
+}

@@ -58,6 +58,17 @@ WHERE id = $1`
 	return getPlayerByRow(row)
 }
 
+// Save will persist any changes made to the user to the database
+func (p *Player) Save(ctx context.Context) error {
+	const query = `
+UPDATE players
+SET email = $1, display_name = $2, is_site_admin = $3, updated = (NOW() AT TIME ZONE 'utc')
+WHERE id = $4`
+
+	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.DisplayName, p.IsSiteAdmin, p.ID)
+	return err
+}
+
 // GetPlayerByEmailAndPassword will return a user if the email and password are valid
 func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*Player, error) {
 	const query = `
