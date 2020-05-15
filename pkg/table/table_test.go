@@ -87,17 +87,21 @@ func TestTable_GetGamesCount(t *testing.T) {
 	assert.Equal(t, int64(1), c)
 }
 
-func TestTable_GetPlayersShifted(t *testing.T) {
+func TestTable_GetActivePlayersShifted(t *testing.T) {
 	p0, tbl := playerAndTable()
 	p1 := player()
 	p2 := player()
 	p3 := player()
+	p4 := player()
 
 	_, _ = p1.Join(cbg, tbl)
 	_, _ = p2.Join(cbg, tbl)
 	_, _ = p3.Join(cbg, tbl)
+	pt4, _ := p4.Join(cbg, tbl)
 
-	players, err := tbl.GetPlayersShifted(cbg)
+	_ = pt4.SetActive(cbg, false)
+
+	players, err := tbl.GetActivePlayersShifted(cbg)
 	assert.NoError(t, err)
 	assert.Equal(t, p0.ID, players[0].PlayerID)
 	assert.Equal(t, p1.ID, players[1].PlayerID)
@@ -105,7 +109,7 @@ func TestTable_GetPlayersShifted(t *testing.T) {
 	assert.Equal(t, p3.ID, players[3].PlayerID)
 
 	_, _ = tbl.CreateGame(cbg, "bourre")
-	players, err = tbl.GetPlayersShifted(cbg)
+	players, err = tbl.GetActivePlayersShifted(cbg)
 	assert.NoError(t, err)
 	assert.Equal(t, p1.ID, players[0].PlayerID)
 	assert.Equal(t, p2.ID, players[1].PlayerID)
@@ -113,7 +117,7 @@ func TestTable_GetPlayersShifted(t *testing.T) {
 	assert.Equal(t, p0.ID, players[3].PlayerID)
 
 	_, _ = tbl.CreateGame(cbg, "bourre")
-	players, err = tbl.GetPlayersShifted(cbg)
+	players, err = tbl.GetActivePlayersShifted(cbg)
 	assert.NoError(t, err)
 	assert.Equal(t, p2.ID, players[0].PlayerID)
 	assert.Equal(t, p3.ID, players[1].PlayerID)
@@ -121,7 +125,7 @@ func TestTable_GetPlayersShifted(t *testing.T) {
 	assert.Equal(t, p1.ID, players[3].PlayerID)
 
 	_, _ = tbl.CreateGame(cbg, "bourre")
-	players, err = tbl.GetPlayersShifted(cbg)
+	players, err = tbl.GetActivePlayersShifted(cbg)
 	assert.NoError(t, err)
 	assert.Equal(t, p3.ID, players[0].PlayerID)
 	assert.Equal(t, p0.ID, players[1].PlayerID)
@@ -130,7 +134,7 @@ func TestTable_GetPlayersShifted(t *testing.T) {
 
 	_, _ = tbl.CreateGame(cbg, "bourre")
 	_, _ = tbl.CreateGame(cbg, "bourre")
-	players, err = tbl.GetPlayersShifted(cbg)
+	players, err = tbl.GetActivePlayersShifted(cbg)
 	assert.NoError(t, err)
 	assert.Equal(t, p1.ID, players[0].PlayerID)
 	assert.Equal(t, p2.ID, players[1].PlayerID)

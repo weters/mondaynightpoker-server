@@ -401,7 +401,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 }
 
 func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
-	players, err := d.table.GetPlayersShifted(context.Background())
+	players, err := d.table.GetActivePlayersShifted(context.Background())
 	if err != nil {
 		return err
 	}
