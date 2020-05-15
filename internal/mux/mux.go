@@ -69,6 +69,8 @@ func NewMux(version string) *Mux {
 	{
 		r := this.authRouter
 
+		r.Methods(http.MethodPost).Path("/player/{id:[0-9]+}").Handler(this.postPlayerID())
+
 		r.Methods(http.MethodGet).Path("/table").Handler(this.getTable())
 
 		tr := r.PathPrefix("/table/{uuid:(?i)[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}}").Subrouter()

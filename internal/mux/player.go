@@ -5,10 +5,11 @@ import (
 	"errors"
 	"github.com/badoux/checkmail"
 	"github.com/gorilla/mux"
-	"net/http"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -18,8 +19,13 @@ type playerPayload struct {
 	Password    string `json:"password"`
 }
 
+var validDisplayNameRx = regexp.MustCompile(`^[\p{L}\p{N} ]*\z`)
+var statusOK = map[string]string{
+	"status": "OK",
+}
+
+
 func (m *Mux) postPlayer() http.HandlerFunc {
-	validDisplayNameRx := regexp.MustCompile(`^[\p{L}\p{N} ]*\z`)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var pp playerPayload
 		if !decodeRequest(w, r, &pp) {
@@ -71,6 +77,64 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 
 		writeJSON(w, http.StatusCreated, player)
 		return
+	}
+}
+
+type postPlayerIDPayload struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+}
+
+func (m *Mux) postPlayerID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playerID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		// prevent a player from updating another player
+		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		if player.ID != playerID {
+			writeJSONError(w, http.StatusForbidden, err)
+			return
+		}
+
+		var pp postPlayerIDPayload
+		if !decodeRequest(w, r, &pp) {
+			return
+		}
+
+		update := false
+
+		if displayName := pp.DisplayName; displayName != "" {
+			if !validDisplayNameRx.MatchString(displayName) {
+				writeJSONError(w, http.StatusBadRequest, errors.New("display name must only contain letters, numbers, and spaces"))
+				return
+			}
+
+			player.DisplayName = displayName
+			update = true
+		}
+
+		if email := pp.Email; email != "" {
+			if err := checkmail.ValidateFormat(email); err != nil {
+				writeJSONError(w, http.StatusBadRequest, errors.New("invalid email address"))
+				return
+			}
+
+			player.Email = email
+			update = true
+		}
+
+		if update {
+			if err := player.Save(r.Context()); err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
 	}
 }
 

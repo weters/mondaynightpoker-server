@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"mondaynightpoker-server/internal/jwt"
@@ -74,6 +75,47 @@ func Test_postPlayer(t *testing.T) {
 		Password: "123456",
 	}, &obj, 400)
 	assert.Equal(t, "please wait before creating another player", obj.Message)
+}
+
+func Test_postPlayerID(t *testing.T) {
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	player, j := player()
+
+	// playerID must match
+	var errResp errorResponse
+	assertPost(t, ts, "/player/0", postPlayerIDPayload{}, &errResp, http.StatusForbidden, j)
+
+	newEmail := util.RandomEmail()
+	payload := postPlayerIDPayload{
+		DisplayName: "TEST",
+		Email:       newEmail,
+	}
+
+	var resp map[string]interface{}
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), payload, &resp, http.StatusOK, j)
+	assert.Equal(t, "OK", resp["status"])
+
+	p, _ := table.GetPlayerByID(context.Background(), player.ID)
+	assert.Equal(t, "TEST", p.DisplayName)
+	assert.Equal(t, newEmail, p.Email)
+
+	// no change OK
+	resp = make(map[string]interface{})
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{}, &resp, http.StatusOK, j)
+	assert.Equal(t, "OK", resp["status"])
+
+	// bad email
+	errResp = errorResponse{}
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{Email: "invalid"}, &errResp, http.StatusBadRequest, j)
+	assert.Equal(t, "invalid email address", errResp.Message)
+
+	// bad username
+	errResp = errorResponse{}
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{DisplayName: "!"}, &errResp, http.StatusBadRequest, j)
+	assert.Equal(t, "display name must only contain letters, numbers, and spaces", errResp.Message)
 }
 
 func Test_postPlayerAuth(t *testing.T) {
