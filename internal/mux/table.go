@@ -40,8 +40,8 @@ func (m *Mux) postTable() http.HandlerFunc {
 			return
 		}
 
-		if !wordChar.MatchString(pp.Name) || len(pp.Name) < 3 {
-			writeJSONError(w, http.StatusBadRequest, errors.New("name must be three or more characters"))
+		if !wordChar.MatchString(pp.Name) || len(pp.Name) < 3 || len(pp.Name) > 40 {
+			writeJSONError(w, http.StatusBadRequest, errors.New("name must be 3-40 characters"))
 			return
 		}
 
