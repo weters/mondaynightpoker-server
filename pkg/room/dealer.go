@@ -20,6 +20,15 @@ const (
 	stateGameEnded
 )
 
+type action string
+
+const (
+	actionAdmin action = "admin"
+	actionStart action = "start"
+	actionRestart action = "restart"
+	actionTerminate action = "terminate"
+)
+
 // Dealer is responsible for controller the game
 type Dealer struct {
 	pitBoss *PitBoss
@@ -127,9 +136,9 @@ func (d *Dealer) AddClient(client *Client) {
 	d.stateChanged <- stateClientEvent
 	d.execInRunLoop <- func() {
 		client.Send <- &playable.Response{
-			Key:     "allLogs",
-			Value:   "",
-			Data:    d.logMessages,
+			Key:   "allLogs",
+			Value: "",
+			Data:  d.logMessages,
 		}
 
 		if d.game == nil {
@@ -198,9 +207,9 @@ func (d *Dealer) sendLogMessages(messages []*playable.LogMessage) {
 	d.addLogMessages(messages)
 	for client := range d.clients {
 		client.Send <- &playable.Response{
-			Key:     "logs",
-			Value:   "",
-			Data:    messages,
+			Key:   "logs",
+			Value: "",
+			Data:  messages,
 		}
 	}
 }
@@ -250,7 +259,7 @@ func (d *Dealer) sendPlayerData() {
 
 // canAdminOrSendError will send an error message to the client if they are not a table admin or site admin
 // If they are an appropriate admin, true is returned, otherwise false is returned
-func canAdminTable(ctx string, c *Client) bool {
+func canPerformActionOnTable(ctx string, c *Client, action action) bool {
 	if c.player.IsSiteAdmin {
 		return true
 	}
@@ -261,19 +270,38 @@ func canAdminTable(ctx string, c *Client) bool {
 		return false
 	}
 
-	if !playerTable.IsTableAdmin {
-		c.Send <- newErrorResponse(ctx, errors.New("you do not have the appropriate permission"))
-		return false
+	if playerTable.IsTableAdmin {
+		return true
 	}
 
-	return true
+	switch action {
+	case actionStart:
+		if playerTable.CanStart {
+			return true
+		}
+	case actionRestart:
+		if playerTable.CanRestart {
+			return true
+		}
+	case actionTerminate:
+		if playerTable.CanTerminate {
+			return true
+		}
+	case actionAdmin:
+		// if you get here, you do not have permission
+	default:
+		logrus.WithField("action", action).Error("unknown action")
+	}
+
+	c.Send <- newErrorResponse(ctx, errors.New("you do not have the appropriate permission"))
+	return false
 }
 
 // ReceivedMessage is called when a client sends a message to the server
 func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 	switch msg.Action {
 	case "createGame":
-		if !canAdminTable(msg.Context, c) {
+		if !canPerformActionOnTable(msg.Context, c, actionStart) {
 			return
 		}
 
@@ -293,7 +321,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			// handle error
 		}
 	case "terminateGame":
-		if !canAdminTable(msg.Context, c) {
+		if !canPerformActionOnTable(msg.Context, c, actionTerminate) {
 			return
 		}
 
@@ -314,13 +342,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		c.Send <- playable.OK(msg.Context)
 	case "tableAdmin":
 		d.execInRunLoop <- func() {
-			if !canAdminTable(msg.Context, c) {
-				return
-			}
-
-			isTableAdmin, ok := msg.AdditionalData["isTableAdmin"].(bool)
-			if !ok {
-				c.Send <- newErrorResponse(msg.Context, errors.New("isTableAdmin is not boolean"))
+			if !canPerformActionOnTable(msg.Context, c, actionAdmin) {
 				return
 			}
 
@@ -342,7 +364,21 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				return
 			}
 
-			playerTable.IsTableAdmin = isTableAdmin
+			if isTableAdmin, ok := msg.AdditionalData["isTableAdmin"].(bool); ok {
+				playerTable.IsTableAdmin = isTableAdmin
+			}
+
+			if canStart, ok := msg.AdditionalData["canStart"].(bool); ok {
+				playerTable.CanStart = canStart
+			}
+
+			if canRestart, ok := msg.AdditionalData["canRestart"].(bool); ok {
+				playerTable.CanRestart = canRestart
+			}
+
+			if canTerminate, ok := msg.AdditionalData["canTerminate"].(bool); ok {
+				playerTable.CanTerminate = canTerminate
+			}
 
 			if err := playerTable.Save(context.Background()); err != nil {
 				c.Send <- newErrorResponse(msg.Context, err)
@@ -361,7 +397,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			// set status for other player, requires table admin
 			playerID, ok := msg.AdditionalData["playerId"].(float64)
 			if ok {
-				if !canAdminTable(msg.Context, c) {
+				if !canPerformActionOnTable(msg.Context, c, actionAdmin) {
 					return
 				}
 
