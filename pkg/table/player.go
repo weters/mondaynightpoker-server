@@ -38,7 +38,7 @@ type Player struct {
 	Updated      time.Time `json:"updated"`
 }
 
-func getPlayerByRow(row *sql.Row) (*Player, error) {
+func getPlayerByRow(row db.Scanner) (*Player, error) {
 	var player Player
 	if err := row.Scan(&player.ID, &player.Email, &player.DisplayName, &player.IsSiteAdmin, &player.passwordHash, &player.Created, &player.Updated); err != nil {
 		return nil, err
@@ -232,4 +232,31 @@ LIMIT $3`
 	}
 
 	return records, nil
+}
+
+// GetPlayers returns a list of players
+func GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
+	const query = `
+SELECT ` + playerColumns + `
+FROM players
+ORDER BY id ASC
+OFFSET $1
+LIMIT $2`
+
+	rows, err := db.Instance().QueryContext(ctx, query, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	players := make([]*Player, 0)
+	for rows.Next() {
+		player, err := getPlayerByRow(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		players = append(players, player)
+	}
+
+	return players, nil
 }

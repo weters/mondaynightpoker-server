@@ -77,3 +77,4 @@ func Test_adminRouter(t *testing.T) {
 	assertGet(t, ts, "/test", &str, 200, token)
 	assert.Equal(t, "OK", str)
 }
+

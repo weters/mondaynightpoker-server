@@ -165,3 +165,18 @@ func TestPlayer_Save(t *testing.T) {
 	assert.Equal(t, "New Display Name", p.DisplayName)
 	assert.True(t, p1.Updated.After(p1.Created))
 }
+
+func TestGetPlayers(t *testing.T) {
+	_ = player()
+	_ = player()
+	_ = player()
+	_ = player()
+
+	players, err := GetPlayers(cbg, 0, 4)
+	assert.NoError(t, err)
+	assert.Equal(t, len(players), 4)
+
+	players, err = GetPlayers(cbg, 1, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, len(players), 1)
+}
