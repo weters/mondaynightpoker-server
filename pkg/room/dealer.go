@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
@@ -23,9 +24,9 @@ const (
 type action string
 
 const (
-	actionAdmin action = "admin"
-	actionStart action = "start"
-	actionRestart action = "restart"
+	actionAdmin     action = "admin"
+	actionStart     action = "start"
+	actionRestart   action = "restart"
 	actionTerminate action = "terminate"
 )
 
@@ -301,13 +302,19 @@ func canPerformActionOnTable(ctx string, c *Client, action action) bool {
 func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 	switch msg.Action {
 	case "createGame":
-		if !canPerformActionOnTable(msg.Context, c, actionStart) {
-			return
+		if d.game != nil {
+			if !canPerformActionOnTable(msg.Context, c, actionRestart) {
+				return
+			}
+		} else {
+			if !canPerformActionOnTable(msg.Context, c, actionStart) {
+				return
+			}
 		}
 
-		switch msg.Subject {
-		case "bourre":
-			d.execInRunLoop <- func() {
+		d.execInRunLoop <- func() {
+			switch msg.Subject {
+			case "bourre":
 				if err := d.createBourreGame(msg.AdditionalData); err != nil {
 					c.Send <- newErrorResponse(msg.Context, err)
 					return
@@ -316,9 +323,10 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				c.Send <- playable.OK(msg.Context)
 
 				return
+			default:
+				c.Send <- newErrorResponse(msg.Context, fmt.Errorf("unknown game: %s", msg.Subject))
+				return
 			}
-		default:
-			// handle error
 		}
 	case "terminateGame":
 		if !canPerformActionOnTable(msg.Context, c, actionTerminate) {
