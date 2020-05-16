@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net/http/httptest"
 	"mondaynightpoker-server/pkg/table"
+	"strings"
 	"testing"
 )
 
@@ -66,7 +67,12 @@ func Test_postTable(t *testing.T) {
 	// require valid name
 	var err errorResponse
 	assertPost(t, ts, "/table", postTablePayload{Name: "Te"}, &err, 400, j)
-	assert.Equal(t, "name must be three or more characters", err.Message)
+	assert.Equal(t, "name must be 3-40 characters", err.Message)
+
+	// require valid name
+	err = errorResponse{}
+	assertPost(t, ts, "/table", postTablePayload{Name: strings.Repeat("A", 41)}, &err, 400, j)
+	assert.Equal(t, "name must be 3-40 characters", err.Message)
 }
 
 func Test_postTableUUIDJoin(t *testing.T) {

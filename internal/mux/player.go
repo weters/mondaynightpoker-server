@@ -20,7 +20,7 @@ type playerPayload struct {
 	Token       string `json:"token"`
 }
 
-var validDisplayNameRx = regexp.MustCompile(`^[\p{L}\p{N} ]*\z`)
+var validDisplayNameRx = regexp.MustCompile(`^[\p{L}\p{N} ]{0,40}\z`)
 var statusOK = map[string]string{
 	"status": "OK",
 }
@@ -38,7 +38,7 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 		}
 
 		if !validDisplayNameRx.MatchString(pp.DisplayName) {
-			writeJSONError(w, http.StatusBadRequest, errors.New("display name must only contain letters, numbers, and spaces"))
+			writeJSONError(w, http.StatusBadRequest, errors.New("display name must only contain letters, numbers, and spaces, and be 40 characters or less"))
 			return
 		}
 

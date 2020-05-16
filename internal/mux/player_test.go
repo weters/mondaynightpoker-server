@@ -11,6 +11,7 @@ import (
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
+	"strings"
 	"testing"
 	"time"
 )
@@ -63,7 +64,15 @@ func Test_postPlayer(t *testing.T) {
 		Email:    "",
 		Password: "",
 	}, &obj, 400)
-	assert.Equal(t, "display name must only contain letters, numbers, and spaces", obj.Message)
+	assert.Equal(t, "display name must only contain letters, numbers, and spaces, and be 40 characters or less", obj.Message)
+
+	obj = errorResponse{}
+	assertPost(t, ts, "/player", playerPayload{
+		DisplayName: strings.Repeat("A", 41),
+		Email:    "",
+		Password: "",
+	}, &obj, 400)
+	assert.Equal(t, "display name must only contain letters, numbers, and spaces, and be 40 characters or less", obj.Message)
 
 	email := util.RandomEmail()
 	obj = errorResponse{}
