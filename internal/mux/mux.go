@@ -24,6 +24,7 @@ type Mux struct {
 	*gmux.Router
 	config  config
 	version string
+	recaptcha recaptcha
 	pitBoss *room.PitBoss
 
 	// store for testing purposes
@@ -48,6 +49,7 @@ func NewMux(version string) *Mux {
 		config: config{
 			playerCreateDelay: time.Minute,
 		},
+		recaptcha: newRecaptcha(),
 	}
 
 	this.authRouter = this.Router.NewRoute().Subrouter()

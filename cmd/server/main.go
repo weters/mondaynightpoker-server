@@ -29,6 +29,11 @@ func main() {
 	// fail fast
 	jwt.LoadKeys()
 
+	if os.Getenv("RECAPTCHA_SECRET") == "" {
+		logrus.Fatal("missing RECAPTCHA_SECRET")
+	}
+
+
 	// run the db migrations
 	db.Migrate()
 

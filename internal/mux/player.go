@@ -17,6 +17,7 @@ type playerPayload struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
 	Password    string `json:"password"`
+	Token       string `json:"token"`
 }
 
 var validDisplayNameRx = regexp.MustCompile(`^[\p{L}\p{N} ]*\z`)
@@ -24,11 +25,15 @@ var statusOK = map[string]string{
 	"status": "OK",
 }
 
-
 func (m *Mux) postPlayer() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var pp playerPayload
 		if !decodeRequest(w, r, &pp) {
+			return
+		}
+
+		if err := m.recaptcha.Verify(pp.Token); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
 			return
 		}
 
