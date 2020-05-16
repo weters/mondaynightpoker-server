@@ -91,7 +91,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 		g.sendLogMessages(newLogMessage(0, nil, "Dealer replaced discards"))
 		return playable.OK(), true, nil
-	case "playerDidPlayCard":
+	case "playCard":
 		if len(message.Cards) != 1 {
 			return nil, false, fmt.Errorf("expected to get 1 card, got %d", len(message.Cards))
 		}
