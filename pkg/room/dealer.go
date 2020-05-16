@@ -342,7 +342,9 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				return
 			}
 
-			if err := playerTable.SetIsTableAdmin(context.Background(), isTableAdmin); err != nil {
+			playerTable.IsTableAdmin = isTableAdmin
+
+			if err := playerTable.Save(context.Background()); err != nil {
 				c.Send <- newErrorResponse(msg.Context, err)
 				return
 			}

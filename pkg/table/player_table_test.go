@@ -25,24 +25,32 @@ func TestPlayerTable_SetActive(t *testing.T) {
 	assert.True(t, pt.Updated.After(pt.Created))
 }
 
-func TestPlayerTable_SetIsTableAdmin(t *testing.T) {
-	p, tbl := playerAndTable()
-	pt, err := p.GetPlayerTable(cbg, tbl)
+func TestPlayerTable_Save(t *testing.T) {
+	p1, tbl := playerAndTable()
+	pt1, err := p1.GetPlayerTable(cbg, tbl)
 	assert.NoError(t, err)
-	assert.True(t, pt.IsTableAdmin)
+	assert.True(t, pt1.IsTableAdmin)
 
-	assert.NoError(t, pt.SetIsTableAdmin(cbg, true))
-	assert.True(t, pt.IsTableAdmin)
-	// refresh from db and ensure it's still true
-	pt, _ = p.GetPlayerTable(cbg, tbl)
-	assert.True(t, pt.IsTableAdmin)
+	p2 := player()
+	pt2, err := p2.Join(cbg, tbl)
+	assert.NoError(t, err)
+	assert.False(t, pt2.IsTableAdmin)
+	assert.False(t, pt2.CanStart)
+	assert.False(t, pt2.CanRestart)
+	assert.False(t, pt2.CanTerminate)
 
-	assert.NoError(t, pt.SetIsTableAdmin(cbg, false))
-	assert.False(t, pt.IsTableAdmin)
-	// refresh from db and ensure it's still false
-	pt, _ = p.GetPlayerTable(cbg, tbl)
-	assert.False(t, pt.IsTableAdmin)
-	assert.True(t, pt.Updated.After(pt.Created))
+	pt2.IsTableAdmin = true
+	pt2.CanStart = true
+	pt2.CanRestart = true
+	pt2.CanTerminate = true
+	assert.NoError(t, pt2.Save(cbg))
+
+	pt2, err = p2.GetPlayerTable(cbg, tbl)
+	assert.NoError(t, err)
+	assert.True(t, pt2.IsTableAdmin)
+	assert.True(t, pt2.CanStart)
+	assert.True(t, pt2.CanRestart)
+	assert.True(t, pt2.CanTerminate)
 }
 
 func TestPlayerTable_AdjustBalance(t *testing.T) {
