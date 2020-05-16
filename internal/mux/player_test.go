@@ -2,6 +2,7 @@ package mux
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net/http"
@@ -14,16 +15,47 @@ import (
 	"time"
 )
 
+type mockRecaptcha struct {
+	valid bool
+	token string
+}
+
+func newMockRecaptcha(valid bool) *mockRecaptcha { return &mockRecaptcha{valid: valid}}
+
+func (m *mockRecaptcha) Verify(token string) error {
+	m.token = token
+
+	if m.valid {
+		return nil
+	}
+
+	return errors.New("token is not valid")
+}
+
 func Test_postPlayer(t *testing.T) {
 	m := NewMux("")
 	m.config.playerCreateDelay = time.Second * -1
+	mr := newMockRecaptcha(false)
+	m.recaptcha = mr
 
 	ts := httptest.NewServer(m)
 	defer ts.Close()
 
 	var obj errorResponse
 	assertPost(t, ts, "/player", "{}", &obj, 400)
+	assert.Equal(t, "token is not valid", obj.Message)
+
+	obj = errorResponse{}
+	assertPost(t, ts, "/player", `{"token":"bad"}`, &obj, 400)
+	assert.Equal(t, "token is not valid", obj.Message)
+	assert.Equal(t, "bad", mr.token)
+
+	mr.valid = true
+
+	obj = errorResponse{}
+	assertPost(t, ts, "/player", `{"token":"good"}`, &obj, 400)
 	assert.Equal(t, "missing or invalid email address", obj.Message)
+	assert.Equal(t, "good", mr.token)
 
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", playerPayload{
