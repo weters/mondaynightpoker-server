@@ -197,3 +197,21 @@ func (m *Mux) getPlayerAuthJWT() http.HandlerFunc {
 		writeJSON(w, http.StatusOK, player)
 	}
 }
+
+func (m *Mux) getPlayer() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		offset, limit, err := parsePaginationOptions(r)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		players, err := table.GetPlayers(r.Context(), offset, limit)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, players)
+	}
+}

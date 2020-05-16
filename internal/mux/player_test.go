@@ -186,3 +186,27 @@ func Test_postPlayerAuth_BadCreds(t *testing.T) {
 	}, &errObj, 401)
 	assert.Equal(t, "invalid email address and/or password", errObj.Message)
 }
+
+func Test_getPlayers(t *testing.T) {
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	p1, j1 := player()
+	_ = p1.SetIsSiteAdmin(context.Background(), true)
+
+	_, j2 := player()
+	_, _ = player()
+	_, _ = player()
+
+	assertGet(t, ts, "/player", nil, 403, j2)
+
+
+	var players []*table.Player
+	assertGet(t, ts, "/player?start=0&rows=4", &players, 200, j1)
+	assert.Equal(t, 4, len(players))
+
+	var err errorResponse
+	assertGet(t, ts, "/player?start=-1", &err, 400, j1)
+	assert.Equal(t, "start cannot be less than zero", err.Message)
+}
