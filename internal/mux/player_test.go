@@ -84,7 +84,7 @@ func Test_postPlayer(t *testing.T) {
 	assert.Equal(t, "password must be 6 or more characters", obj.Message)
 
 	// test random name
-	var pObj *table.Player
+	var pObj *playerWithEmail
 	rand.Seed(0)
 	assertPost(t, ts, "/player", playerPayload{
 		Email:    email,
@@ -189,7 +189,7 @@ func Test_postPlayerAuth(t *testing.T) {
 	assert.Equal(t, player.ID, id)
 	assert.Equal(t, email, player.Email)
 
-	var playerObj *table.Player
+	var playerObj *playerWithEmail
 	assertGet(t, ts, fmt.Sprintf("/player/auth/%s", resp.JWT), &playerObj, 200)
 	assert.Equal(t, email, playerObj.Email)
 }
@@ -246,7 +246,7 @@ func Test_getPlayers(t *testing.T) {
 	assertGet(t, ts, "/player", nil, 403, j2)
 
 
-	var players []*adminPlayer
+	var players []*playerWithEmail
 	assertGet(t, ts, "/player?start=0&rows=4", &players, 200, j1)
 	assert.Equal(t, 4, len(players))
 	assert.NotEmpty(t, players[0].Email)

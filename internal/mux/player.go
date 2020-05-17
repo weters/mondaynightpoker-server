@@ -21,6 +21,12 @@ type playerPayload struct {
 	Token       string `json:"token"`
 }
 
+// playerWithEmail should only be return in an admin context, or for the requesting player
+type playerWithEmail struct {
+	*table.Player
+	Email string `json:"email"`
+}
+
 var validDisplayNameRx = regexp.MustCompile(`^[\p{L}\p{N} ]{0,40}\z`)
 var statusOK = map[string]string{
 	"status": "OK",
@@ -83,7 +89,10 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, player)
+		writeJSON(w, http.StatusCreated, &playerWithEmail{
+			Player: player,
+			Email:  player.Email,
+		})
 		return
 	}
 }
@@ -147,8 +156,8 @@ func (m *Mux) postPlayerID() http.HandlerFunc {
 }
 
 type postPlayerAuthResponse struct {
-	JWT    string        `json:"jwt"`
-	Player *table.Player `json:"player"`
+	JWT    string          `json:"jwt"`
+	Player playerWithEmail `json:"player"`
 }
 
 func (m *Mux) postPlayerAuth() http.HandlerFunc {
@@ -177,7 +186,10 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, postPlayerAuthResponse{
 			JWT:    signedToken,
-			Player: player,
+			Player: playerWithEmail{
+				Player: player,
+				Email:  player.Email,
+			},
 		})
 	}
 }
@@ -202,13 +214,11 @@ func (m *Mux) getPlayerAuthJWT() http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, player)
+		writeJSON(w, http.StatusOK, playerWithEmail{
+			Player: player,
+			Email:  player.Email,
+		})
 	}
-}
-
-type adminPlayer struct {
-	*table.Player
-	Email string `json:"email"`
 }
 
 func (m *Mux) getPlayer() http.HandlerFunc {
@@ -225,9 +235,9 @@ func (m *Mux) getPlayer() http.HandlerFunc {
 			return
 		}
 
-		adminPlayers := make([]*adminPlayer, len(players))
+		adminPlayers := make([]*playerWithEmail, len(players))
 		for i, p := range players {
-			adminPlayers[i] = &adminPlayer{
+			adminPlayers[i] = &playerWithEmail{
 				Player: p,
 				Email:  p.Email,
 			}
