@@ -30,7 +30,7 @@ var ErrDuplicateKey = errors.New("duplicate key constraint violation")
 // Player is a record in the `players` table
 type Player struct {
 	ID           int64  `json:"id"`
-	Email        string `json:"email"`
+	Email        string `json:"-"`
 	DisplayName  string `json:"displayName"`
 	IsSiteAdmin  bool   `json:"isSiteAdmin"`
 	passwordHash string

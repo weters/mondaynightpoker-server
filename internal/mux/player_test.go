@@ -246,9 +246,10 @@ func Test_getPlayers(t *testing.T) {
 	assertGet(t, ts, "/player", nil, 403, j2)
 
 
-	var players []*table.Player
+	var players []*adminPlayer
 	assertGet(t, ts, "/player?start=0&rows=4", &players, 200, j1)
 	assert.Equal(t, 4, len(players))
+	assert.NotEmpty(t, players[0].Email)
 
 	var err errorResponse
 	assertGet(t, ts, "/player?start=-1", &err, 400, j1)
