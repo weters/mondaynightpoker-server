@@ -206,6 +206,11 @@ func (m *Mux) getPlayerAuthJWT() http.HandlerFunc {
 	}
 }
 
+type adminPlayer struct {
+	*table.Player
+	Email string `json:"email"`
+}
+
 func (m *Mux) getPlayer() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		offset, limit, err := parsePaginationOptions(r)
@@ -220,6 +225,14 @@ func (m *Mux) getPlayer() http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, players)
+		adminPlayers := make([]*adminPlayer, len(players))
+		for i, p := range players {
+			adminPlayers[i] = &adminPlayer{
+				Player: p,
+				Email:  p.Email,
+			}
+		}
+
+		writeJSON(w, http.StatusOK, adminPlayers)
 	}
 }
