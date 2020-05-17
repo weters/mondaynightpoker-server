@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -82,14 +83,16 @@ func Test_postPlayer(t *testing.T) {
 	}, &obj, 400)
 	assert.Equal(t, "password must be 6 or more characters", obj.Message)
 
+	// test random name
 	var pObj *table.Player
+	rand.Seed(0)
 	assertPost(t, ts, "/player", playerPayload{
 		Email:    email,
 		Password: "123456",
 	}, &pObj, 201)
 	assert.Greater(t, pObj.ID, int64(0))
 	assert.Equal(t, email, pObj.Email)
-	assert.Equal(t, email, pObj.DisplayName)
+	assert.Equal(t, "Waiving Lion", pObj.DisplayName)
 
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", &playerPayload{

@@ -6,6 +6,7 @@ import (
 	"github.com/badoux/checkmail"
 	"github.com/gorilla/mux"
 	"mondaynightpoker-server/internal/jwt"
+	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
 	"net/http"
 	"regexp"
@@ -64,9 +65,11 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
-		displayName := pp.Email
+		var displayName string
 		if pp.DisplayName != "" {
 			displayName = pp.DisplayName
+		} else {
+			displayName = util.GetRandomName()
 		}
 
 		player, err := table.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, addr)
