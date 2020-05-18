@@ -691,7 +691,7 @@ func (g *Game) nextRound() error {
 		return ErrRoundNotOver
 	}
 
-	g.sendLogMessages(newLogMessage(g.winningCardPlayed.player.PlayerID, g.winningCardPlayed.card, "{} won the trick"))
+	g.sendLogMessages(newLogMessage(g.winningCardPlayed.player.PlayerID, nil, "{} won the trick"))
 	g.roundWinnerCalculated = false
 	g.winningCardPlayed = nil
 	g.cardsPlayed = []*playedCard{}
