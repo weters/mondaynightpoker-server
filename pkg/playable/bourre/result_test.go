@@ -153,16 +153,18 @@ func TestResult_NewGame_Booted(t *testing.T) {
 	game.done = true
 	details, over := game.GetEndOfGameDetails()
 
-
 	assert.True(t, over)
 	assert.NotNil(t, details)
+	assert.Equal(t, 1, len(game.foldedPlayers))
+	assert.Equal(t, 2, len(game.playerOrder))
+	assert.Equal(t, []*Player{players[0]}, game.result.Booted)
+	assert.Equal(t, []*Player{players[1]}, game.result.Winners)
+	assert.Equal(t, []*Player{players[2]}, game.result.Folded)
 
 	expect := map[int64]int{
 		0: -50,
 		1: 100,
 		2: -50,
 	}
-
 	assert.Equal(t, expect, details.BalanceAdjustments)
-
 }
