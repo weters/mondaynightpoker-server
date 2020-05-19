@@ -63,7 +63,9 @@ func (r *Result) NewGame() (*Game, error) {
 		nextPlayers = append(nextPlayers, player)
 	}
 
-	g, err := newGame(nextPlayers, r.Folded, Options{InitialPot: r.NewPot, Ante: r.Ante})
+	folded := append(r.Folded, r.Booted...)
+
+	g, err := newGame(nextPlayers, folded, Options{InitialPot: r.NewPot, Ante: r.Ante})
 	if err != nil {
 		return nil, err
 	}

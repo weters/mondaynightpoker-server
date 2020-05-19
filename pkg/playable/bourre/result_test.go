@@ -2,6 +2,7 @@ package bourre
 
 import (
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/deck"
 	"testing"
 )
 
@@ -66,4 +67,102 @@ func TestResult_NewGame(t *testing.T) {
 	assert.Equal(t, 0, len(p3.hand))
 	assert.False(t, p3.folded)
 	assert.Equal(t, 0, p3.winCount)
+}
+
+func TestResult_NewGame_Booted(t *testing.T) {
+	game, players := setupGame("14S", []string{
+		"14c,14d,13h,12s,2s",
+		"13c,13d,14h,14s,3s",
+		"12c,12d,12h,13s,4s",
+	})
+
+	players[0].PlayerID = 0
+	players[0].balance = -50
+	players[1].PlayerID = 1
+	players[1].balance = -50
+	players[2].PlayerID = 2
+	players[2].balance = -50
+
+	game.pot = 150
+	game.ante = 50
+
+	cardFunc := createPlayCardFunc(t, game, players)
+	game.playerDidDiscard(players[0], []*deck.Card{})
+	game.playerDidDiscard(players[1], []*deck.Card{})
+	game.playerDidDiscard(players[2], []*deck.Card{})
+	assert.NoError(t, game.replaceDiscards())
+
+	cardFunc(0, 0)
+	cardFunc(1, 0)
+	cardFunc(2, 0)
+	assert.NoError(t, game.nextRound())
+
+	cardFunc(1, 0)
+	cardFunc(2, 0)
+	cardFunc(0, 0)
+	assert.NoError(t, game.nextRound())
+
+	cardFunc(2, 0)
+	cardFunc(0, 0)
+	cardFunc(1, 0)
+	assert.NoError(t, game.nextRound())
+
+	cardFunc(0, 0)
+	cardFunc(1, 0)
+	cardFunc(2, 0)
+	assert.NoError(t, game.nextRound())
+
+	cardFunc(1, 0)
+	cardFunc(2, 0)
+	cardFunc(0, 0)
+	assert.NoError(t, game.nextRound())
+
+	res := game.result
+	assert.NotNil(t, res)
+
+	assert.Equal(t, 1, len(res.Booted))
+	assert.Equal(t, players[2], res.Booted[0])
+
+	game, err := res.NewGame()
+	assert.NoError(t, err)
+	players[0].hand = cardsFromString("2c,3c,4c,5c,6c")
+	players[1].hand = cardsFromString("2h,3h,4h,5h,6h")
+	game.trumpCard = cardFromString("14d")
+
+	game.playerDidDiscard(players[1], []*deck.Card{})
+	game.playerDidDiscard(players[0], []*deck.Card{})
+	assert.NoError(t, game.replaceDiscards())
+
+	cardFunc = createPlayCardFunc(t, game, []*Player{players[0], players[1]})
+	cardFunc(1, 0)
+	cardFunc(0, 0)
+	game.nextRound()
+	cardFunc(0, 0)
+	cardFunc(1, 0)
+	game.nextRound()
+	cardFunc(1, 0)
+	cardFunc(0, 0)
+	game.nextRound()
+	cardFunc(0, 0)
+	cardFunc(1, 0)
+	game.nextRound()
+	cardFunc(1, 0)
+	cardFunc(0, 0)
+	game.nextRound()
+
+	game.done = true
+	details, over := game.GetEndOfGameDetails()
+
+
+	assert.True(t, over)
+	assert.NotNil(t, details)
+
+	expect := map[int64]int{
+		0: -50,
+		1: 100,
+		2: -50,
+	}
+
+	assert.Equal(t, expect, details.BalanceAdjustments)
+
 }
