@@ -40,7 +40,8 @@ spec:
                 secretKeyRef:
                   name: mondaynightpoker-server-config
                   key: pg_dsn
-
+            - name: LOG_LEVEL
+              value: DEBUG
       volumes:
         - name: keys
           secret:

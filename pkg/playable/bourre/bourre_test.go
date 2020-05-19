@@ -281,7 +281,7 @@ func TestGame_FullGame_TwoTwoOne(t *testing.T) {
 	assert.Equal(t, 2, len(newGame.playerOrder))
 	assert.Equal(t, 1, newGame.playerOrder[players[0]])
 	assert.Equal(t, 0, newGame.playerOrder[players[1]])
-	assert.Equal(t, 0, len(newGame.foldedPlayers))
+	assert.Equal(t, 1, len(newGame.foldedPlayers)) // booted
 }
 
 func TestGame_FullGame_WithWinner(t *testing.T) {
