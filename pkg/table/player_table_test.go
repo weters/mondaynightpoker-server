@@ -5,26 +5,6 @@ import (
 	"testing"
 )
 
-func TestPlayerTable_SetActive(t *testing.T) {
-	p, tbl := playerAndTable()
-	pt, err := p.GetPlayerTable(cbg, tbl)
-	assert.NoError(t, err)
-	assert.True(t, pt.Active)
-
-	assert.NoError(t, pt.SetActive(cbg, true))
-	assert.True(t, pt.Active)
-	// refresh from db and ensure it's still true
-	pt, _ = p.GetPlayerTable(cbg, tbl)
-	assert.True(t, pt.Active)
-
-	assert.NoError(t, pt.SetActive(cbg, false))
-	assert.False(t, pt.Active)
-	// refresh from db and ensure it's still false
-	pt, _ = p.GetPlayerTable(cbg, tbl)
-	assert.False(t, pt.Active)
-	assert.True(t, pt.Updated.After(pt.Created))
-}
-
 func TestPlayerTable_Save(t *testing.T) {
 	p1, tbl := playerAndTable()
 	pt1, err := p1.GetPlayerTable(cbg, tbl)
@@ -34,23 +14,29 @@ func TestPlayerTable_Save(t *testing.T) {
 	p2 := player()
 	pt2, err := p2.Join(cbg, tbl)
 	assert.NoError(t, err)
+	assert.True(t, pt2.Active)
 	assert.False(t, pt2.IsTableAdmin)
 	assert.False(t, pt2.CanStart)
 	assert.False(t, pt2.CanRestart)
 	assert.False(t, pt2.CanTerminate)
+	assert.False(t, pt2.IsBlocked)
 
+	pt2.Active = false
 	pt2.IsTableAdmin = true
 	pt2.CanStart = true
 	pt2.CanRestart = true
 	pt2.CanTerminate = true
+	pt2.IsBlocked = true
 	assert.NoError(t, pt2.Save(cbg))
 
 	pt2, err = p2.GetPlayerTable(cbg, tbl)
 	assert.NoError(t, err)
+	assert.False(t, pt2.Active)
 	assert.True(t, pt2.IsTableAdmin)
 	assert.True(t, pt2.CanStart)
 	assert.True(t, pt2.CanRestart)
 	assert.True(t, pt2.CanTerminate)
+	assert.True(t, pt2.IsBlocked)
 }
 
 func TestPlayerTable_AdjustBalance(t *testing.T) {
@@ -79,4 +65,19 @@ func TestPlayerTable_AdjustBalance(t *testing.T) {
 	pt2, _ = p2.GetPlayerTable(cbg, table)
 	assert.Equal(t, 75, pt1.Balance)
 	assert.Equal(t, -10, pt2.Balance)
+}
+
+func TestPlayerTable_IsPlaying(t *testing.T) {
+	pt := &PlayerTable{
+		Active: true,
+		IsBlocked: false,
+	}
+	assert.True(t, pt.IsPlaying())
+
+	pt.Active = false
+	assert.False(t, pt.IsPlaying())
+
+	pt.Active = true
+	pt.IsBlocked = true
+	assert.False(t, pt.IsPlaying())
 }

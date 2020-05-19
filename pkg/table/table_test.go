@@ -99,7 +99,8 @@ func TestTable_GetActivePlayersShifted(t *testing.T) {
 	_, _ = p3.Join(cbg, tbl)
 	pt4, _ := p4.Join(cbg, tbl)
 
-	_ = pt4.SetActive(cbg, false)
+	pt4.Active = false
+	_ = pt4.Save(cbg)
 
 	players, err := tbl.GetActivePlayersShifted(cbg)
 	assert.NoError(t, err)

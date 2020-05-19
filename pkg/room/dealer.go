@@ -388,6 +388,14 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				playerTable.CanTerminate = canTerminate
 			}
 
+			if isBlocked, ok := msg.AdditionalData["isBlocked"].(bool); ok {
+				if isBlocked {
+					playerTable.Active = false
+				}
+
+				playerTable.IsBlocked = isBlocked
+			}
+
 			if err := playerTable.Save(context.Background()); err != nil {
 				c.Send <- newErrorResponse(msg.Context, err)
 				return
@@ -433,7 +441,14 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				return
 			}
 
-			if err := pt.SetActive(context.Background(), isActive); err != nil {
+			if pt.IsBlocked && isActive {
+				c.Send <- newErrorResponse(msg.Context, errors.New("player is currently blocked from participating"))
+				return
+			}
+
+			pt.Active = isActive
+
+			if err := pt.Save(context.Background()); err != nil {
 				c.Send <- newErrorResponse(msg.Context, errors.New("active is not boolean"))
 				return
 			}
@@ -492,7 +507,7 @@ func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
 
 	playerIDs := make([]int64, 0, len(players))
 	for _, player := range players {
-		if player.Active {
+		if player.IsPlaying() {
 			playerIDs = append(playerIDs, player.PlayerID)
 		}
 	}

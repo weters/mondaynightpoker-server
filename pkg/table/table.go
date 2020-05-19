@@ -146,7 +146,7 @@ ORDER BY players_tables.id`
 		var pt PlayerTable
 		if err := rows.Scan(&p.ID, &p.Email, &p.DisplayName, &p.IsSiteAdmin, &p.passwordHash, &p.Created, &p.Updated,
 			&pt.ID, &pt.PlayerID, &pt.TableUUID, &pt.IsTableAdmin, &pt.CanStart, &pt.CanRestart, &pt.CanTerminate,
-			&pt.Balance, &pt.Active, &pt.Created, &pt.Updated); err != nil {
+			&pt.Balance, &pt.Active, &pt.IsBlocked, &pt.Created, &pt.Updated); err != nil {
 			return nil, err
 		}
 
