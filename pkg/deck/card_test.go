@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func Test_constants(t *testing.T) {
+	assert.Equal(t, 11, Jack)
+	assert.Equal(t, 12, Queen)
+	assert.Equal(t, 13, King)
+	assert.Equal(t, 14, Ace)
+}
+
 func TestCard_String(t *testing.T) {
 	card := Card{
 		Rank: 2,

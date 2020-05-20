@@ -22,16 +22,24 @@ type Card struct {
 	Suit Suit `json:"suit"`
 }
 
+// face cards
+const (
+	Jack = 11
+	Queen = 12
+	King = 13
+	Ace =14
+)
+
 func (c *Card) String() string {
 	var rank string
 	switch c.Rank {
-	case 11:
+	case Jack:
 		rank = "J"
-	case 12:
+	case Queen:
 		rank = "Q"
-	case 13:
+	case King:
 		rank = "K"
-	case 14:
+	case Ace:
 		rank = "A"
 	default:
 		rank = strconv.Itoa(c.Rank)
