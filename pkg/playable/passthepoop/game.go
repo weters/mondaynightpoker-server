@@ -15,6 +15,8 @@ type Game struct {
 	idToParticipant map[int64]*Participant
 
 	decisionIndex int
+	// did the dealer decide to go to the deck?
+	dealerWillGoToDeck bool
 	// prevent deal() from being called multiple times
 	dealtCards bool
 }
@@ -26,6 +28,9 @@ type GameAction int
 const (
 	ActionStay GameAction = iota
 	ActionTrade
+	// ActionGoToDeck happens when the dealer announces their intention to go to the deck
+	// They will have to follow it up with an ActionTrade as well to actually execute that move
+	ActionGoToDeck
 )
 
 // ActionResult is the result of a player's action
@@ -88,11 +93,11 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 	return g, nil
 }
 
-// PerformGameAction will perform a game action for the player
+// ExecuteTurnForPlayer will perform a game action for the player
 // A player can either stay or trade
 // If trading, the player can either trade with the next player, or if they are the last player, they can go to the deck
 // If trading with a player, and the next player has a King, they cannot trade
-func (g *Game) PerformGameAction(playerID int64, gameAction GameAction) (ActionResult, error) {
+func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) (ActionResult, error) {
 	if g.decisionIndex >= len(g.participants) {
 		return ResultError, errors.New("no more decisions can be made this round")
 	}
@@ -109,12 +114,29 @@ func (g *Game) PerformGameAction(playerID int64, gameAction GameAction) (ActionR
 	switch gameAction {
 	case ActionStay:
 		// do nothing
+	case ActionGoToDeck:
+		if !g.isDecisionWithDealer() {
+			return ResultError, errors.New("only the dealer may go to the deck")
+		}
+
+		// going to the deck is a two-step process so we can first reveal the rest of the cards so the players
+		// can see what the dealer needs. #Drama
+		g.dealerWillGoToDeck = true
+
+		g.flipAllCards()
+
+		// return early so we don't move the decision index
+		return ResultOK, nil
 	case ActionTrade:
 		if participant.card.Rank == deck.King {
 			return ResultError, errors.New("you cannot trade a king")
 		}
 
-		if g.decisionIndex+1 == len(g.participants) {
+		if g.isDecisionWithDealer() {
+			if !g.dealerWillGoToDeck {
+				return ResultError, errors.New("you must first announce your intention to go to the deck")
+			}
+
 			// go to the deck
 			nextCard, err := g.deck.Draw()
 			if err != nil {
@@ -143,16 +165,33 @@ func (g *Game) PerformGameAction(playerID int64, gameAction GameAction) (ActionR
 	return ResultOK, nil
 }
 
+// EndRound performs all necessary end of round actions
+func (g *Game) EndRound() error {
+	g.flipAllCards()
+
+	loserGroups, err := g.options.Edition.EndRound(g.participants)
+	if err != nil {
+		return err
+	}
+
+	// TODO: do something with the loser groups
+	_ = loserGroups
+
+	return nil
+}
+
 // decisionWith returns the participant who is currently making the decision
 func (g *Game) decisionWith() *Participant {
 	return g.participants[g.decisionIndex]
 }
 
-// nextRound will handle cleanup and set state for next round
-// 1. Determine next dealer
-// 2. Remove dead players
-// 3. Set next decision index
-func (g *Game) nextRound() error {
+// isDecisionWithDealer returns true if the dealer is up
+func (g *Game) isDecisionWithDealer() bool {
+	return g.decisionIndex+1 == len(g.participants)
+}
+
+// eliminateAndRotateParticipants removes eliminated players, and rotates the dealer button
+func (g *Game) eliminateAndRotateParticipants() {
 	newList := make([]*Participant, 0, len(g.participants))
 
 	// this essentially does a shift and push (makes 1st position [index=0] into the dealer [index=n-1])
@@ -166,14 +205,43 @@ func (g *Game) nextRound() error {
 		}
 	}
 
-	if len(newList) <= 1 {
-		return errors.New("expected to find at least two active players left")
+	g.participants = newList
+}
+
+// shouldContinue returns true if there are still active participants left
+// You should call this method after eliminateAndRotateParticipants()
+func (g *Game) shouldContinue() bool {
+	// XXX: may want to cache the results here to prevent repeated loop lookups
+	active := 0
+	for _, p := range g.participants {
+		if p.lives > 0 {
+			active++
+
+			if active >= 2 {
+				return true
+			}
+		}
 	}
 
-	g.participants = newList
+	return false
+}
+
+// nextRound will handle cleanup and set state for next round
+// 1. Determine next dealer
+// 2. Set next decision index
+// Do not call nextRound() unless you know the game can continue
+func (g *Game) nextRound() error {
+	g.eliminateAndRotateParticipants()
+
+	if len(g.participants) < 2 {
+		return errors.New("not enough players for a new round")
+	}
+
 	g.dealtCards = false
 	g.decisionIndex = 0
-	return nil
+	g.dealerWillGoToDeck = false
+
+	return g.deal()
 }
 
 func (g *Game) deal() error {
@@ -200,9 +268,12 @@ func (g *Game) deal() error {
 	return nil
 }
 
-// canReveal returns true if all players have had a turn
-func (g *Game) canReveal() bool {
-	return g.decisionIndex == len(g.participants)
+// flipAllCards must only be called at the end of the game, or after the dealer announced they are going to the
+// deck. Validation is assumed to happen elsewhere
+func (g *Game) flipAllCards() {
+	for _, p := range g.participants {
+		p.isFlipped = true
+	}
 }
 
 // -- Methods for the playable.Playable interface --
