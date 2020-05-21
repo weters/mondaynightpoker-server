@@ -15,6 +15,18 @@ type LoserGroup struct {
 	RoundLosers []*RoundLoser `json:"roundLosers"`
 }
 
+func newLoserGroup(roundLosers ...[]*RoundLoser) []*LoserGroup {
+	lg := make([]*LoserGroup, len(roundLosers))
+	for i, rl := range roundLosers {
+		lg[i] = &LoserGroup{
+			Order:       i,
+			RoundLosers: rl,
+		}
+	}
+
+	return lg
+}
+
 // Edition provides capabilities for a specific variant of Pass the Poop
 type Edition interface {
 	// Name returns the name of the Edition
