@@ -10,24 +10,26 @@ type Suit string
 
 // suit constants
 const (
-	Hearts Suit = "hearts"
-	Clubs Suit = "clubs"
+	Hearts   Suit = "hearts"
+	Clubs    Suit = "clubs"
 	Diamonds Suit = "diamonds"
-	Spades Suit = "spades"
+	Spades   Suit = "spades"
 )
 
 // Card is an individual playing card
 type Card struct {
-	Rank int `json:"rank"`
+	Rank int  `json:"rank"`
 	Suit Suit `json:"suit"`
 }
 
 // face cards
 const (
-	Jack = 11
-	Queen = 12
-	King = 13
-	Ace =14
+	Jack    = 11
+	Queen   = 12
+	King    = 13
+	Ace     = 14
+	HighAce = Ace
+	LowAce  = 1
 )
 
 func (c *Card) String() string {
@@ -65,4 +67,13 @@ func (c *Card) String() string {
 // Equal returns true if the cards are equal (matches suit and rank)
 func (c *Card) Equal(card *Card) bool {
 	return c.Suit == card.Suit && c.Rank == card.Rank
+}
+
+// AceLowRank return the rank where Ace is considered low instead of high
+func (c *Card) AceLowRank() int {
+	if c.Rank == Ace {
+		return 1
+	}
+
+	return c.Rank
 }
