@@ -59,6 +59,8 @@ func (d *Deck) Shuffle(seed int64) {
 		seed = time.Now().UnixNano()
 	}
 
+	rand.Seed(seed)
+
 	for j := len(d.Cards)-1; j > 0; j-- {
 		i := rand.Intn(j+1)
 
