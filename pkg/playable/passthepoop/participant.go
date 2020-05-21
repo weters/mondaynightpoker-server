@@ -31,18 +31,23 @@ func (p *Participant) newRound() {
 
 // subtractLife will subtract the specified number of lives
 // if count == 0, subtract all the lives!
-func (p *Participant) subtractLife(count int) {
+// Returns the number of lives lost
+func (p *Participant) subtractLife(count int) int {
 	if count < 0 {
 		panic("count cannot be less than 0")
 	}
 
 	if count == 0 {
+		livesLost := p.lives
 		p.lives = 0
-		return
+		return livesLost
 	}
 
+	originalLives := p.lives
 	p.lives -= count
 	if p.lives < 0 {
 		p.lives = 0
 	}
+
+	return originalLives - p.lives
 }
