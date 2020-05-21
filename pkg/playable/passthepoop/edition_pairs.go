@@ -9,6 +9,11 @@ type PairsEdition struct {
 
 }
 
+// EndRound ends the round
+func (p *PairsEdition) EndRound(participants []*Participant) ([]*LoserGroup, error) {
+	panic("implement me")
+}
+
 // Name returns the name of the Edition
 func (p *PairsEdition) Name() string {
 	return "Pairs"
