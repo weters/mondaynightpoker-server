@@ -328,5 +328,6 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 // LogChan returns a channel where log messages will be sent
 // Part of the Playable interface
 func (g *Game) LogChan() chan []*playable.LogMessage {
-	panic("implement me")
+	// XXX: implement me
+	return nil
 }

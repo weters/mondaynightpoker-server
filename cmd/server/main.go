@@ -5,11 +5,11 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/rs/cors"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"os"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/mux"
 	"mondaynightpoker-server/pkg/db"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -43,13 +43,21 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           handlers.CombinedLoggingHandler(os.Stdout, c.Handler(mux.NewMux(Version))),
+		Handler:           loggingHandler(c.Handler(mux.NewMux(Version))),
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
 	}
 
 	logrus.WithField("addr", srv.Addr).Info("listening")
 	logrus.Fatal(srv.ListenAndServe())
+}
+
+func loggingHandler(next http.Handler) http.Handler {
+	if os.Getenv("DISABLE_ACCESS_LOGS") != "" {
+		return next
+	}
+
+	return handlers.CombinedLoggingHandler(os.Stdout, next)
 }
 
 func setupLogger() {
