@@ -2,6 +2,7 @@ package passthepoop
 
 import (
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/playable"
 	"testing"
 )
 
@@ -236,4 +237,31 @@ func TestGame_CompleteGame(t *testing.T) {
 
 	assert.NoError(t, game.EndRound())
 	assert.False(t, game.shouldContinue())
+}
+
+func TestGame_GetPlayerState(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	p1 := game.participants[0]
+	p1.card = card("9s")
+	game.participants[1].lives = 0
+	game.eliminateAndRotateParticipants()
+
+	state, err := game.GetPlayerState(1)
+	assert.NoError(t, err)
+	assert.Equal(t, &playable.Response{
+		Key:   "game",
+		Value: "pass-the-poop",
+		Data: &ParticipantState{
+			Participant: p1,
+			GameState: &GameState{
+				Edition:         "Standard",
+				Participants:    game.participants,
+				AllParticipants: game.idToParticipant,
+				Ante:            game.options.Ante,
+				Pot:             game.options.Ante * 3,
+				DecisionIndex:   0,
+			},
+			Card: card("9s"),
+		},
+	}, state)
 }
