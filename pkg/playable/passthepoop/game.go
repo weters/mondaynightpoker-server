@@ -10,6 +10,7 @@ import (
 // Game is an individual game of pass the poop
 type Game struct {
 	options         Options
+	pot             int
 	deck            *deck.Deck
 	participants    []*Participant
 	idToParticipant map[int64]*Participant
@@ -69,7 +70,9 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 
 	idToParticipants := make(map[int64]*Participant)
 	participants := make([]*Participant, len(playerIDs))
+	pot := 0
 	for i, id := range playerIDs {
+		pot += options.Ante
 		participants[i] = &Participant{
 			PlayerID: id,
 			lives:    options.Lives,
@@ -80,6 +83,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 
 	g := &Game{
 		deck:            d,
+		pot:             pot,
 		options:         options,
 		participants:    participants,
 		idToParticipant: idToParticipants,
@@ -292,7 +296,27 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 // GetPlayerState returns the player state in the game
 // Part of the Playable interface
 func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
-	panic("implement me")
+	participant, found := g.idToParticipant[playerID]
+	if !found {
+		return nil, fmt.Errorf("could not find player with ID %d", playerID)
+	}
+
+	return &playable.Response{
+		Key:   "game",
+		Value: "pass-the-poop",
+		Data: &ParticipantState{
+			Participant: participant,
+			Card:        participant.card,
+			GameState: &GameState{
+				Edition:         g.options.Edition.Name(),
+				Participants:    g.participants,
+				AllParticipants: g.idToParticipant,
+				Ante:            g.options.Ante,
+				Pot:             g.pot,
+				DecisionIndex:   g.decisionIndex,
+			},
+		},
+	}, nil
 }
 
 // GetEndOfGameDetails returns the final results
