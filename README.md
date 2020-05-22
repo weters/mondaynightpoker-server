@@ -11,6 +11,7 @@ Variable | Default | Description
 `JWT_PUBLIC_KEY` | `.keys/public.pem` | Path to the RSA 256 public key for JWT validation
 `JWT_PRIVATE_KEY` | `.keys/private.key` | Path to the RSA 256 private key for JWT signing
 `RECAPTCHA_SECRET` | | Recaptcha v3 secret key
+`DISABLE_ACCESS_LOGS` | | Disables access logging. Only recommended for dev
 
 ## Supported Card Games
 
