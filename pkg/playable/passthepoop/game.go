@@ -16,6 +16,8 @@ type Game struct {
 	idToParticipant map[int64]*Participant
 
 	decisionIndex int
+	pendingTrade  bool // was the decision to swap the card
+
 	// did the dealer decide to go to the deck?
 	dealerWillGoToDeck bool
 	// prevent deal() from being called multiple times
@@ -29,9 +31,14 @@ type GameAction int
 const (
 	ActionStay GameAction = iota
 	ActionTrade
+	// ActionAccept is when the player has to accept the swap from the previous player
+	ActionAccept
+	// ActionFlipKing is the action a player can take when they have a king and the previous
+	// player is attempting to swap
+	ActionFlipKing
 	// ActionGoToDeck happens when the dealer announces their intention to go to the deck
-	// They will have to follow it up with an ActionTrade as well to actually execute that move
 	ActionGoToDeck
+	ActionDrawFromDeck
 )
 
 // ActionResult is the result of a player's action
@@ -111,15 +118,25 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) (Acti
 		return ResultError, fmt.Errorf("%d is not in this game", playerID)
 	}
 
-	if participant != g.decisionWith() {
+	if participant != g.getCurrentTurn() {
 		return ResultError, errors.New("you are not up")
 	}
 
 	switch gameAction {
 	case ActionStay:
+		if g.pendingTrade && participant.card.Rank == deck.King {
+			return ResultError, errors.New("you have to flip the King")
+		}
+
+		if g.pendingTrade {
+			return ResultError, errors.New("there is a pending trade you have to accept")
+		}
+
 		// do nothing
+		g.decisionIndex++
+		return ResultOK, nil
 	case ActionGoToDeck:
-		if !g.isDecisionWithDealer() {
+		if !g.isDealersTurn() {
 			return ResultError, errors.New("only the dealer may go to the deck")
 		}
 
@@ -129,44 +146,70 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) (Acti
 
 		g.flipAllCards()
 
-		// return early so we don't move the decision index
+		// do not advance decision index
+		return ResultOK, nil
+	case ActionDrawFromDeck:
+		if !g.isDealersTurn() {
+			return ResultError, errors.New("only the dealer may draw from the deck")
+		}
+
+		if !g.dealerWillGoToDeck {
+			return ResultError, errors.New("you must first announce your intention to draw from the deck")
+		}
+
+		newCard, err := g.deck.Draw()
+		if err != nil {
+			return ResultError, err
+		}
+
+		participant.card = newCard
+		g.dealerWillGoToDeck = false
+		g.decisionIndex++
 		return ResultOK, nil
 	case ActionTrade:
 		if participant.card.Rank == deck.King {
-			return ResultError, errors.New("you cannot trade a king")
+			return ResultError, errors.New("you cannot trade a King")
 		}
 
-		if g.isDecisionWithDealer() {
-			if !g.dealerWillGoToDeck {
-				return ResultError, errors.New("you must first announce your intention to go to the deck")
-			}
-
-			// go to the deck
-			nextCard, err := g.deck.Draw()
-			if err != nil {
-				return ResultError, err
-			}
-
-			participant.card = nextCard
-		} else {
-			// swap with the next player
-			nextParticipant := g.participants[g.decisionIndex+1]
-			nextCard := nextParticipant.card
-			if nextCard.Rank == deck.King {
-				// cannot trade into a king
-				g.decisionIndex++
-				return ResultKing, nil
-			}
-
-			// players swap cards
-			participant.card, nextParticipant.card = nextCard, participant.card
+		if g.isDealersTurn() {
+			return ResultError, errors.New("the dealer can only go to the deck")
 		}
-	default:
-		return ResultError, fmt.Errorf("not a valid game action")
+
+		if g.pendingTrade {
+			return ResultError, errors.New("there is a pending trade you have to accept")
+		}
+
+		g.pendingTrade = true
+		g.decisionIndex++
+		return ResultOK, nil
+	case ActionAccept:
+		if !g.pendingTrade {
+			return ResultError, errors.New("there is no card to accept")
+		}
+
+		if participant.card.Rank == deck.King {
+			return ResultError, errors.New("you cannot accept the trade if you have a King")
+		}
+
+		g.pendingTrade = false
+
+		prevParticipant := g.participants[g.decisionIndex-1]
+		participant.card, prevParticipant.card = prevParticipant.card, participant.card
+
+		// do not increment the decision index, because the player still can make their own decision
+		return ResultOK, nil
+	case ActionFlipKing:
+		if participant.card.Rank != deck.King {
+			return ResultError, errors.New("you do not have a King")
+		}
+
+		participant.isFlipped = true
+		g.decisionIndex++
+		g.pendingTrade = false
+		return ResultOK, nil
 	}
 
-	g.decisionIndex++
-	return ResultOK, nil
+	return ResultError, fmt.Errorf("not a valid game action")
 }
 
 // EndRound performs all necessary end of round actions
@@ -184,13 +227,17 @@ func (g *Game) EndRound() error {
 	return nil
 }
 
-// decisionWith returns the participant who is currently making the decision
-func (g *Game) decisionWith() *Participant {
-	return g.participants[g.decisionIndex]
+// getCurrentTurn returns the participant who is currently making the decision
+func (g *Game) getCurrentTurn() *Participant {
+	if g.decisionIndex < len(g.participants) {
+		return g.participants[g.decisionIndex]
+	}
+
+	return nil
 }
 
-// isDecisionWithDealer returns true if the dealer is up
-func (g *Game) isDecisionWithDealer() bool {
+// isDealersTurn returns true if the dealer is up
+func (g *Game) isDealersTurn() bool {
 	return g.decisionIndex+1 == len(g.participants)
 }
 
@@ -301,6 +348,11 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		return nil, fmt.Errorf("could not find player with ID %d", playerID)
 	}
 
+	currentTurn := int64(0)
+	if p := g.getCurrentTurn(); p != nil {
+		currentTurn = p.PlayerID
+	}
+
 	return &playable.Response{
 		Key:   "game",
 		Value: "pass-the-poop",
@@ -313,7 +365,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 				AllParticipants: g.idToParticipant,
 				Ante:            g.options.Ante,
 				Pot:             g.pot,
-				DecisionIndex:   g.decisionIndex,
+				CurrentTurn:     currentTurn,
 			},
 		},
 	}, nil
