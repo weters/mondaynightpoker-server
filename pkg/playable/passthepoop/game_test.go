@@ -72,47 +72,36 @@ func TestGame_ExecuteTurnForPlayer_AllTrades(t *testing.T) {
 	participants[2].card = card("4c")
 	game.deck.Cards[0] = card("5c")
 
-	res, err := game.ExecuteTurnForPlayer(2, ActionTrade)
-	assert.EqualError(t, err, "you are not up")
-	assert.Equal(t, ResultError, res)
+	execOK, execError := createExecFunctions(t, game)
 
-	res, err = game.ExecuteTurnForPlayer(99, ActionTrade)
-	assert.EqualError(t, err, "99 is not in this game")
-	assert.Equal(t, ResultError, res)
+	execError(2, ActionTrade, "you are not up")
+	execError(99, ActionTrade, "99 is not in this game")
+	execError(1, GameAction(99), "not a valid game action")
+	execOK(1, ActionTrade)
+	// swap did not happen yet
+	assert.Equal(t, card("2c"), participants[0].card)
+	assert.Equal(t, card("3c"), participants[1].card)
 
-	res, err = game.ExecuteTurnForPlayer(1, GameAction(99))
-	assert.EqualError(t, err, "not a valid game action")
-	assert.Equal(t, ResultError, res)
-
-	res, err = game.ExecuteTurnForPlayer(1, ActionTrade)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
+	execError(2, ActionTrade, "there is a pending trade you have to accept")
+	execError(2, ActionStay, "there is a pending trade you have to accept")
+	execOK(2, ActionAccept)
 	assert.Equal(t, card("3c"), participants[0].card)
 	assert.Equal(t, card("2c"), participants[1].card)
 
 	// ensure the first player cannot double trade
-	res, err = game.ExecuteTurnForPlayer(1, ActionTrade)
-	assert.EqualError(t, err, "you are not up")
-	assert.Equal(t, ResultError, res)
-
-	res, err = game.ExecuteTurnForPlayer(2, ActionTrade)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
+	execError(1, ActionTrade, "you are not up")
+	execOK(2, ActionTrade)
+	execOK(3, ActionAccept)
 	assert.Equal(t, card("4c"), participants[1].card)
 	assert.Equal(t, card("2c"), participants[2].card)
 
 	// test going to the deck
-	res, err = game.ExecuteTurnForPlayer(3, ActionGoToDeck)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
-	res, err = game.ExecuteTurnForPlayer(3, ActionTrade)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
+	execError(3, ActionTrade, "the dealer can only go to the deck")
+	execOK(3, ActionGoToDeck)
+	execOK(3, ActionDrawFromDeck)
 	assert.Equal(t, card("5c"), participants[2].card)
 
-	res, err = game.ExecuteTurnForPlayer(3, ActionTrade)
-	assert.EqualError(t, err, "no more decisions can be made this round")
-	assert.Equal(t, ResultError, res)
+	execError(3, ActionStay, "no more decisions can be made this round")
 }
 
 func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {
@@ -125,63 +114,50 @@ func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {
 	participants[3].card = card("14c")
 	game.deck.Cards[0] = card("13h")
 
+	execOK, execError := createExecFunctions(t, game)
+
 	// stay
-	res, err := game.ExecuteTurnForPlayer(1, ActionStay)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
+	execOK(1, ActionStay)
 	assert.Equal(t, card("10c"), participants[0].card)
 	assert.Equal(t, card("2c"), participants[1].card)
 
 	// hit a king
-	res, err = game.ExecuteTurnForPlayer(2, ActionTrade)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultKing, res)
+	execOK(2, ActionTrade)
+	execError(3, ActionAccept, "you cannot accept the trade if you have a King")
+	execError(3, ActionStay, "you have to flip the King")
 	assert.Equal(t, card("2c"), participants[1].card)
 	assert.Equal(t, card("13c"), participants[2].card)
 
 	// cannot trade with king
-	res, err = game.ExecuteTurnForPlayer(3, ActionTrade)
-	assert.EqualError(t, err, "you cannot trade a king")
-	assert.Equal(t, ResultError, res)
+	execError(3, ActionTrade, "you cannot trade a King")
 	assert.Equal(t, card("13c"), participants[2].card)
 
-	res, err = game.ExecuteTurnForPlayer(3, ActionStay)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
+	execError(3, ActionStay, "you have to flip the King")
+
+	execOK(3, ActionFlipKing)
 	assert.Equal(t, card("13c"), participants[2].card)
 	assert.Equal(t, card("14c"), participants[3].card)
 
 	// can trade for a king
-	res, err = game.ExecuteTurnForPlayer(4, ActionGoToDeck)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
-	res, err = game.ExecuteTurnForPlayer(4, ActionTrade)
-	assert.NoError(t, err)
-	assert.Equal(t, ResultOK, res)
+	execOK(4, ActionGoToDeck)
+	execOK(4, ActionDrawFromDeck)
 	assert.Equal(t, card("13h"), participants[3].card)
 }
 
 func TestGame_ExecuteTurnForPlayer_DealerDeck(t *testing.T) {
 	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
-	res, err := game.ExecuteTurnForPlayer(1, ActionGoToDeck)
-	assert.Equal(t, ResultError, res)
-	assert.EqualError(t, err, "only the dealer may go to the deck")
+	execOK, execError := createExecFunctions(t, game)
+	game.participants[1].card = card("2s") // ensure they don't have a King
 
-	res, err = game.ExecuteTurnForPlayer(1, ActionStay)
-	assert.Equal(t, ResultOK, res)
-	assert.NoError(t, err)
+	execError(1, ActionGoToDeck, "only the dealer may go to the deck")
+	execOK(1, ActionStay)
 
-	res, err = game.ExecuteTurnForPlayer(2, ActionTrade)
-	assert.Equal(t, ResultError, res)
-	assert.EqualError(t, err, "you must first announce your intention to go to the deck")
+	execError(2, ActionTrade, "the dealer can only go to the deck")
+	execError(2, ActionDrawFromDeck, "you must first announce your intention to draw from the deck")
 
-	res, err = game.ExecuteTurnForPlayer(2, ActionGoToDeck)
-	assert.Equal(t, ResultOK, res)
-	assert.NoError(t, err)
+	execOK(2, ActionGoToDeck)
 
-	res, err = game.ExecuteTurnForPlayer(2, ActionTrade)
-	assert.Equal(t, ResultOK, res)
-	assert.NoError(t, err)
+	execOK(2, ActionDrawFromDeck)
 }
 
 func getPlayerIDsFromGame(g *Game) []int64 {
@@ -246,6 +222,7 @@ func TestGame_GetPlayerState(t *testing.T) {
 	game.participants[1].lives = 0
 	game.eliminateAndRotateParticipants()
 
+
 	state, err := game.GetPlayerState(1)
 	assert.NoError(t, err)
 	assert.Equal(t, &playable.Response{
@@ -259,9 +236,31 @@ func TestGame_GetPlayerState(t *testing.T) {
 				AllParticipants: game.idToParticipant,
 				Ante:            game.options.Ante,
 				Pot:             game.options.Ante * 3,
-				DecisionIndex:   0,
+				CurrentTurn:     3, // game rotated
 			},
 			Card: card("9s"),
 		},
 	}, state)
+}
+
+func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action GameAction), func(playerID int64, action GameAction, expectedError string)) {
+	t.Helper()
+
+	execOK := func(playerID int64, action GameAction) {
+		t.Helper()
+
+		res, err := game.ExecuteTurnForPlayer(playerID, action)
+		assert.Equal(t, ResultOK, res)
+		assert.NoError(t, err)
+	}
+
+	execError := func(playerID int64, action GameAction, expectedError string) {
+		t.Helper()
+
+		res, err := game.ExecuteTurnForPlayer(playerID, action)
+		assert.Equal(t, ResultError, res)
+		assert.EqualError(t, err, expectedError)
+	}
+
+	return execOK, execError
 }
