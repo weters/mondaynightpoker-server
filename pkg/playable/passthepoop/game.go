@@ -158,12 +158,12 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 			return errors.New("you cannot trade a King")
 		}
 
-		if g.isDealersTurn() {
-			return errors.New("the dealer can only go to the deck")
-		}
-
 		if g.pendingTrade {
 			return errors.New("there is a pending trade you have to accept")
+		}
+
+		if g.isDealersTurn() {
+			return errors.New("the dealer can only go to the deck")
 		}
 
 		g.pendingTrade = true
