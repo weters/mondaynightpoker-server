@@ -91,6 +91,7 @@ func TestGame_ExecuteTurnForPlayer_AllTrades(t *testing.T) {
 	// ensure the first player cannot double trade
 	execError(1, ActionTrade, "you are not up")
 	execOK(2, ActionTrade)
+	execError(3, ActionTrade, "there is a pending trade you have to accept")
 	execOK(3, ActionAccept)
 	assert.Equal(t, card("4c"), participants[1].card)
 	assert.Equal(t, card("2c"), participants[2].card)
