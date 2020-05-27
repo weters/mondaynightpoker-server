@@ -523,18 +523,19 @@ func (g *Game) buildResults() error {
 
 	g.result = &Result{
 		Parent:        g.parentResult,
-		Ante:          g.ante,
 		PaidAnte:      payAnte,
 		PaidPot:       payPot,
 		Winners:       winners,
-		Booted:        booted,
 		Folded:        g.getFoldedPlayers(),
+		Booted:        booted,
 		WinningAmount: winningAmount,
+		Ante:          g.ante,
 		OldPot:        g.pot,
 		NewPot:        newPot,
+		table:         g.table,
+		logChan:       g.logChan,
 		playerOrder:   g.playerOrder,
 		idToPlayer:    g.idToPlayer,
-		table:         g.table,
 	}
 
 	return nil
