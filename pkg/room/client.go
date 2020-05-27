@@ -13,8 +13,8 @@ type Client struct {
 	// Conn is the underlying websocket connection
 	Conn *websocket.Conn
 
-	// Send is a channel for sending messages to the client
-	Send chan interface{}
+	// send is a channel for sending messages to the client
+	send chan interface{}
 
 	// Close is a channel for closing the client
 	Close chan string
@@ -31,12 +31,27 @@ type Client struct {
 // NewClient returns a new client object
 func NewClient(conn *websocket.Conn, player *table.Player, table *table.Table) *Client {
 	return &Client{
-		Send:   make(chan interface{}, 256),
+		send:   make(chan interface{}, 256),
 		Close:  make(chan string),
 		Conn:   conn,
 		player: player,
 		table:  table,
 	}
+}
+
+// Send send a message to the web client
+func (c *Client) Send(msg interface{}) bool {
+	select {
+	case c.send <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// SendChan returns a read-only channel
+func (c *Client) SendChan() <- chan interface{} {
+	return c.send
 }
 
 // String returns a traceable identifier for the player and table
