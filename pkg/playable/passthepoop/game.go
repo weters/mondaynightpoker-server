@@ -41,19 +41,6 @@ const (
 	ActionDrawFromDeck
 )
 
-// ActionResult is the result of a player's action
-type ActionResult int
-
-// action result values
-const (
-	// ResultError is no result
-	ResultError ActionResult = iota
-	// ResultOK means the trade or stay was successful
-	ResultOK
-	// ResultKing means the move was blocked by a King
-	ResultKing
-)
-
 // random seed generator
 // defined here for testing purposes
 var seed = int64(0)
@@ -108,36 +95,36 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 // A player can either stay or trade
 // If trading, the player can either trade with the next player, or if they are the last player, they can go to the deck
 // If trading with a player, and the next player has a King, they cannot trade
-func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) (ActionResult, error) {
+func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error {
 	if g.decisionIndex >= len(g.participants) {
-		return ResultError, errors.New("no more decisions can be made this round")
+		return errors.New("no more decisions can be made this round")
 	}
 
 	participant, ok := g.idToParticipant[playerID]
 	if !ok {
-		return ResultError, fmt.Errorf("%d is not in this game", playerID)
+		return fmt.Errorf("%d is not in this game", playerID)
 	}
 
 	if participant != g.getCurrentTurn() {
-		return ResultError, errors.New("you are not up")
+		return errors.New("you are not up")
 	}
 
 	switch gameAction {
 	case ActionStay:
 		if g.pendingTrade && participant.card.Rank == deck.King {
-			return ResultError, errors.New("you have to flip the King")
+			return errors.New("you have to flip the King")
 		}
 
 		if g.pendingTrade {
-			return ResultError, errors.New("there is a pending trade you have to accept")
+			return errors.New("there is a pending trade you have to accept")
 		}
 
 		// do nothing
 		g.decisionIndex++
-		return ResultOK, nil
+		return nil
 	case ActionGoToDeck:
 		if !g.isDealersTurn() {
-			return ResultError, errors.New("only the dealer may go to the deck")
+			return errors.New("only the dealer may go to the deck")
 		}
 
 		// going to the deck is a two-step process so we can first reveal the rest of the cards so the players
@@ -147,48 +134,48 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) (Acti
 		g.flipAllCards()
 
 		// do not advance decision index
-		return ResultOK, nil
+		return nil
 	case ActionDrawFromDeck:
 		if !g.isDealersTurn() {
-			return ResultError, errors.New("only the dealer may draw from the deck")
+			return errors.New("only the dealer may draw from the deck")
 		}
 
 		if !g.dealerWillGoToDeck {
-			return ResultError, errors.New("you must first announce your intention to draw from the deck")
+			return errors.New("you must first announce your intention to draw from the deck")
 		}
 
 		newCard, err := g.deck.Draw()
 		if err != nil {
-			return ResultError, err
+			return err
 		}
 
 		participant.card = newCard
 		g.dealerWillGoToDeck = false
 		g.decisionIndex++
-		return ResultOK, nil
+		return nil
 	case ActionTrade:
 		if participant.card.Rank == deck.King {
-			return ResultError, errors.New("you cannot trade a King")
+			return errors.New("you cannot trade a King")
 		}
 
 		if g.isDealersTurn() {
-			return ResultError, errors.New("the dealer can only go to the deck")
+			return errors.New("the dealer can only go to the deck")
 		}
 
 		if g.pendingTrade {
-			return ResultError, errors.New("there is a pending trade you have to accept")
+			return errors.New("there is a pending trade you have to accept")
 		}
 
 		g.pendingTrade = true
 		g.decisionIndex++
-		return ResultOK, nil
+		return nil
 	case ActionAccept:
 		if !g.pendingTrade {
-			return ResultError, errors.New("there is no card to accept")
+			return errors.New("there is no card to accept")
 		}
 
 		if participant.card.Rank == deck.King {
-			return ResultError, errors.New("you cannot accept the trade if you have a King")
+			return errors.New("you cannot accept the trade if you have a King")
 		}
 
 		g.pendingTrade = false
@@ -197,19 +184,19 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) (Acti
 		participant.card, prevParticipant.card = prevParticipant.card, participant.card
 
 		// do not increment the decision index, because the player still can make their own decision
-		return ResultOK, nil
+		return nil
 	case ActionFlipKing:
 		if participant.card.Rank != deck.King {
-			return ResultError, errors.New("you do not have a King")
+			return errors.New("you do not have a King")
 		}
 
 		participant.isFlipped = true
 		g.decisionIndex++
 		g.pendingTrade = false
-		return ResultOK, nil
+		return nil
 	}
 
-	return ResultError, fmt.Errorf("not a valid game action")
+	return fmt.Errorf("not a valid game action")
 }
 
 // EndRound performs all necessary end of round actions

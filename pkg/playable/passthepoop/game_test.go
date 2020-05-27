@@ -189,16 +189,12 @@ func TestGame_CompleteGame(t *testing.T) {
 	game.participants[1].card = card("3c")
 	game.participants[2].card = card("4c")
 
-	execOK := func(res ActionResult, err error) {
-		t.Helper()
-		assert.Equal(t, ResultOK, res)
-		assert.NoError(t, err)
-	}
+	execOK, _ := createExecFunctions(t, game)
 
 	// round 1
-	execOK(game.ExecuteTurnForPlayer(1, ActionStay))
-	execOK(game.ExecuteTurnForPlayer(2, ActionStay))
-	execOK(game.ExecuteTurnForPlayer(3, ActionStay))
+	execOK(1, ActionStay)
+	execOK(2, ActionStay)
+	execOK(3, ActionStay)
 	assert.NoError(t, game.EndRound())
 
 	assert.True(t, game.shouldContinue())
@@ -208,8 +204,8 @@ func TestGame_CompleteGame(t *testing.T) {
 	assert.Equal(t, card("6d"), game.participants[0].card)
 	assert.Equal(t, card("13d"), game.participants[1].card)
 
-	execOK(game.ExecuteTurnForPlayer(2, ActionStay))
-	execOK(game.ExecuteTurnForPlayer(3, ActionStay))
+	execOK(2, ActionStay)
+	execOK(3, ActionStay)
 
 	assert.NoError(t, game.EndRound())
 	assert.False(t, game.shouldContinue())
@@ -249,16 +245,14 @@ func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action 
 	execOK := func(playerID int64, action GameAction) {
 		t.Helper()
 
-		res, err := game.ExecuteTurnForPlayer(playerID, action)
-		assert.Equal(t, ResultOK, res)
+		err := game.ExecuteTurnForPlayer(playerID, action)
 		assert.NoError(t, err)
 	}
 
 	execError := func(playerID int64, action GameAction, expectedError string) {
 		t.Helper()
 
-		res, err := game.ExecuteTurnForPlayer(playerID, action)
-		assert.Equal(t, ResultError, res)
+		err := game.ExecuteTurnForPlayer(playerID, action)
 		assert.EqualError(t, err, expectedError)
 	}
 
