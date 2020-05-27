@@ -77,7 +77,7 @@ func (m *Mux) webSocketWriteLoop(client *room.Client, waitForCloseFrame chan boo
 			case <-time.After(time.Second):
 			}
 			return
-		case msg, ok := <-client.Send:
+		case msg, ok := <-client.SendChan():
 			if !ok {
 				return
 			}

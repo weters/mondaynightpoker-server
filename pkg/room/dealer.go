@@ -136,11 +136,11 @@ func (d *Dealer) AddClient(client *Client) {
 
 	d.stateChanged <- stateClientEvent
 	d.execInRunLoop <- func() {
-		client.Send <- &playable.Response{
+		client.Send(playable.Response{
 			Key:   "allLogs",
 			Value: "",
 			Data:  d.logMessages,
-		}
+		})
 
 		if d.game == nil {
 			return
@@ -152,7 +152,7 @@ func (d *Dealer) AddClient(client *Client) {
 			return
 		}
 
-		client.Send <- gs
+		client.Send(gs)
 	}
 }
 
@@ -180,9 +180,9 @@ func (d *Dealer) EndShift() {
 // NOTE: must only be called from the run loop
 func (d *Dealer) sendGameEnded() {
 	for _, client := range d.Clients() {
-		client.Send <- &playable.Response{
+		client.Send(playable.Response{
 			Key: "gameEnded",
-		}
+		})
 	}
 }
 
@@ -200,18 +200,18 @@ func (d *Dealer) sendGameData() {
 			continue
 		}
 
-		client.Send <- data
+		client.Send(data)
 	}
 }
 
 func (d *Dealer) sendLogMessages(messages []*playable.LogMessage) {
 	d.addLogMessages(messages)
 	for client := range d.clients {
-		client.Send <- &playable.Response{
+		client.Send(playable.Response{
 			Key:   "logs",
 			Value: "",
 			Data:  messages,
-		}
+		})
 	}
 }
 
@@ -251,10 +251,10 @@ func (d *Dealer) sendPlayerData() {
 	}
 
 	for _, client := range d.Clients() {
-		client.Send <- &playable.Response{
+		client.Send(playable.Response{
 			Key:  "clientState",
 			Data: csPlayers,
-		}
+		})
 	}
 }
 
@@ -267,7 +267,7 @@ func canPerformActionOnTable(ctx string, c *Client, action action) bool {
 
 	playerTable, err := c.player.GetPlayerTable(context.Background(), c.table)
 	if err != nil {
-		c.Send <- newErrorResponse(ctx, err)
+		c.Send(newErrorResponse(ctx, err))
 		return false
 	}
 
@@ -294,7 +294,7 @@ func canPerformActionOnTable(ctx string, c *Client, action action) bool {
 		logrus.WithField("action", action).Error("unknown action")
 	}
 
-	c.Send <- newErrorResponse(ctx, errors.New("you do not have the appropriate permission"))
+	c.Send(newErrorResponse(ctx, errors.New("you do not have the appropriate permission")))
 	return false
 }
 
@@ -316,15 +316,15 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			switch msg.Subject {
 			case "bourre":
 				if err := d.createBourreGame(msg.AdditionalData); err != nil {
-					c.Send <- newErrorResponse(msg.Context, err)
+					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
 
-				c.Send <- playable.OK(msg.Context)
+				c.Send(playable.OK(msg.Context))
 
 				return
 			default:
-				c.Send <- newErrorResponse(msg.Context, fmt.Errorf("unknown game: %s", msg.Subject))
+				c.Send(newErrorResponse(msg.Context, fmt.Errorf("unknown game: %s", msg.Subject)))
 				return
 			}
 		}
@@ -347,7 +347,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			})
 		}
 
-		c.Send <- playable.OK(msg.Context)
+		c.Send(playable.OK(msg.Context))
 	case "tableAdmin":
 		d.execInRunLoop <- func() {
 			if !canPerformActionOnTable(msg.Context, c, actionAdmin) {
@@ -356,19 +356,19 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 			playerID, ok := msg.AdditionalData["playerId"].(float64)
 			if !ok {
-				c.Send <- newErrorResponse(msg.Context, errors.New("could not obtain playerId"))
+				c.Send(newErrorResponse(msg.Context, errors.New("could not obtain playerId")))
 				return
 			}
 
 			player, err := table.GetPlayerByID(context.Background(), int64(playerID))
 			if err != nil {
-				c.Send <- newErrorResponse(msg.Context, err)
+				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
 			playerTable, err := player.GetPlayerTable(context.Background(), c.table)
 			if err != nil {
-				c.Send <- newErrorResponse(msg.Context, err)
+				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
@@ -397,11 +397,11 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			}
 
 			if err := playerTable.Save(context.Background()); err != nil {
-				c.Send <- newErrorResponse(msg.Context, err)
+				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
-			c.Send <- playable.OK(msg.Context)
+			c.Send(playable.OK(msg.Context))
 			d.stateChanged <- stateClientEvent
 			return
 		}
@@ -420,7 +420,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				var player *table.Player
 				player, err = table.GetPlayerByID(context.Background(), int64(playerID))
 				if err != nil {
-					c.Send <- newErrorResponse(msg.Context, err)
+					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
 
@@ -431,29 +431,29 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			}
 
 			if err != nil {
-				c.Send <- newErrorResponse(msg.Context, err)
+				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
 			isActive, ok := msg.AdditionalData["active"].(bool)
 			if !ok {
-				c.Send <- newErrorResponse(msg.Context, errors.New("active is not boolean"))
+				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
 				return
 			}
 
 			if pt.IsBlocked && isActive {
-				c.Send <- newErrorResponse(msg.Context, errors.New("player is currently blocked from participating"))
+				c.Send(newErrorResponse(msg.Context, errors.New("player is currently blocked from participating")))
 				return
 			}
 
 			pt.Active = isActive
 
 			if err := pt.Save(context.Background()); err != nil {
-				c.Send <- newErrorResponse(msg.Context, errors.New("active is not boolean"))
+				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
 				return
 			}
 
-			c.Send <- playable.OK(msg.Context)
+			c.Send(playable.OK(msg.Context))
 			d.stateChanged <- stateClientEvent
 		}
 	default:
@@ -461,13 +461,13 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			action, updateState, err := game.Action(c.player.ID, msg)
 			if err != nil {
 				logrus.WithError(err).WithField("client", c.String()).Error("could not perform action")
-				c.Send <- newErrorResponse(msg.Context, err)
+				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
 			if action != nil {
 				action.Context = msg.Context
-				c.Send <- action
+				c.Send(action)
 			}
 
 			if updateState {
@@ -478,13 +478,13 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				record, err := d.table.CreateGame(context.Background(), game.Name())
 				if err != nil {
 					logrus.WithError(err).Error("could not create game")
-					c.Send <- newErrorResponse(msg.Context, err)
+					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
 
 				if err := record.EndGame(context.Background(), details.Log, details.BalanceAdjustments); err != nil {
 					logrus.WithError(err).Error("could not save game")
-					c.Send <- newErrorResponse(msg.Context, err)
+					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
 
