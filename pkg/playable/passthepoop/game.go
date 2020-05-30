@@ -3,8 +3,10 @@ package passthepoop
 import (
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"strconv"
 )
 
 // Game is an individual game of pass the poop
@@ -22,24 +24,14 @@ type Game struct {
 	dealerWillGoToDeck bool
 	// prevent deal() from being called multiple times
 	dealtCards bool
+
+	// loserGroups will only be present after
+	// EndRound() is called, and cleared when nextRound() is called
+	loserGroups []*LoserGroup
+
+	// balanceAdjustments will be nil until the end of game calculations have been made
+	balanceAdjustments map[int64]int
 }
-
-// GameAction is a game action a player can take (i.e., stay or trade)
-type GameAction int
-
-// game action constants
-const (
-	ActionStay GameAction = iota
-	ActionTrade
-	// ActionAccept is when the player has to accept the swap from the previous player
-	ActionAccept
-	// ActionFlipKing is the action a player can take when they have a king and the previous
-	// player is attempting to swap
-	ActionFlipKing
-	// ActionGoToDeck happens when the dealer announces their intention to go to the deck
-	ActionGoToDeck
-	ActionDrawFromDeck
-)
 
 // random seed generator
 // defined here for testing purposes
@@ -61,6 +53,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 
 	d := deck.New()
 	d.Shuffle(seed)
+	logrus.WithField("seed", seed).WithField("deckSeed", d.Seed()).WithField("card", d.Cards[0]).Info("Shuffled")
 
 	idToParticipants := make(map[int64]*Participant)
 	participants := make([]*Participant, len(playerIDs))
@@ -201,16 +194,55 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 
 // EndRound performs all necessary end of round actions
 func (g *Game) EndRound() error {
+	if g.getCurrentTurn() != nil {
+		return errors.New("not all players have had a turn yet")
+	}
+
 	g.flipAllCards()
 
 	loserGroups, err := g.options.Edition.EndRound(g.participants)
 	if err != nil {
+		if err == ErrMutualDestruction {
+			logrus.WithError(err).Warn("round must be redone")
+			g.loserGroups = make([]*LoserGroup, 0)
+			return nil
+		}
+
 		return err
 	}
 
-	// TODO: do something with the loser groups
-	_ = loserGroups
+	g.loserGroups = loserGroups
 
+	if !g.shouldContinue() {
+		return g.endGame()
+	}
+
+	return nil
+}
+
+// endGame will calculate the end of game winner, make final balance adjustments
+// Note: this method assumes we already checked that we can end the game
+func (g *Game) endGame() error {
+	if g.balanceAdjustments != nil {
+		return errors.New("endGame() already called")
+	}
+
+	foundWinner := false
+	adjustments := make(map[int64]int)
+	for id, p := range g.idToParticipant {
+		if p.lives > 0 {
+			if foundWinner {
+				return errors.New("too many winners found")
+			}
+
+			foundWinner = true
+			p.balance += g.pot
+		}
+
+		adjustments[id] = p.balance
+	}
+
+	g.balanceAdjustments = adjustments
 	return nil
 }
 
@@ -278,6 +310,7 @@ func (g *Game) nextRound() error {
 	g.dealtCards = false
 	g.decisionIndex = 0
 	g.dealerWillGoToDeck = false
+	g.loserGroups = nil
 
 	return g.deal()
 }
@@ -292,13 +325,16 @@ func (g *Game) deal() error {
 		g.deck.Shuffle(seed)
 	}
 
+	for _, p := range g.idToParticipant {
+		p.newRound()
+	}
+
 	for _, p := range g.participants {
 		card, err := g.deck.Draw()
 		if err != nil {
 			return err
 		}
 
-		p.newRound()
 		p.card = card
 	}
 
@@ -314,6 +350,10 @@ func (g *Game) flipAllCards() {
 	}
 }
 
+func (g *Game) isRoundOver() bool {
+	return g.loserGroups != nil
+}
+
 // -- Methods for the playable.Playable interface --
 
 // Name returns the name of the game
@@ -324,28 +364,91 @@ func (g *Game) Name() string {
 // Action is called when a client performs an action
 // Part of the Playable interface
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
-	panic("implement me")
+	switch message.Action {
+	case "execute":
+		raw, err := strconv.Atoi(message.Subject)
+		if err != nil {
+			return nil, false, err
+		}
+
+		action, err := GameActionFromInt(raw)
+		if err != nil {
+			return nil, false, err
+		}
+
+		switch action {
+		case ActionEndRound:
+			if err := g.EndRound(); err != nil {
+				return nil, false, err
+			}
+
+			return playable.OK(), true, nil
+		case ActionNextRound:
+			if err := g.nextRound(); err != nil {
+				return nil, false, err
+			}
+
+			return playable.OK(), true, nil
+		default:
+			if err := g.ExecuteTurnForPlayer(playerID, action); err != nil {
+				return nil, false, err
+			}
+
+			return playable.OK(), true, nil
+		}
+	default:
+		return nil, false, fmt.Errorf("unsupported action: %s", message.Action)
+	}
 }
 
 // GetPlayerState returns the player state in the game
 // Part of the Playable interface
 func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
-	participant, found := g.idToParticipant[playerID]
-	if !found {
-		return nil, fmt.Errorf("could not find player with ID %d", playerID)
-	}
-
+	var card *deck.Card
+	actions := make([]GameAction, 0)
 	currentTurn := int64(0)
 	if p := g.getCurrentTurn(); p != nil {
 		currentTurn = p.PlayerID
+	}
+
+	participant, found := g.idToParticipant[playerID]
+	if found {
+		card = participant.card
+
+		if currentTurn == playerID {
+			if g.pendingTrade {
+				if participant.card.Rank == deck.King {
+					actions = []GameAction{ActionFlipKing}
+				} else {
+					actions = []GameAction{ActionAccept}
+				}
+			} else {
+				if g.isDealersTurn() {
+					if g.dealerWillGoToDeck {
+						actions = []GameAction{ActionDrawFromDeck}
+					} else {
+						actions = []GameAction{ActionStay, ActionGoToDeck}
+					}
+				} else {
+					actions = []GameAction{ActionStay, ActionTrade}
+				}
+			}
+		}
+
+		if g.isRoundOver() {
+			actions = append(actions, ActionNextRound)
+		} else if g.getCurrentTurn() == nil {
+			actions = append(actions, ActionEndRound)
+		}
 	}
 
 	return &playable.Response{
 		Key:   "game",
 		Value: "pass-the-poop",
 		Data: &ParticipantState{
-			Participant: participant,
-			Card:        participant.card,
+			Participant:      participant,
+			Card:             card,
+			AvailableActions: actions,
 			GameState: &GameState{
 				Edition:         g.options.Edition.Name(),
 				Participants:    g.participants,
@@ -361,7 +464,14 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 // GetEndOfGameDetails returns the final results
 // Part of the Playable interface
 func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	panic("implement me")
+	if !g.shouldContinue() {
+		return &playable.GameOverDetails{
+			BalanceAdjustments: g.balanceAdjustments,
+			Log:                nil,
+		}, true
+	}
+
+	return nil, false
 }
 
 // LogChan returns a channel where log messages will be sent

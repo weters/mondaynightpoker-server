@@ -58,24 +58,32 @@ func (p *Participant) subtractLife(count int) int {
 // -- MarshallJSON implementation --
 
 type participantJSON struct {
-	PlayerID int64 `json:"playerId"`
-	Balance int `json:"balance"`
-	Lives int `json:"lives"`
-	IsFlipped bool `json:"isFlipped"`
+	PlayerID  int64      `json:"playerId"`
+	Balance   int        `json:"balance"`
+	Lives     int        `json:"lives"`
+	IsFlipped bool       `json:"isFlipped"`
+	Card      *deck.Card `json:"card"`
 }
 
 func (p *Participant) jsonObject() participantJSON {
+	// do not return card for all users unless it's been flipped
+	var card *deck.Card
+	if p.isFlipped {
+		card = p.card
+	}
+
 	return participantJSON{
 		PlayerID:  p.PlayerID,
 		Balance:   p.balance,
 		Lives:     p.lives,
 		IsFlipped: p.isFlipped,
+		Card:      card,
 	}
 }
 
 // MarshalJSON will JSON encode the data
 // Using a custom marshaller so we can expose some private fields that
 // I do not want to make public
-func (p *Participant) MarshalJSON() ([]byte, error)  {
+func (p *Participant) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p.jsonObject())
 }
