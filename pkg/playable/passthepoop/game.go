@@ -31,6 +31,10 @@ type Game struct {
 
 	// balanceAdjustments will be nil until the end of game calculations have been made
 	balanceAdjustments map[int64]int
+
+	// endGameAck is when a player acknowledges the game is over and the UI can go to
+	// game select screen
+	endGameAck bool
 }
 
 // random seed generator
@@ -118,6 +122,10 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 	case ActionGoToDeck:
 		if !g.isDealersTurn() {
 			return errors.New("only the dealer may go to the deck")
+		}
+
+		if participant.card.Rank == deck.King {
+			return errors.New("dealer must stay with a King")
 		}
 
 		// going to the deck is a two-step process so we can first reveal the rest of the cards so the players
@@ -350,6 +358,10 @@ func (g *Game) flipAllCards() {
 	}
 }
 
+func (g *Game) isGameOver() bool {
+	return g.balanceAdjustments != nil
+}
+
 func (g *Game) isRoundOver() bool {
 	return g.loserGroups != nil
 }
@@ -388,6 +400,9 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 				return nil, false, err
 			}
 
+			return playable.OK(), true, nil
+		case ActionEndGame:
+			g.endGameAck = true
 			return playable.OK(), true, nil
 		default:
 			if err := g.ExecuteTurnForPlayer(playerID, action); err != nil {
@@ -435,7 +450,9 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			}
 		}
 
-		if g.isRoundOver() {
+		if g.isGameOver() {
+			actions = append(actions, ActionEndGame)
+		} else if g.isRoundOver() {
 			actions = append(actions, ActionNextRound)
 		} else if g.getCurrentTurn() == nil {
 			actions = append(actions, ActionEndRound)
@@ -456,6 +473,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 				Ante:            g.options.Ante,
 				Pot:             g.pot,
 				CurrentTurn:     currentTurn,
+				LoserGroups:     g.loserGroups,
 			},
 		},
 	}, nil
@@ -464,14 +482,14 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 // GetEndOfGameDetails returns the final results
 // Part of the Playable interface
 func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	if !g.shouldContinue() {
-		return &playable.GameOverDetails{
-			BalanceAdjustments: g.balanceAdjustments,
-			Log:                nil,
-		}, true
+	if !g.endGameAck {
+		return nil, false
 	}
 
-	return nil, false
+	return &playable.GameOverDetails{
+		BalanceAdjustments: g.balanceAdjustments,
+		Log:                nil,
+	}, true
 }
 
 // LogChan returns a channel where log messages will be sent

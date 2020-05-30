@@ -148,11 +148,14 @@ func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {
 func TestGame_ExecuteTurnForPlayer_DealerDeck(t *testing.T) {
 	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
 	execOK, execError := createExecFunctions(t, game)
-	game.participants[1].card = card("2s") // ensure they don't have a King
 
 	execError(1, ActionGoToDeck, "only the dealer may go to the deck")
 	execOK(1, ActionStay)
 
+	game.participants[1].card = card("13s")
+	execError(2, ActionGoToDeck, "dealer must stay with a King")
+
+	game.participants[1].card = card("2s") // ensure they don't have a King
 	execError(2, ActionTrade, "the dealer can only go to the deck")
 	execError(2, ActionDrawFromDeck, "you must first announce your intention to draw from the deck")
 
