@@ -580,6 +580,11 @@ func (d *Dealer) createPassThePoopGame(additionalData map[string]interface{}) er
 		opts.Edition = &passthepoop.PairsEdition{}
 	}
 
+	lives, _ := additionalData["lives"].(float64)
+	if lives > 0 {
+		opts.Lives = int(lives)
+	}
+
 	game, err := passthepoop.NewGame(d.table.UUID, playerIDs, opts)
 	if err != nil {
 		return err

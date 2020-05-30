@@ -1,0 +1,3 @@
+BEGIN;
+-- noop
+END;

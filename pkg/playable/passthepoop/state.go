@@ -2,7 +2,6 @@ package passthepoop
 
 import (
 	"encoding/json"
-	"log"
 	"mondaynightpoker-server/pkg/deck"
 )
 
@@ -20,23 +19,32 @@ type GameState struct {
 // ParticipantState is the state for a specific participant
 type ParticipantState struct {
 	*Participant
-	GameState *GameState `json:"gameState"`
-	Card      *deck.Card `json:"card"`
+	GameState        *GameState
+	Card             *deck.Card
+	AvailableActions []GameAction
 }
 
 type participantStateJSON struct {
 	participantJSON
-	GameState *GameState `json:"gameState"`
-	Card      *deck.Card `json:"card"`
+	GameState        *GameState   `json:"gameState"`
+	Card             *deck.Card   `json:"card"`
+	AvailableActions []GameAction `json:"availableActions"`
 }
 
 // MarshalJSON performs custom JSON marshaling so we don't have to publicly expose
 // private fields
 func (p *ParticipantState) MarshalJSON() ([]byte, error) {
-	log.Println("MJ")
+	var pj participantJSON
+	var card *deck.Card
+	if participant := p.Participant; participant != nil {
+		pj = participant.jsonObject()
+		card = participant.card
+	}
+
 	return json.Marshal(participantStateJSON{
-		participantJSON: p.Participant.jsonObject(),
-		GameState:       p.GameState,
-		Card:            p.Participant.card,
+		participantJSON:  pj,
+		GameState:        p.GameState,
+		Card:             card,
+		AvailableActions: p.AvailableActions,
 	})
 }

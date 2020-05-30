@@ -193,6 +193,7 @@ func TestGame_CompleteGame(t *testing.T) {
 	execOK, _ := createExecFunctions(t, game)
 
 	// round 1
+	assert.EqualError(t, game.EndRound(), "not all players have had a turn yet")
 	execOK(1, ActionStay)
 	execOK(2, ActionStay)
 	execOK(3, ActionStay)
@@ -235,7 +236,8 @@ func TestGame_GetPlayerState(t *testing.T) {
 				Pot:             game.options.Ante * 3,
 				CurrentTurn:     3, // game rotated
 			},
-			Card: card("9s"),
+			Card:             card("9s"),
+			AvailableActions: []GameAction{},
 		},
 	}, state)
 }
