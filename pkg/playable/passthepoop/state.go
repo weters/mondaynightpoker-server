@@ -14,6 +14,7 @@ type GameState struct {
 	Ante            int                    `json:"ante"`
 	Pot             int                    `json:"pot"`
 	CurrentTurn     int64                  `json:"currentTurn"`
+	LoserGroups     []*LoserGroup          `json:"loserGroups"`
 }
 
 // ParticipantState is the state for a specific participant

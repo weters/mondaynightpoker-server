@@ -32,13 +32,15 @@ const (
 	ActionGoToDeck
 	ActionDrawFromDeck
 
+	// game based actions (i.e., not player specific)
 	ActionEndRound
 	ActionNextRound
+	ActionEndGame
 )
 
 // GameActionFromInt returns a GameAction object from an integer
 func GameActionFromInt(i int) (GameAction, error) {
-	if i >= 0 && i <= int(ActionNextRound) {
+	if i >= 0 && i <= int(ActionEndGame) {
 		return GameAction(i), nil
 	}
 
@@ -63,6 +65,8 @@ func (g GameAction) String() string {
 		return "End Round"
 	case ActionNextRound:
 		return "Next Round"
+	case ActionEndGame:
+		return "End Game"
 	}
 
 	panic(fmt.Sprintf("invalid action %d", g))
