@@ -5,6 +5,13 @@ import (
 	"mondaynightpoker-server/pkg/deck"
 )
 
+// GameActionDetails contains information about the last executed game action
+type GameActionDetails struct {
+	GameAction        GameAction `json:"gameAction"`
+	PlayerID          int64      `json:"playerId"`
+	SecondaryPlayerID int64      `json:"secondaryPlayerId"`
+}
+
 // GameState is the overall state of the game
 // These values must be safe for someone to snoop on
 type GameState struct {
@@ -14,6 +21,7 @@ type GameState struct {
 	Ante            int                    `json:"ante"`
 	Pot             int                    `json:"pot"`
 	CurrentTurn     int64                  `json:"currentTurn"`
+	LastGameAction  *GameActionDetails     `json:"lastGameAction"`
 	LoserGroups     []*LoserGroup          `json:"loserGroups"`
 }
 
