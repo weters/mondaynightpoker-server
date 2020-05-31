@@ -177,6 +177,142 @@ func TestDiarrheaEdition_EndRound_DoubleDoubleBail(t *testing.T) {
 	assert.Equal(t, 0, participants[3].lives)
 }
 
+func TestDiarrheaEdition_EndRound_AcePassBack(t *testing.T) {
+	game, err := NewGame("", []int64{1,2,3}, Options{
+		Ante:    75,
+		Lives:   3,
+		Edition: &DiarrheaEdition{},
+	})
+	assert.NoError(t, err)
+
+	game.participants[0].card = card("4c") // double'd out
+	game.participants[1].card = card("14d") // double'd out
+	game.participants[2].card = card("13c") // lose 1
+	execOK, _ := createExecFunctions(t, game)
+
+	execOK(1, ActionTrade) // trade 4 of Clubs
+	execOK(2, ActionAccept) // trade back A of Diamonds
+	execOK(2, ActionStay) // stay with 4 of Clubs
+	execOK(3, ActionStay) // stay with K of Clubs
+
+	assert.NoError(t, game.EndRound())
+	assert.Equal(t, []*LoserGroup{
+		{
+			Order:       0,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  1, Card:      card("14d"), LivesLost: 1 },
+			},
+		},
+		{
+			Order:       1,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  2, Card:      card("4c"), LivesLost: 1 },
+			},
+		},
+	}, game.loserGroups)
+
+	assert.Equal(t, 2, game.participants[0].lives)
+	assert.Equal(t, 2, game.participants[1].lives)
+	assert.Equal(t, 3, game.participants[2].lives)
+}
+
+func TestDiarrheaEdition_EndRound_AceFromDeck(t *testing.T) {
+	game, err := NewGame("", []int64{1,2,3,4,5}, Options{
+		Ante:    75,
+		Lives:   3,
+		Edition: &DiarrheaEdition{},
+	})
+	assert.NoError(t, err)
+
+	game.participants[0].card = card("6c") // double'd out
+	game.participants[1].card = card("6d") // double'd out
+	game.participants[2].card = card("7c") // lose 1
+	game.participants[3].card = card("8c") // safe
+	game.participants[4].card = card("3c") // lose 1
+	execOK, _ := createExecFunctions(t, game)
+
+	execOK(1, ActionStay)
+	execOK(2, ActionStay)
+	execOK(3, ActionStay)
+	execOK(4, ActionStay)
+	execOK(5, ActionGoToDeck)
+	game.deck.Cards[0] = card("14c") // ace pass back
+	execOK(5, ActionDrawFromDeck)
+
+	assert.NoError(t, game.EndRound())
+	assert.Equal(t, []*LoserGroup{
+		{
+			Order:       0,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  5, Card:      card("14c"), LivesLost: 1 },
+			},
+		},
+		{
+			Order:       1,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  1, Card:      card("6c"), LivesLost: 3 },
+				{ PlayerID:  2, Card:      card("6d"), LivesLost: 3 },
+			},
+		},
+		{
+			Order:       2,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  3, Card:      card("7c"), LivesLost: 1 },
+			},
+		},
+	}, game.loserGroups)
+
+	assert.Equal(t, 0, game.participants[0].lives)
+	assert.Equal(t, 0, game.participants[1].lives)
+	assert.Equal(t, 2, game.participants[2].lives)
+	assert.Equal(t, 3, game.participants[3].lives)
+	assert.Equal(t, 2, game.participants[4].lives)
+}
+
+func TestDiarrheaEdition_EndRound_AceFromDeck_DoubleD_Safe(t *testing.T) {
+	game, err := NewGame("", []int64{1,2,3,4}, Options{
+		Ante:    75,
+		Lives:   3,
+		Edition: &DiarrheaEdition{},
+	})
+	assert.NoError(t, err)
+
+	game.participants[0].card = card("6c") // double'd out
+	game.participants[1].card = card("6d") // double'd out
+	game.participants[2].card = card("7c") // safe
+	game.participants[3].card = card("3c") // lose 1
+	execOK, _ := createExecFunctions(t, game)
+
+	execOK(1, ActionStay)
+	execOK(2, ActionStay)
+	execOK(3, ActionStay)
+	execOK(4, ActionGoToDeck)
+	game.deck.Cards[0] = card("14c") // ace pass back
+	execOK(4, ActionDrawFromDeck)
+
+	assert.NoError(t, game.EndRound())
+	assert.Equal(t, []*LoserGroup{
+		{
+			Order:       0,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  4, Card:      card("14c"), LivesLost: 1 },
+			},
+		},
+		{
+			Order:       1,
+			RoundLosers: []*RoundLoser{
+				{ PlayerID:  1, Card:      card("6c"), LivesLost: 3 },
+				{ PlayerID:  2, Card:      card("6d"), LivesLost: 3 },
+			},
+		},
+	}, game.loserGroups)
+
+	assert.Equal(t, 0, game.participants[0].lives)
+	assert.Equal(t, 0, game.participants[1].lives)
+	assert.Equal(t, 3, game.participants[2].lives)
+	assert.Equal(t, 2, game.participants[3].lives)
+}
+
 func TestDiarrheaEdition_EndRound_MutualDestruction(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},

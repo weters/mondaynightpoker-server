@@ -26,16 +26,31 @@ func (d *DiarrheaEdition) ParticipantWasPassed(participant *Participant, nextCar
 
 // EndRound ends the round
 func (d *DiarrheaEdition) EndRound(participants []*Participant) ([]*LoserGroup, error) {
+	aceLosers := make([]*RoundLoser, 0)
+
 	// filter out any participants who have a dead card (i.e., were passed back an Ace)
 	liveParticipants := make([]*Participant, 0, len(participants))
 	for _, participant := range participants {
 		if !participant.deadCard {
 			liveParticipants = append(liveParticipants, participant)
+		} else {
+			aceLosers = append(aceLosers, &RoundLoser{
+				PlayerID:  participant.PlayerID,
+				Card:      participant.card,
+				LivesLost: 1, // XXX is this the best way to do this???
+			})
 		}
 	}
 
 	loserGroups := make([]*LoserGroup, 0)
-	for i := 0; true; i++ {
+	if len(aceLosers) > 0 {
+		loserGroups = append(loserGroups, &LoserGroup{
+			Order:       0,
+			RoundLosers: aceLosers,
+		})
+	}
+
+	for i := len(loserGroups); true; i++ {
 		roundLosers, remainingParticipants := d.getLowCards(liveParticipants)
 		if roundLosers == nil {
 			if i == 0 {

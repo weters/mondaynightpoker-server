@@ -196,6 +196,7 @@ func (g *Game) executeTurnForPlayer(playerID int64, gameAction GameAction, gameA
 		participant.card = newCard
 		g.dealerWillGoToDeck = false
 		g.decisionIndex++
+		g.options.Edition.ParticipantWasPassed(participant, participant.card)
 		return nil
 	case ActionTrade:
 		if participant.card.Rank == deck.King {
@@ -227,6 +228,8 @@ func (g *Game) executeTurnForPlayer(playerID int64, gameAction GameAction, gameA
 
 		prevParticipant := g.participants[g.decisionIndex-1]
 		participant.card, prevParticipant.card = prevParticipant.card, participant.card
+
+		g.options.Edition.ParticipantWasPassed(prevParticipant, prevParticipant.card)
 
 		// do not increment the decision index, because the player still can make their own decision
 		return nil
