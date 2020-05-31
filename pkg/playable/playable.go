@@ -23,7 +23,7 @@ type Playable interface {
 	Name() string
 
 	// LogChan should return a channel that a game will send log messages to
-	LogChan() chan []*LogMessage
+	LogChan() <-chan []*LogMessage
 }
 
 // LogMessage is the format a game should send log messages in

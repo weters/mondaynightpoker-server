@@ -52,7 +52,7 @@ func (g *Game) Name() string {
 }
 
 // LogChan returns a channel for sending log messages
-func (g *Game) LogChan() chan []*playable.LogMessage {
+func (g *Game) LogChan() <-chan []*playable.LogMessage {
 	return g.logChan
 }
 
