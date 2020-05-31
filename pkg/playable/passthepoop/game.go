@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+// how long you must wait before you can hit next round after
+// you end a round
+const nextRoundDelay = time.Second * 2
+
 // Game is an individual game of pass the poop
 type Game struct {
 	options         Options
@@ -42,6 +46,10 @@ type Game struct {
 	// endGameAck is when a player acknowledges the game is over and the UI can go to
 	// game select screen
 	endGameAck bool
+
+	// nextRoundStartTime if not zero, cannot start next round unless
+	// after now
+	nextRoundStartTime time.Time
 }
 
 // random seed generator
@@ -450,8 +458,15 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 				return nil, false, err
 			}
 
+			g.nextRoundStartTime = time.Now().Add(nextRoundDelay)
+
 			return playable.OK(), true, nil
 		case ActionNextRound:
+			diff := g.nextRoundStartTime.Sub(time.Now())
+			if !g.nextRoundStartTime.IsZero() && diff > 0 {
+				return nil, false, fmt.Errorf("please wait %.1f s until starting the next round", float64(diff) / float64(time.Second))
+			}
+
 			if err := g.nextRound(); err != nil {
 				return nil, false, err
 			}
@@ -497,6 +512,8 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 				if g.isDealersTurn() {
 					if g.dealerWillGoToDeck {
 						actions = []GameAction{ActionDrawFromDeck}
+					} else if participant.card.Rank == deck.King {
+						actions = []GameAction{ActionStay}
 					} else {
 						actions = []GameAction{ActionStay, ActionGoToDeck}
 					}
