@@ -25,6 +25,9 @@ type Game struct {
 	// prevent deal() from being called multiple times
 	dealtCards bool
 
+	// lastGameAction keeps track of the last successful game action
+	lastGameAction *GameActionDetails
+
 	// loserGroups will only be present after
 	// EndRound() is called, and cleared when nextRound() is called
 	loserGroups []*LoserGroup
@@ -93,6 +96,22 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 // If trading, the player can either trade with the next player, or if they are the last player, they can go to the deck
 // If trading with a player, and the next player has a King, they cannot trade
 func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error {
+	gameActionDetails := &GameActionDetails{
+		GameAction:        gameAction,
+		PlayerID:          playerID,
+		SecondaryPlayerID: 0,
+	}
+
+	if err := g.executeTurnForPlayer(playerID, gameAction, gameActionDetails); err != nil {
+		return err
+	}
+
+	// only save the details if it succeeded
+	g.lastGameAction = gameActionDetails
+	return nil
+}
+
+func (g *Game) executeTurnForPlayer(playerID int64, gameAction GameAction, gameActionDetails *GameActionDetails) error {
 	if g.decisionIndex >= len(g.participants) {
 		return errors.New("no more decisions can be made this round")
 	}
@@ -169,6 +188,7 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 
 		g.pendingTrade = true
 		g.decisionIndex++
+		gameActionDetails.SecondaryPlayerID = g.participants[g.decisionIndex].PlayerID
 		return nil
 	case ActionAccept:
 		if !g.pendingTrade {
@@ -473,6 +493,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 				Ante:            g.options.Ante,
 				Pot:             g.pot,
 				CurrentTurn:     currentTurn,
+				LastGameAction:  g.lastGameAction,
 				LoserGroups:     g.loserGroups,
 			},
 		},
