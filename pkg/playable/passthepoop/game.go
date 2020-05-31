@@ -50,6 +50,10 @@ type Game struct {
 	// nextRoundStartTime if not zero, cannot start next round unless
 	// after now
 	nextRoundStartTime time.Time
+
+	// gameLog keeps track of all moves and will be returned
+	// by GetEndOfGameDetails() to be stored in the database
+	gameLog *GameLog
 }
 
 // random seed generator
@@ -87,6 +91,16 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		idToParticipants[id] = participants[i]
 	}
 
+	gameLog := &GameLog{
+		Edition:   options.Edition.Name(),
+		Pot:       pot,
+		Ante:      options.Ante,
+		Lives:     options.Lives,
+		StartTime: time.Now(),
+		Players:   playerIDs,
+		Rounds:    make([]*GameLogRound, 0),
+	}
+
 	g := &Game{
 		deck:            d,
 		pot:             pot,
@@ -95,11 +109,14 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		idToParticipant: idToParticipants,
 		decisionIndex:   0,
 		logChan:         make(chan []*playable.LogMessage, 256),
+		gameLog:         gameLog,
 	}
 
 	if err := g.deal(); err != nil {
 		return nil, err
 	}
+
+	gameLog.AddRound(g.startingHand())
 
 	g.sendLogMessage(0, fmt.Sprintf("New game of Pass the Poop: %s Edition started", g.options.Edition.Name()))
 
@@ -137,6 +154,8 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 	case ActionStay:
 		g.sendLogMessage(playerID, "{} will stay")
 	}
+
+	g.gameLog.AddGameAction(gameActionDetails)
 
 	// only save the details if it succeeded
 	g.lastGameAction = gameActionDetails
@@ -283,6 +302,9 @@ func (g *Game) EndRound() error {
 	}
 	g.logChan <- messages
 
+	g.gameLog.SetLoserGroups(loserGroups)
+	g.gameLog.EndRound()
+
 	if !g.shouldContinue() {
 		return g.endGame()
 	}
@@ -307,6 +329,7 @@ func (g *Game) endGame() error {
 
 			foundWinner = true
 			p.balance += g.pot
+			g.gameLog.Winner = p.PlayerID
 		}
 
 		adjustments[id] = p.balance
@@ -384,7 +407,30 @@ func (g *Game) nextRound() error {
 	g.dealerWillGoToDeck = false
 	g.loserGroups = nil
 
-	return g.deal()
+	if err := g.deal(); err != nil {
+		return err
+	}
+
+	g.gameLog.AddRound(g.startingHand())
+
+	return nil
+}
+
+func (g *Game) startingHand() []*GameLogHand {
+	hands := make([]*GameLogHand, len(g.participants))
+	for i, p := range g.participants {
+		hands[i] = &GameLogHand{
+			PlayerID: p.PlayerID,
+			Card:     p.card,
+		}
+	}
+
+	hands = append(hands, &GameLogHand{
+		PlayerID: -1,
+		Card:     g.deck.Cards[0], // card in the deck
+	})
+
+	return hands
 }
 
 func (g *Game) deal() error {
@@ -464,7 +510,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		case ActionNextRound:
 			diff := g.nextRoundStartTime.Sub(time.Now())
 			if !g.nextRoundStartTime.IsZero() && diff > 0 {
-				return nil, false, fmt.Errorf("please wait %.1f s until starting the next round", float64(diff) / float64(time.Second))
+				return nil, false, fmt.Errorf("please wait %.1f s until starting the next round", float64(diff)/float64(time.Second))
 			}
 
 			if err := g.nextRound(); err != nil {
@@ -562,7 +608,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: g.balanceAdjustments,
-		Log:                nil,
+		Log:                g.gameLog,
 	}, true
 }
 
