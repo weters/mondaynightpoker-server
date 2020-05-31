@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/bourre"
+	"mondaynightpoker-server/pkg/playable/passthepoop"
 	"mondaynightpoker-server/pkg/table"
 	"sync"
 	"time"
@@ -90,7 +91,7 @@ func (d *Dealer) runLoop() {
 
 	log.WithField("uuid", d.table.UUID).Debug("creating dealer run loop")
 	for {
-		var logChan chan []*playable.LogMessage
+		var logChan <-chan []*playable.LogMessage
 		if d.game != nil {
 			logChan = d.game.LogChan()
 		}
@@ -321,7 +322,14 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				}
 
 				c.Send(playable.OK(msg.Context))
+				return
+			case "pass-the-poop":
+				if err := d.createPassThePoopGame(msg.AdditionalData); err != nil {
+					c.Send(newErrorResponse(msg.Context, err))
+					return
+				}
 
+				c.Send(playable.OK(msg.Context))
 				return
 			default:
 				c.Send(newErrorResponse(msg.Context, fmt.Errorf("unknown game: %s", msg.Subject)))
@@ -499,10 +507,10 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 	}
 }
 
-func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
+func (d *Dealer) getNextPlayersIDsForGame() ([]int64, error) {
 	players, err := d.table.GetActivePlayersShifted(context.Background())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	playerIDs := make([]int64, 0, len(players))
@@ -510,6 +518,15 @@ func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
 		if player.IsPlaying() {
 			playerIDs = append(playerIDs, player.PlayerID)
 		}
+	}
+
+	return playerIDs, nil
+}
+
+func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
+	playerIDs, err := d.getNextPlayersIDsForGame()
+	if err != nil {
+		return err
 	}
 
 	ante := 0
@@ -523,6 +540,53 @@ func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
 	}
 
 	if err := game.Deal(); err != nil {
+		return err
+	}
+
+	d.game = game
+	d.stateChanged <- stateGameEvent
+
+	return nil
+}
+
+func (d *Dealer) createPassThePoopGame(additionalData map[string]interface{}) error {
+	playerIDs, err := d.getNextPlayersIDsForGame()
+	if err != nil {
+		return err
+	}
+
+	ante := 0
+	if rawAnte, ok := additionalData["ante"]; ok {
+		ante = int(rawAnte.(float64))
+	}
+
+	if ante <= 0 {
+		return errors.New("ante must be greater than 0")
+	}
+
+	edition, ok := additionalData["edition"].(string)
+	if !ok {
+		return errors.New("edition is required")
+	}
+
+	opts := passthepoop.DefaultOptions()
+	opts.Ante = ante
+	switch edition {
+	case "standard":
+		opts.Edition = &passthepoop.StandardEdition{}
+	case "diarrhea":
+		opts.Edition = &passthepoop.DiarrheaEdition{}
+	case "pairs":
+		opts.Edition = &passthepoop.PairsEdition{}
+	}
+
+	lives, _ := additionalData["lives"].(float64)
+	if lives > 0 {
+		opts.Lives = int(lives)
+	}
+
+	game, err := passthepoop.NewGame(d.table.UUID, playerIDs, opts)
+	if err != nil {
 		return err
 	}
 

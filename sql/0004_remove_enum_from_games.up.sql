@@ -1,0 +1,4 @@
+BEGIN;
+ALTER TABLE games
+ALTER COLUMN game_type TYPE text;
+END;
