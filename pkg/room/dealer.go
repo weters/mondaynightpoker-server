@@ -91,7 +91,7 @@ func (d *Dealer) runLoop() {
 
 	log.WithField("uuid", d.table.UUID).Debug("creating dealer run loop")
 	for {
-		var logChan chan []*playable.LogMessage
+		var logChan <-chan []*playable.LogMessage
 		if d.game != nil {
 			logChan = d.game.LogChan()
 		}

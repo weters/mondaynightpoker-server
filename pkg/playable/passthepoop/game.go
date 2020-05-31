@@ -3,10 +3,12 @@ package passthepoop
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"strconv"
+	"time"
 )
 
 // Game is an individual game of pass the poop
@@ -16,6 +18,8 @@ type Game struct {
 	deck            *deck.Deck
 	participants    []*Participant
 	idToParticipant map[int64]*Participant
+
+	logChan chan []*playable.LogMessage
 
 	decisionIndex int
 	pendingTrade  bool // was the decision to swap the card
@@ -82,11 +86,14 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		participants:    participants,
 		idToParticipant: idToParticipants,
 		decisionIndex:   0,
+		logChan:         make(chan []*playable.LogMessage, 256),
 	}
 
 	if err := g.deal(); err != nil {
 		return nil, err
 	}
+
+	g.sendLogMessage(0, fmt.Sprintf("New game of Pass the Poop: %s Edition started", g.options.Edition.Name()))
 
 	return g, nil
 }
@@ -104,6 +111,23 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 
 	if err := g.executeTurnForPlayer(playerID, gameAction, gameActionDetails); err != nil {
 		return err
+	}
+
+	switch gameAction {
+	case ActionGoToDeck:
+		g.sendLogMessage(playerID, "{} will go to the deck")
+	case ActionTrade:
+		g.sendLogMessage(playerID, "{} trades their card")
+	case ActionAccept:
+		g.sendLogMessage(playerID, "{} accepted the trade")
+	case ActionFlipKing:
+		p := g.idToParticipant[playerID]
+		g.sendLogMessage(playerID, "{} revealed a King", p.card)
+	case ActionDrawFromDeck:
+		p := g.idToParticipant[playerID]
+		g.sendLogMessage(playerID, "{} pulled a card from the deck", p.card)
+	case ActionStay:
+		g.sendLogMessage(playerID, "{} will stay")
 	}
 
 	// only save the details if it succeeded
@@ -239,7 +263,14 @@ func (g *Game) EndRound() error {
 		return err
 	}
 
+	messages := make([]*playable.LogMessage, 0)
 	g.loserGroups = loserGroups
+	for _, group := range loserGroups {
+		for _, loser := range group.RoundLosers {
+			messages = append(messages, newLogMessage(loser.PlayerID, fmt.Sprintf("{} lost the round (-%d)", loser.LivesLost), loser.Card))
+		}
+	}
+	g.logChan <- messages
 
 	if !g.shouldContinue() {
 		return g.endGame()
@@ -334,6 +365,8 @@ func (g *Game) nextRound() error {
 	if len(g.participants) < 2 {
 		return errors.New("not enough players for a new round")
 	}
+
+	g.sendLogMessage(0, "Next round started")
 
 	g.dealtCards = false
 	g.decisionIndex = 0
@@ -515,7 +548,20 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 // LogChan returns a channel where log messages will be sent
 // Part of the Playable interface
-func (g *Game) LogChan() chan []*playable.LogMessage {
-	// XXX: implement me
-	return nil
+func (g *Game) LogChan() <-chan []*playable.LogMessage {
+	return g.logChan
+}
+
+func (g *Game) sendLogMessage(playerID int64, msg string, card ...*deck.Card) {
+	g.logChan <- []*playable.LogMessage{newLogMessage(playerID, msg, card...)}
+}
+
+func newLogMessage(playerID int64, msg string, card ...*deck.Card) *playable.LogMessage {
+	return &playable.LogMessage{
+		UUID:      uuid.New().String(),
+		PlayerIDs: []int64{playerID},
+		Cards:     card,
+		Message:   msg,
+		Time:      time.Now(),
+	}
 }
