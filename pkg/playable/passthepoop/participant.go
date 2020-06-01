@@ -58,26 +58,28 @@ func (p *Participant) subtractLife(count int) int {
 // -- MarshallJSON implementation --
 
 type participantJSON struct {
-	PlayerID  int64      `json:"playerId"`
-	Balance   int        `json:"balance"`
-	Lives     int        `json:"lives"`
-	IsFlipped bool       `json:"isFlipped"`
-	Card      *deck.Card `json:"card"`
+	PlayerID   int64      `json:"playerId"`
+	Balance    int        `json:"balance"`
+	Lives      int        `json:"lives"`
+	IsFlipped  bool       `json:"isFlipped"`
+	IsCardDead bool       `json:"isCardDead"`
+	Card       *deck.Card `json:"card"`
 }
 
 func (p *Participant) jsonObject() participantJSON {
 	// do not return card for all users unless it's been flipped
 	var card *deck.Card
-	if p.isFlipped {
+	if p.isFlipped || p.deadCard {
 		card = p.card
 	}
 
 	return participantJSON{
-		PlayerID:  p.PlayerID,
-		Balance:   p.balance,
-		Lives:     p.lives,
-		IsFlipped: p.isFlipped,
-		Card:      card,
+		PlayerID:   p.PlayerID,
+		Balance:    p.balance,
+		Lives:      p.lives,
+		IsFlipped:  p.isFlipped,
+		IsCardDead: p.deadCard,
+		Card:       card,
 	}
 }
 

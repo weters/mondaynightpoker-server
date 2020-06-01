@@ -1,6 +1,7 @@
 package passthepoop
 
 import (
+	"math"
 	"mondaynightpoker-server/pkg/deck"
 )
 
@@ -26,6 +27,10 @@ func (d *DiarrheaEdition) ParticipantWasPassed(participant *Participant, nextCar
 
 // EndRound ends the round
 func (d *DiarrheaEdition) EndRound(participants []*Participant) ([]*LoserGroup, error) {
+	if len(participants) <= 1 {
+		panic("EndRound should not be called with a single participant")
+	}
+
 	aceLosers := make([]*RoundLoser, 0)
 
 	// filter out any participants who have a dead card (i.e., were passed back an Ace)
@@ -50,7 +55,44 @@ func (d *DiarrheaEdition) EndRound(participants []*Participant) ([]*LoserGroup, 
 		})
 	}
 
+	if len(liveParticipants) <= 1 {
+		if len(loserGroups) == 0 {
+			panic("can't have 1 live participant and no loser groups")
+		}
+
+		if len(liveParticipants) == 1 {
+			return loserGroups, nil
+		}
+
+		// no live participants left. see if the one's who got an ace at least
+		// one has a life left
+		roundOK := false
+		for _, p := range participants {
+			if p.deadCard && p.lives > 0 {
+				roundOK = true
+				break
+			}
+		}
+
+		// nobody has any lives left. add a life
+		if !roundOK {
+			for _, p := range participants {
+				if p.deadCard {
+					p.lives++
+				}
+			}
+
+			return nil, ErrMutualDestruction
+		}
+
+		return loserGroups, nil
+	}
+
 	for i := len(loserGroups); true; i++ {
+		if i > 52 {
+			panic("infite loop detected")
+		}
+
 		roundLosers, remainingParticipants := d.getLowCards(liveParticipants)
 		if roundLosers == nil {
 			if i == 0 {
@@ -80,7 +122,7 @@ func (d *DiarrheaEdition) EndRound(participants []*Participant) ([]*LoserGroup, 
 
 // nil, nil is returned if there is a double screwed and no remaining players
 func (d *DiarrheaEdition) getLowCards(participants []*Participant) ([]*RoundLoser, []*Participant) {
-	lowRank := 99
+	lowRank := math.MaxInt32
 	low := make(map[*Participant]int)
 	index := 0
 	for _, participant := range participants {
