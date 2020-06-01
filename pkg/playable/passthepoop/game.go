@@ -591,6 +591,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 				AllParticipants: g.idToParticipant,
 				Ante:            g.options.Ante,
 				Pot:             g.pot,
+				CardsLeftInDeck: g.deck.CardsLeft(),
 				CurrentTurn:     currentTurn,
 				LastGameAction:  g.lastGameAction,
 				LoserGroups:     g.loserGroups,
