@@ -30,6 +30,7 @@ type Participant struct {
 func (p *Participant) newRound() {
 	p.card = nil
 	p.isFlipped = false
+	p.deadCard = false
 }
 
 // subtractLife will subtract the specified number of lives
