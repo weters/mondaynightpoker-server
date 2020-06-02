@@ -236,6 +236,7 @@ func TestGame_GetPlayerState(t *testing.T) {
 				Participants:    game.participants,
 				AllParticipants: game.idToParticipant,
 				Ante:            game.options.Ante,
+				Lives:           3,
 				Pot:             game.options.Ante * 3,
 				CardsLeftInDeck: 49,
 				CurrentTurn:     3, // game rotated

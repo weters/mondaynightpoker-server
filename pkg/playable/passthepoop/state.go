@@ -19,6 +19,7 @@ type GameState struct {
 	Participants    []*Participant         `json:"participants"`
 	AllParticipants map[int64]*Participant `json:"allParticipants"`
 	Ante            int                    `json:"ante"`
+	Lives           int                    `json:"lives"`
 	Pot             int                    `json:"pot"`
 	CardsLeftInDeck int                    `json:"cardsLeftInDeck"`
 	CurrentTurn     int64                  `json:"currentTurn"`
