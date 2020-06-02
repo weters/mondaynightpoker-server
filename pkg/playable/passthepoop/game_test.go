@@ -37,18 +37,33 @@ func Test_nextRound(t *testing.T) {
 	assert.NoError(t, err)
 	participants := game.participants
 
+	execOK, _ := createExecFunctions(t, game)
+	stay := func() {
+		for _, p := range game.participants {
+			execOK(p.PlayerID, ActionStay)
+		}
+	}
+
+	dealCards(game, "2c", "3c", "4c", "5c", "6c")
+	stay()
+	assert.NoError(t, game.EndRound())
 	assert.NoError(t, game.nextRound())
 	assert.Equal(t, []int64{2, 3, 4, 5, 1}, getPlayerIDsFromGame(game))
 
+	dealCards(game, "2c", "3c", "4c", "5c", "6c")
+	stay()
+	assert.NoError(t, game.EndRound())
 	assert.NoError(t, game.nextRound())
 	assert.Equal(t, []int64{3, 4, 5, 1, 2}, getPlayerIDsFromGame(game))
 
-	game.participants[0].lives = 0 // id=3, lost
-	game.participants[1].lives = 0 // id=4, lost
-	game.participants[2].lives = 1 // id=5, still alive
-
+	dealCards(game, "2c", "2c", "4c", "5c", "6c")
+	game.participants[0].lives = 1
+	game.participants[1].lives = 1
+	stay()
+	assert.NoError(t, game.EndRound())
 	assert.NoError(t, game.nextRound())
 	assert.Equal(t, []int64{5, 1, 2}, getPlayerIDsFromGame(game))
+
 	assert.Equal(t, map[int64]*Participant{
 		1: participants[0],
 		2: participants[1],
@@ -59,7 +74,9 @@ func Test_nextRound(t *testing.T) {
 
 	game.participants[0].lives = 0 // id=5
 	game.participants[1].lives = 0 // id=1
-
+	dealCards(game, "2c", "2c", "3c")
+	stay()
+	assert.NoError(t, game.EndRound())
 	assert.EqualError(t, game.nextRound(), "not enough players for a new round")
 }
 
@@ -247,6 +264,29 @@ func TestGame_GetPlayerState(t *testing.T) {
 			AvailableActions: []GameAction{},
 		},
 	}, state)
+}
+
+func TestGame_NextRoundAndEndRound(t *testing.T) {
+	game, _ := NewGame("", []int64{1,2,3}, DefaultOptions())
+	assert.EqualError(t, game.nextRound(), "you must end the round first")
+
+	execOk, _ := createExecFunctions(t, game)
+	dealCards(game, "3c", "4c", "3c")
+	execOk(1, ActionStay)
+	execOk(2, ActionStay)
+	execOk(3, ActionStay)
+	assert.NoError(t, game.EndRound())
+	assert.EqualError(t, game.EndRound(), "you cannot end the round multiple times")
+	livesEqual(t, game, map[int64]int{
+		1: 2,
+		2: 3,
+		3: 2,
+	})
+
+	assert.NoError(t, game.nextRound())
+	assert.EqualError(t, game.nextRound(), "you must end the round first")
+
+	assert.Equal(t, []int64{2,3,1}, getPlayerIDsFromGame(game))
 }
 
 func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action GameAction), func(playerID int64, action GameAction, expectedError string)) {

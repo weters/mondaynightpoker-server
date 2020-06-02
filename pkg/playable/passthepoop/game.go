@@ -280,6 +280,10 @@ func (g *Game) EndRound() error {
 		return errors.New("not all players have had a turn yet")
 	}
 
+	if g.loserGroups != nil {
+		return errors.New("you cannot end the round multiple times")
+	}
+
 	g.flipAllCards()
 
 	loserGroups, err := g.options.Edition.EndRound(g.participants)
@@ -394,6 +398,10 @@ func (g *Game) shouldContinue() bool {
 // 2. Set next decision index
 // Do not call nextRound() unless you know the game can continue
 func (g *Game) nextRound() error {
+	if g.loserGroups == nil {
+		return errors.New("you must end the round first")
+	}
+
 	g.eliminateAndRotateParticipants()
 
 	if len(g.participants) < 2 {

@@ -2,6 +2,7 @@ package passthepoop
 
 import (
 	"errors"
+	"math"
 	"mondaynightpoker-server/pkg/deck"
 )
 
@@ -15,7 +16,7 @@ type StandardEdition struct {
 
 // EndRound ends the round
 func (s *StandardEdition) EndRound(participants []*Participant) ([]*LoserGroup, error) {
-	lowRank := 99 // non-existent rank
+	lowRank := math.MaxInt32 // non-existent rank
 	low := make([]*Participant, 0, 1)
 	for _, participant := range participants {
 		// note: dead cards don't apply in standard edition

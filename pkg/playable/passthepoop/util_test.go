@@ -2,10 +2,12 @@ package passthepoop
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"regexp"
 	"strconv"
 	"strings"
+	"testing"
 )
 
 var cardRx = regexp.MustCompile(`^(?i)([2-9]|1[0-4])([cdhs])$`)
@@ -31,5 +33,19 @@ func card(s string) *deck.Card {
 	return &deck.Card{
 		Rank: rank,
 		Suit: suit,
+	}
+}
+
+func dealCards(g *Game, cards ...string) {
+	for i, c := range cards {
+		g.participants[i].card = card(c)
+	}
+}
+
+func livesEqual(t *testing.T, g *Game, livesMap map[int64]int) {
+	t.Helper()
+
+	for id, expectedLives := range livesMap {
+		assert.Equal(t, expectedLives, g.idToParticipant[id].lives, "expected player ID %d to have %d lives", id, expectedLives)
 	}
 }
