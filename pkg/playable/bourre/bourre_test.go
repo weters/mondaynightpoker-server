@@ -25,7 +25,7 @@ func TestNewGame(t *testing.T) {
 func Test_newGame(t *testing.T) {
 	g, err := newGame([]*Player{NewPlayer(1)}, nil, Options{})
 	assert.Nil(t, g)
-	assert.EqualError(t,  err, "expected 2–8 players, got 1")
+	assert.EqualError(t, err, "expected 2–8 players, got 1")
 
 	players := make([]*Player, 0)
 	for i := 0; i <= playersLimit; i++ {
@@ -34,7 +34,7 @@ func Test_newGame(t *testing.T) {
 
 	g, err = newGame(players, nil, Options{})
 	assert.Nil(t, g)
-	assert.EqualError(t,  err, "expected 2–8 players, got 9")
+	assert.EqualError(t, err, "expected 2–8 players, got 9")
 
 	testPlayers := []*Player{
 		NewPlayer(1),
@@ -292,7 +292,7 @@ func TestGame_FullGame_WithWinner(t *testing.T) {
 	})
 
 	foldedPlayer := &Player{}
-	game.foldedPlayers = map[*Player]bool{foldedPlayer:true}
+	game.foldedPlayers = map[*Player]bool{foldedPlayer: true}
 
 	game.ante = 88
 	game.pot = 99
@@ -467,6 +467,30 @@ func TestGame_EndGame_NeedsOne(t *testing.T) {
 	assert.True(t, game.canGameEnd())
 }
 
+func TestGame_replaceDiscards(t *testing.T) {
+	game, players := setupGame("14s", []string{
+		"2c,3c,4c,5c,6c",
+		"7c,8c,9c,10c,11c",
+		"2d,3d,4d,5d,6d",
+		"7d,8d,9d,10d,11d",
+	})
+
+	game.deck.Cards = cardsFromString("3s,4s,5s,6s,7s")
+	assert.NoError(t, game.playerDidDiscard(players[0], cardsFromString("2c,3c")))
+	assert.NoError(t, game.playerDidDiscard(players[1], cardsFromString("7c,8c")))
+	assert.NoError(t, game.playerDidDiscard(players[2], cardsFromString("2d,3d")))
+	assert.NoError(t, game.playerDidDiscard(players[3], cardsFromString("7d,8d")))
+
+	rand.Seed(0)
+	assert.NoError(t, game.replaceDiscards())
+
+	assert.Equal(t, "4c,5c,6c,3s,4s", cardsToString(players[0].hand))
+	assert.Equal(t, "9c,10c,11c,5s,6s", cardsToString(players[1].hand))
+	assert.Equal(t, "4d,5d,6d,7s,7c", cardsToString(players[2].hand))
+	// ensure the trump card is included in shuffle
+	assert.Equal(t, "9d,10d,11d,14s,2c", cardsToString(players[3].hand))
+}
+
 func createPlayCardFunc(t *testing.T, game *Game, players []*Player) func(player, card int) {
 	t.Helper()
 	return func(player, card int) {
@@ -546,7 +570,7 @@ func setupGame(trump string, playerHands []string) (*Game, []*Player) {
 		playerOrder:    playerOrder,
 		trumpCard:      trumpCard,
 		playerDiscards: make(map[*Player][]*deck.Card),
-		foldedPlayers: make(map[*Player]bool),
+		foldedPlayers:  make(map[*Player]bool),
 	}, players
 }
 

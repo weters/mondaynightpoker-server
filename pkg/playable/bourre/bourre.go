@@ -385,7 +385,7 @@ func (g *Game) replaceDiscards() error {
 		return ErrRoundNotOver
 	}
 
-	discardPile := make([]*deck.Card, 0)
+	discardPile := []*deck.Card{g.trumpCard}
 	players := make([]*Player, len(g.playerOrder))
 	for player, i := range g.playerOrder {
 		players[i] = player
