@@ -240,7 +240,6 @@ func TestGame_GetPlayerState(t *testing.T) {
 	game.participants[1].lives = 0
 	game.eliminateAndRotateParticipants()
 
-
 	state, err := game.GetPlayerState(1)
 	assert.NoError(t, err)
 	assert.Equal(t, &playable.Response{
@@ -267,7 +266,7 @@ func TestGame_GetPlayerState(t *testing.T) {
 }
 
 func TestGame_NextRoundAndEndRound(t *testing.T) {
-	game, _ := NewGame("", []int64{1,2,3}, DefaultOptions())
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
 	assert.EqualError(t, game.nextRound(), "you must end the round first")
 
 	execOk, _ := createExecFunctions(t, game)
@@ -286,7 +285,7 @@ func TestGame_NextRoundAndEndRound(t *testing.T) {
 	assert.NoError(t, game.nextRound())
 	assert.EqualError(t, game.nextRound(), "you must end the round first")
 
-	assert.Equal(t, []int64{2,3,1}, getPlayerIDsFromGame(game))
+	assert.Equal(t, []int64{2, 3, 1}, getPlayerIDsFromGame(game))
 }
 
 func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action GameAction), func(playerID int64, action GameAction, expectedError string)) {
@@ -307,4 +306,109 @@ func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action 
 	}
 
 	return execOK, execError
+}
+
+func TestGame_getActionsForParticipant(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2}, Options{
+		Ante:    100,
+		Lives:   2,
+		Edition: &StandardEdition{},
+	})
+
+	execOK, _ := createExecFunctions(t, game)
+
+	game.idToParticipant[1].card = card("2c")
+	actions := game.getActionsForParticipant(game.idToParticipant[1])
+	assert.Equal(t, []GameAction{
+		ActionStay,
+		ActionTrade,
+	}, actions)
+
+	game.idToParticipant[1].card = card("13c")
+	actions = game.getActionsForParticipant(game.idToParticipant[1])
+	assert.Equal(t, []GameAction{
+		ActionStay,
+		ActionFlipKing,
+	}, actions)
+
+	// no actions for player out of turn
+	assert.Equal(t, []GameAction{}, game.getActionsForParticipant(game.idToParticipant[2]))
+
+	game.idToParticipant[1].card = card("2c")
+	execOK(1, ActionTrade)
+
+	game.idToParticipant[2].card = card("13c")
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionFlipKing,
+	}, actions)
+
+	game.idToParticipant[2].card = card("12c")
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionAccept,
+	}, actions)
+
+	execOK(2, ActionAccept)
+
+	game.idToParticipant[2].card = card("13c")
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionStay,
+		ActionFlipKing,
+	}, actions)
+
+	game.idToParticipant[2].card = card("12c")
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionStay,
+		ActionGoToDeck,
+	}, actions)
+
+	execOK(2, ActionGoToDeck)
+
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionDrawFromDeck,
+	}, actions)
+
+	execOK(2, ActionDrawFromDeck)
+
+	actions = game.getActionsForParticipant(game.idToParticipant[1])
+	assert.Equal(t, []GameAction{
+		ActionEndRound,
+	}, actions)
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionEndRound,
+	}, actions)
+
+	game.idToParticipant[1].card = card("3c")
+	game.idToParticipant[2].card = card("4c")
+	assert.NoError(t, game.EndRound())
+
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionNextRound,
+	}, actions)
+
+	assert.NoError(t, game.nextRound())
+
+	// double check we are in a known state
+	assert.Equal(t, 1, game.idToParticipant[1].lives)
+	assert.Equal(t, 2, game.idToParticipant[2].lives)
+
+	game.idToParticipant[1].card = card("2c")
+	game.idToParticipant[2].card = card("3c")
+
+	execOK(2, ActionStay)
+	execOK(1, ActionStay)
+	assert.NoError(t, game.EndRound())
+
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{
+		ActionEndGame,
+	}, actions)
+
+	assert.True(t, game.isGameOver())
 }

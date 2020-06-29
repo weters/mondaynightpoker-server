@@ -78,8 +78,6 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 	d.Shuffle(seed)
 	logrus.WithField("seed", seed).WithField("deckSeed", d.Seed()).WithField("card", d.Cards[0]).Info("Shuffled")
 
-	d.Cards[1] = &deck.Card{Suit: deck.Hearts, Rank: deck.Ace}
-
 	idToParticipants := make(map[int64]*Participant)
 	participants := make([]*Participant, len(playerIDs))
 	pot := 0
@@ -155,6 +153,8 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 		g.sendLogMessage(playerID, "{} pulled a card from the deck", p.card)
 	case ActionStay:
 		g.sendLogMessage(playerID, "{} will stay")
+	default:
+		logrus.WithField("action", gameAction.String()).Warn("cannot exec action")
 	}
 
 	g.gameLog.AddGameAction(gameActionDetails)
@@ -556,36 +556,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	participant, found := g.idToParticipant[playerID]
 	if found {
 		card = participant.card
-
-		if currentTurn == playerID {
-			if g.pendingTrade {
-				if participant.card.Rank == deck.King {
-					actions = []GameAction{ActionFlipKing}
-				} else {
-					actions = []GameAction{ActionAccept}
-				}
-			} else {
-				if g.isDealersTurn() {
-					if g.dealerWillGoToDeck {
-						actions = []GameAction{ActionDrawFromDeck}
-					} else if participant.card.Rank == deck.King {
-						actions = []GameAction{ActionStay}
-					} else {
-						actions = []GameAction{ActionStay, ActionGoToDeck}
-					}
-				} else {
-					actions = []GameAction{ActionStay, ActionTrade}
-				}
-			}
-		}
-
-		if g.isGameOver() {
-			actions = append(actions, ActionEndGame)
-		} else if g.isRoundOver() {
-			actions = append(actions, ActionNextRound)
-		} else if g.getCurrentTurn() == nil {
-			actions = append(actions, ActionEndRound)
-		}
+		actions = g.getActionsForParticipant(participant)
 	}
 
 	return &playable.Response{
@@ -609,6 +580,45 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			},
 		},
 	}, nil
+}
+
+func (g *Game) getActionsForParticipant(participant *Participant) []GameAction {
+	actions := make([]GameAction, 0)
+	if g.getCurrentTurn() == participant {
+		if g.pendingTrade {
+			if participant.card.Rank == deck.King {
+				actions = []GameAction{ActionFlipKing}
+			} else {
+				actions = []GameAction{ActionAccept}
+			}
+		} else {
+			if g.isDealersTurn() {
+				if g.dealerWillGoToDeck {
+					actions = []GameAction{ActionDrawFromDeck}
+				} else if participant.card.Rank == deck.King {
+					actions = []GameAction{ActionStay, ActionFlipKing}
+				} else {
+					actions = []GameAction{ActionStay, ActionGoToDeck}
+				}
+			} else {
+				if participant.card.Rank == deck.King {
+					actions = []GameAction{ActionStay, ActionFlipKing}
+				} else {
+					actions = []GameAction{ActionStay, ActionTrade}
+				}
+			}
+		}
+	}
+
+	if g.isGameOver() {
+		actions = append(actions, ActionEndGame)
+	} else if g.isRoundOver() {
+		actions = append(actions, ActionNextRound)
+	} else if g.getCurrentTurn() == nil {
+		actions = append(actions, ActionEndRound)
+	}
+
+	return actions
 }
 
 // GetEndOfGameDetails returns the final results
