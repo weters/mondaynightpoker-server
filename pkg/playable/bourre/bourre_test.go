@@ -205,9 +205,9 @@ func TestGame_ReplaceDiscard(t *testing.T) {
 	assert.Equal(t, "4h,5h,6h,12h,13h", cardsToString(players[2].hand))
 	assert.Equal(t, "4s,5s,6s,14h,12s", cardsToString(players[3].hand))
 	// now we hit randoms
-	assert.Equal(t, "10c,11c,13s,3h,2d", cardsToString(players[4].hand))
+	assert.Equal(t, "10c,11c,13s,2c,10s", cardsToString(players[4].hand))
 	assert.Equal(t, "7d,8d,9d,10d,11d", cardsToString(players[5].hand))
-	assert.Equal(t, "8h,9h,10h,11h,2s", cardsToString(players[6].hand))
+	assert.Equal(t, "8h,9h,10h,11h,11s", cardsToString(players[6].hand))
 }
 
 func TestGame_IsGameOver(t *testing.T) {

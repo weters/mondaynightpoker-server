@@ -119,3 +119,33 @@ func TestPairsEdition_EndRound_Trips(t *testing.T) {
 	assert.Equal(t, 0, participants[5].lives)
 	assert.Equal(t, 0, participants[6].lives)
 }
+
+func TestPairsEdition_EndRound_Tied(t *testing.T) {
+	game, err := NewGame("", []int64{1,2}, Options{Lives: 1, Edition: &PairsEdition{}, Ante: 25})
+	assert.NoError(t, err)
+
+	game.idToParticipant[1].card = card("2c")
+	game.idToParticipant[2].card = card("2d")
+
+	execOK, _ := createExecFunctions(t, game)
+	execOK(1, ActionStay)
+	execOK(2, ActionStay)
+
+	assert.NoError(t, game.EndRound())
+	assert.Equal(t, 1, game.idToParticipant[1].lives)
+	assert.Equal(t, 1, game.idToParticipant[2].lives)
+
+	assert.False(t, game.isGameOver())
+	assert.NoError(t, game.nextRound())
+
+	game.idToParticipant[1].card = card("3c")
+	game.idToParticipant[2].card = card("2d")
+
+	execOK(2, ActionStay)
+	execOK(1, ActionStay)
+
+	assert.NoError(t, game.EndRound())
+	assert.Equal(t, 1, game.idToParticipant[1].lives)
+	assert.Equal(t, 0, game.idToParticipant[2].lives)
+	assert.True(t, game.isGameOver())
+}

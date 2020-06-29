@@ -56,7 +56,7 @@ func (p *PairsEdition) EndRound(participants []*Participant) ([]*LoserGroup, err
 
 	// trips or better and the rest lose
 	if largestGroupSize >= 3 {
-		roundLosers := make([]*RoundLoser, 0, len(participants) -largestGroupSize)
+		roundLosers := make([]*RoundLoser, 0, len(participants)-largestGroupSize)
 		for _, participant := range participants {
 			if participant.card.AceLowRank() != largestGroupRank {
 				roundLosers = append(roundLosers, &RoundLoser{
@@ -94,6 +94,11 @@ func (p *PairsEdition) EndRound(participants []*Participant) ([]*LoserGroup, err
 
 	losingParticipants := cardStats[lowestRank]
 	roundLosers := make([]*RoundLoser, len(losingParticipants))
+
+	if len(participants) == len(losingParticipants) {
+		return nil, ErrMutualDestruction
+	}
+
 	for i, participant := range losingParticipants {
 		roundLosers[i] = &RoundLoser{
 			PlayerID:  participant.PlayerID,
