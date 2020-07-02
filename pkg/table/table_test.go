@@ -2,10 +2,11 @@ package table
 
 import (
 	"database/sql"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTable_CreateGame(t *testing.T) {

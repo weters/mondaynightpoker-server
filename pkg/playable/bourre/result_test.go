@@ -1,9 +1,10 @@
 package bourre
 
 import (
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestResult_ShouldContinue(t *testing.T) {
@@ -36,8 +37,8 @@ func TestResult_NewGame(t *testing.T) {
 	}
 
 	idToPlayer := map[int64]*Player{
-		10: &Player{},
-		20: &Player{},
+		10: {},
+		20: {},
 	}
 	r = &Result{
 		Booted:      []*Player{p7},
@@ -87,9 +88,9 @@ func TestResult_NewGame_Booted(t *testing.T) {
 	game.ante = 50
 
 	cardFunc := createPlayCardFunc(t, game, players)
-	game.playerDidDiscard(players[0], []*deck.Card{})
-	game.playerDidDiscard(players[1], []*deck.Card{})
-	game.playerDidDiscard(players[2], []*deck.Card{})
+	_ = game.playerDidDiscard(players[0], []*deck.Card{})
+	_ = game.playerDidDiscard(players[1], []*deck.Card{})
+	_ = game.playerDidDiscard(players[2], []*deck.Card{})
 	assert.NoError(t, game.replaceDiscards())
 
 	cardFunc(0, 0)
@@ -129,26 +130,26 @@ func TestResult_NewGame_Booted(t *testing.T) {
 	players[1].hand = cardsFromString("2h,3h,4h,5h,6h")
 	game.trumpCard = cardFromString("14d")
 
-	game.playerDidDiscard(players[1], []*deck.Card{})
-	game.playerDidDiscard(players[0], []*deck.Card{})
+	_ = game.playerDidDiscard(players[1], []*deck.Card{})
+	_ = game.playerDidDiscard(players[0], []*deck.Card{})
 	assert.NoError(t, game.replaceDiscards())
 
 	cardFunc = createPlayCardFunc(t, game, []*Player{players[0], players[1]})
 	cardFunc(1, 0)
 	cardFunc(0, 0)
-	game.nextRound()
+	_ = game.nextRound()
 	cardFunc(0, 0)
 	cardFunc(1, 0)
-	game.nextRound()
+	_ = game.nextRound()
 	cardFunc(1, 0)
 	cardFunc(0, 0)
-	game.nextRound()
+	_ = game.nextRound()
 	cardFunc(0, 0)
 	cardFunc(1, 0)
-	game.nextRound()
+	_ = game.nextRound()
 	cardFunc(1, 0)
 	cardFunc(0, 0)
-	game.nextRound()
+	_ = game.nextRound()
 
 	game.done = true
 	details, over := game.GetEndOfGameDetails()

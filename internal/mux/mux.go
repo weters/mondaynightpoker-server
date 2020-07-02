@@ -2,14 +2,15 @@ package mux
 
 import (
 	"context"
-	gmux "github.com/gorilla/mux"
-	"net/http"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/pkg/room"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	gmux "github.com/gorilla/mux"
 )
 
 type ctxKey int
@@ -22,13 +23,13 @@ const (
 // Mux handles HTTP requests
 type Mux struct {
 	*gmux.Router
-	config  config
-	version string
+	config    config
+	version   string
 	recaptcha recaptcha
-	pitBoss *room.PitBoss
+	pitBoss   *room.PitBoss
 
 	// store for testing purposes
-	authRouter *gmux.Router
+	authRouter  *gmux.Router
 	adminRouter *gmux.Router
 }
 

@@ -4,14 +4,14 @@ import "mondaynightpoker-server/pkg/deck"
 
 // RoundLoser provides details for a particular participant who lost a round
 type RoundLoser struct {
-	PlayerID int64 `json:"playerId"`
-	Card *deck.Card `json:"card"`
-	LivesLost int `json:"livesLost"`
+	PlayerID  int64      `json:"playerId"`
+	Card      *deck.Card `json:"card"`
+	LivesLost int        `json:"livesLost"`
 }
 
 // LoserGroup is a group of losers who lost together
 type LoserGroup struct {
-	Order int `json:"order"`
+	Order       int           `json:"order"`
 	RoundLosers []*RoundLoser `json:"roundLosers"`
 }
 
@@ -37,4 +37,3 @@ type Edition interface {
 	// EndRound performs all end of round calculations
 	EndRound(participants []*Participant) ([]*LoserGroup, error)
 }
-

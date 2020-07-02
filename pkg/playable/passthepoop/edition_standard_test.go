@@ -1,10 +1,12 @@
 package passthepoop
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
+// nolint:dupl
 func TestStandardEdition_EndRound_SingleLoser(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},
@@ -30,7 +32,7 @@ func TestStandardEdition_EndRound_SingleLoser(t *testing.T) {
 }
 
 func TestStandardEdition_EndRound_MultiLoser(t *testing.T) {
-	game, _ := NewGame("", []int64{1,2,3}, DefaultOptions())
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
 	execOk, _ := createExecFunctions(t, game)
 	dealCards(game, "3c", "4c", "3c")
 	execOk(1, ActionStay)

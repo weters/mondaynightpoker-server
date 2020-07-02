@@ -3,12 +3,13 @@ package passthepoop
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // how long you must wait before you can hit next round after
@@ -518,7 +519,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 			return playable.OK(), true, nil
 		case ActionNextRound:
-			diff := g.nextRoundStartTime.Sub(time.Now())
+			diff := time.Until(g.nextRoundStartTime)
 			if !g.nextRoundStartTime.IsZero() && diff > 0 {
 				return nil, false, fmt.Errorf("please wait %.1f s until starting the next round", float64(diff)/float64(time.Second))
 			}
@@ -584,6 +585,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 
 func (g *Game) getActionsForParticipant(participant *Participant) []GameAction {
 	actions := make([]GameAction, 0)
+
 	if g.getCurrentTurn() == participant {
 		if g.pendingTrade {
 			if participant.card.Rank == deck.King {

@@ -9,7 +9,6 @@ import (
 // 1. An ace passed back results in the loss of a life, the ace is thrown out, and we still play for next low card
 // 2. If multiple people are tied with the lowest card, they lose all their lives, the cards are thrown out, and we still play for next low card
 type DiarrheaEdition struct {
-
 }
 
 // Name returns the name of the Edition

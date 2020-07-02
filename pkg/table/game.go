@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/db"
 	"time"
-)
 
+	"github.com/sirupsen/logrus"
+)
 
 // Game is a record in the `games` table
 type Game struct {

@@ -1,8 +1,9 @@
 package passthepoop
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPairsEdition_Name(t *testing.T) {
@@ -105,10 +106,10 @@ func TestPairsEdition_EndRound_Trips(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, lg)
 	assert.Equal(t, newLoserGroup([]*RoundLoser{
-		{ PlayerID:  1, Card:      card("13c"), LivesLost: 3 },
-		{ PlayerID:  5, Card:      card("2c"), LivesLost: 3 },
-		{ PlayerID:  6, Card:      card("2h"), LivesLost: 3 },
-		{ PlayerID:  7, Card:      card("2d"), LivesLost: 3 },
+		{PlayerID: 1, Card: card("13c"), LivesLost: 3},
+		{PlayerID: 5, Card: card("2c"), LivesLost: 3},
+		{PlayerID: 6, Card: card("2h"), LivesLost: 3},
+		{PlayerID: 7, Card: card("2d"), LivesLost: 3},
 	}), lg)
 
 	assert.Equal(t, 0, participants[0].lives)
@@ -121,7 +122,7 @@ func TestPairsEdition_EndRound_Trips(t *testing.T) {
 }
 
 func TestPairsEdition_EndRound_Tied(t *testing.T) {
-	game, err := NewGame("", []int64{1,2}, Options{Lives: 1, Edition: &PairsEdition{}, Ante: 25})
+	game, err := NewGame("", []int64{1, 2}, Options{Lives: 1, Edition: &PairsEdition{}, Ante: 25})
 	assert.NoError(t, err)
 
 	game.idToParticipant[1].card = card("2c")

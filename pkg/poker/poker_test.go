@@ -1,9 +1,10 @@
 package poker
 
 import (
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHandAnalyzer_GetFourOfAKind(t *testing.T) {
@@ -31,24 +32,24 @@ func TestHandAnalyzer_GetFullHouse(t *testing.T) {
 	h := NewHandAnalyzer(5, deck.CardsFromString("14c,2c,14d,5c,14h,2d,5h"))
 	r, ok := h.GetFullHouse()
 	assert.True(t, ok)
-	assert.Equal(t, []int{14,5}, r)
+	assert.Equal(t, []int{14, 5}, r)
 
 	h = NewHandAnalyzer(5, deck.CardsFromString("3c,3d,3h,4c,4d,4h,5c"))
 	r, ok = h.GetFullHouse()
 	assert.True(t, ok)
-	assert.Equal(t, []int{4,3}, r)
+	assert.Equal(t, []int{4, 3}, r)
 
 	// prefer the pair over the second trip
 	h = NewHandAnalyzer(5, deck.CardsFromString("3c,3d,3h,4c,4d,4h,5c,5d"))
 	r, ok = h.GetFullHouse()
 	assert.True(t, ok)
-	assert.Equal(t, []int{4,5}, r)
+	assert.Equal(t, []int{4, 5}, r)
 
 	// prefer the second trip over the pair
 	h = NewHandAnalyzer(5, deck.CardsFromString("7c,7d,7h,6c,6d,6h,5c,5d"))
 	r, ok = h.GetFullHouse()
 	assert.True(t, ok)
-	assert.Equal(t, []int{7,6}, r)
+	assert.Equal(t, []int{7, 6}, r)
 
 	h = NewHandAnalyzer(5, deck.CardsFromString("3c,3d,3h,4c,5d,6h,7c"))
 	r, ok = h.GetFullHouse()
@@ -76,7 +77,7 @@ func TestHandAnalyzer_GetPair(t *testing.T) {
 
 	h = NewHandAnalyzer(5, deck.CardsFromString("2c,3c,4h,5h,6d"))
 	r, ok = h.GetPair()
-	assert.False(t,ok)
+	assert.False(t, ok)
 	assert.Equal(t, 0, r)
 }
 
@@ -88,7 +89,7 @@ func TestHandAnalyzer_GetTrips(t *testing.T) {
 
 	h = NewHandAnalyzer(5, deck.CardsFromString("2c,3c,4h,4h,2d"))
 	r, ok = h.GetThreeOfAKind()
-	assert.False(t,ok)
+	assert.False(t, ok)
 	assert.Equal(t, 0, r)
 }
 
@@ -96,11 +97,11 @@ func TestHandAnalyzer_GetTwoPair(t *testing.T) {
 	h := NewHandAnalyzer(5, deck.CardsFromString("5c,5d,6h,6d,3h"))
 	r, ok := h.GetTwoPair()
 	assert.True(t, ok)
-	assert.Equal(t, []int{6,5}, r)
+	assert.Equal(t, []int{6, 5}, r)
 
 	h = NewHandAnalyzer(5, deck.CardsFromString("2c,2c,3h,4h,5d"))
 	r, ok = h.GetTwoPair()
-	assert.False(t,ok)
+	assert.False(t, ok)
 	assert.Nil(t, r)
 }
 
@@ -108,7 +109,7 @@ func TestHandAnalyzer_GetFlush(t *testing.T) {
 	h := NewHandAnalyzer(5, deck.CardsFromString("2c,3c,4c,5c,6c,7d,8d"))
 	r, ok := h.GetFlush()
 	assert.True(t, ok)
-	assert.Equal(t, []int{6,5,4,3,2}, r)
+	assert.Equal(t, []int{6, 5, 4, 3, 2}, r)
 
 	h = NewHandAnalyzer(5, deck.CardsFromString("2c,3c,4c,5c,6d"))
 	r, ok = h.GetFlush()
@@ -130,6 +131,7 @@ func TestHandAnalyzer_GetRoyalFlush(t *testing.T) {
 	assert.False(t, h.GetRoyalFlush())
 }
 
+// nolint:dupl
 func TestHandAnalyzer_GetStraightFlush(t *testing.T) {
 	h := NewHandAnalyzer(5, deck.CardsFromString("2c,3c,4c,5c,6c"))
 	r, ok := h.GetStraightFlush()
@@ -157,6 +159,7 @@ func TestHandAnalyzer_GetStraightFlush(t *testing.T) {
 	assert.Equal(t, 0, r)
 }
 
+// nolint:dupl
 func TestHandAnalyzer_GetStraight(t *testing.T) {
 	h := NewHandAnalyzer(5, deck.CardsFromString("2c,3d,4h,5s,6c"))
 	r, ok := h.GetStraight()

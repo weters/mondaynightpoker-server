@@ -2,15 +2,17 @@ package passthepoop
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var cardRx = regexp.MustCompile(`^(?i)([2-9]|1[0-4])([cdhs])$`)
+
 func card(s string) *deck.Card {
 	match := cardRx.FindStringSubmatch(s)
 	if match == nil {

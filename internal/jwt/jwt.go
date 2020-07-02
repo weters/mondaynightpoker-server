@@ -4,14 +4,15 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"mondaynightpoker-server/internal/util"
+	"path/filepath"
+	"strconv"
+	"time"
+
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
-	"path/filepath"
-	"mondaynightpoker-server/internal/util"
-	"strconv"
-	"time"
 )
 
 // Issuer issues the JWT

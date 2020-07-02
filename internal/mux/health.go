@@ -3,13 +3,13 @@ package mux
 import "net/http"
 
 type healthResponse struct {
-	Status string `json:"status"`
+	Status  string `json:"status"`
 	Version string `json:"version"`
 }
 
 func (m *Mux) getHealth() http.HandlerFunc {
 	payload := healthResponse{
-		Status: "OK",
+		Status:  "OK",
 		Version: m.version,
 	}
 

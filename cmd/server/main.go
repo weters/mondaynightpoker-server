@@ -2,9 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/gorilla/handlers"
-	"github.com/rs/cors"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/mux"
 	"mondaynightpoker-server/pkg/db"
@@ -12,6 +9,10 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gorilla/handlers"
+	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 )
 
 const readTimeout = time.Second * 5
@@ -33,7 +34,6 @@ func main() {
 		logrus.Fatal("missing RECAPTCHA_SECRET")
 	}
 
-
 	// run the db migrations
 	db.Migrate()
 
@@ -42,10 +42,10 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           loggingHandler(c.Handler(mux.NewMux(Version))),
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
+		Addr:         *addr,
+		Handler:      loggingHandler(c.Handler(mux.NewMux(Version))),
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
 	}
 
 	logrus.WithField("addr", srv.Addr).Info("listening")

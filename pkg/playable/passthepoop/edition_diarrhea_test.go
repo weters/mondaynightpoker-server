@@ -1,9 +1,10 @@
 package passthepoop
 
 import (
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDiarrheaEdition_Name(t *testing.T) {
@@ -27,6 +28,7 @@ func TestDiarrheaEdition_ParticipantWasPassed(t *testing.T) {
 	assert.True(t, p.deadCard)
 }
 
+// nolint:dupl
 func TestDiarrheaEdition_EndRound_NormalFinish(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},
@@ -402,7 +404,7 @@ func TestDiarrheaEdition_EndRound_AceToKing(t *testing.T) {
 	assert.Equal(t, 2, game.participants[3].lives)
 
 	assert.NoError(t, game.nextRound())
-	assert.Equal(t, []int64{2,4,1}, getPlayerIDsFromGame(game))
+	assert.Equal(t, []int64{2, 4, 1}, getPlayerIDsFromGame(game))
 }
 
 func TestDiarrheaEdition_EndRound_AcePassBack_2(t *testing.T) {
@@ -452,13 +454,13 @@ func TestDiarrheaEdition_EndRound_AcePassBack_2(t *testing.T) {
 	assert.Equal(t, 2, game.participants[4].lives)
 
 	assert.NoError(t, game.nextRound())
-	assert.Equal(t, []int64{2,3,4,5,1}, getPlayerIDsFromGame(game))
+	assert.Equal(t, []int64{2, 3, 4, 5, 1}, getPlayerIDsFromGame(game))
 
 	game.participants[0].card = card("14c") // 2
 	game.participants[1].card = card("13c") // 3
-	game.participants[2].card = card("2c") // 4
-	game.participants[3].card = card("3c") // 5
-	game.participants[4].card = card("4c") // 6
+	game.participants[2].card = card("2c")  // 4
+	game.participants[3].card = card("3c")  // 5
+	game.participants[4].card = card("4c")  // 6
 
 	execOK(2, ActionTrade)
 	execOK(3, ActionFlipKing)

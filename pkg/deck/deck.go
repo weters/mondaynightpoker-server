@@ -1,7 +1,7 @@
 package deck
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // nolint:gosec
 	"encoding/hex"
 	"errors"
 	"math/rand"
@@ -14,7 +14,7 @@ var ErrEndOfDeck = errors.New("end of deck reached")
 // Deck represents a playing deck
 type Deck struct {
 	Cards []*Card `json:"cards"`
-	seed int64
+	seed  int64
 }
 
 // New returns a new deck of cards.
@@ -61,8 +61,8 @@ func (d *Deck) Shuffle(seed int64) {
 
 	rand.Seed(seed)
 
-	for j := len(d.Cards)-1; j > 0; j-- {
-		i := rand.Intn(j+1)
+	for j := len(d.Cards) - 1; j > 0; j-- {
+		i := rand.Intn(j + 1)
 
 		d.Cards[i], d.Cards[j] = d.Cards[j], d.Cards[i]
 	}
@@ -75,9 +75,8 @@ func (d *Deck) ShuffleDiscards(discards []*Card) {
 	cards := make([]*Card, len(discards))
 	copy(cards, discards)
 
-
-	for j := len(cards)-1; j > 0; j-- {
-		i := rand.Intn(j+1)
+	for j := len(cards) - 1; j > 0; j-- {
+		i := rand.Intn(j + 1)
 
 		cards[i], cards[j] = cards[j], cards[i]
 	}
@@ -92,9 +91,9 @@ func (d *Deck) Seed() int64 {
 
 // HashCode returns a SHA1 hash code of the deck.
 func (d *Deck) HashCode() string {
-	hash := sha1.New()
+	hash := sha1.New() // nolint:gosec
 	for _, card := range d.Cards {
-		hash.Write([]byte(card.String()))
+		_, _ = hash.Write([]byte(card.String()))
 	}
 
 	return hex.EncodeToString(hash.Sum(nil)[:])

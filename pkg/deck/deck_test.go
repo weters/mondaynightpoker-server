@@ -1,10 +1,11 @@
 package deck
 
 import (
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewDeck(t *testing.T) {
@@ -45,11 +46,11 @@ func TestNewDeck(t *testing.T) {
 func TestDeck_Draw(t *testing.T) {
 	deck := New()
 
-	if !deck.CanDraw(52){
+	if !deck.CanDraw(52) {
 		t.Errorf("expected CanDraw(52) to be true")
 	}
 
-	if deck.CanDraw(53){
+	if deck.CanDraw(53) {
 		t.Errorf("expected CanDraw(53) to be false")
 	}
 

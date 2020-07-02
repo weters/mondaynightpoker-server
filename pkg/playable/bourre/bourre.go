@@ -3,11 +3,12 @@ package bourre
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 const playersLimit = 8
@@ -256,10 +257,8 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 	}).Info("new game of bourré started")
 
 	foldedPlayersMap := make(map[*Player]bool)
-	if foldedPlayers != nil {
-		for _, player := range foldedPlayers {
-			foldedPlayersMap[player] = true
-		}
+	for _, player := range foldedPlayers {
+		foldedPlayersMap[player] = true
 	}
 
 	g := &Game{

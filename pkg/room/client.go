@@ -2,10 +2,11 @@ package room
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/table"
+
+	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 )
 
 // Client is a client connected to the server via websockets
@@ -50,7 +51,7 @@ func (c *Client) Send(msg interface{}) bool {
 }
 
 // SendChan returns a read-only channel
-func (c *Client) SendChan() <- chan interface{} {
+func (c *Client) SendChan() <-chan interface{} {
 	return c.send
 }
 

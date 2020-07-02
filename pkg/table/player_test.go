@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/internal/util"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var cbg = context.Background()

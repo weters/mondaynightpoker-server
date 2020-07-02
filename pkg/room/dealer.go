@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/bourre"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
 	"mondaynightpoker-server/pkg/table"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 type state int
@@ -411,7 +412,6 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 			c.Send(playable.OK(msg.Context))
 			d.stateChanged <- stateClientEvent
-			return
 		}
 	case "playerStatus":
 		d.execInRunLoop <- func() {

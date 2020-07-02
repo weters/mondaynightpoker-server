@@ -3,8 +3,6 @@ package mux
 import (
 	"database/sql"
 	"errors"
-	"github.com/badoux/checkmail"
-	"github.com/gorilla/mux"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
@@ -12,6 +10,9 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/badoux/checkmail"
+	"github.com/gorilla/mux"
 )
 
 type playerPayload struct {
@@ -66,7 +67,7 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
-		if time.Now().Sub(at) < m.config.playerCreateDelay {
+		if time.Since(at) < m.config.playerCreateDelay {
 			writeJSONError(w, http.StatusBadRequest, errors.New("please wait before creating another player"))
 			return
 		}
@@ -93,7 +94,6 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			Player: player,
 			Email:  player.Email,
 		})
-		return
 	}
 }
 
@@ -185,7 +185,7 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, postPlayerAuthResponse{
-			JWT:    signedToken,
+			JWT: signedToken,
 			Player: playerWithEmail{
 				Player: player,
 				Email:  player.Email,

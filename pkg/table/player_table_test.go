@@ -1,8 +1,9 @@
 package table
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPlayerTable_Save(t *testing.T) {
@@ -69,7 +70,7 @@ func TestPlayerTable_AdjustBalance(t *testing.T) {
 
 func TestPlayerTable_IsPlaying(t *testing.T) {
 	pt := &PlayerTable{
-		Active: true,
+		Active:    true,
 		IsBlocked: false,
 	}
 	assert.True(t, pt.IsPlaying())

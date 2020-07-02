@@ -3,10 +3,11 @@ package mux
 import (
 	"context"
 	"errors"
-	"github.com/gorilla/mux"
-	"net/http"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
 	"regexp"
+
+	"github.com/gorilla/mux"
 )
 
 func (m *Mux) getTable() http.HandlerFunc {

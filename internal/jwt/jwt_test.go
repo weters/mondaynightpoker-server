@@ -1,12 +1,13 @@
 package jwt
 
 import (
-	jwtgo "github.com/dgrijalva/jwt-go"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
 	"time"
+
+	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSignAndValidateUserID(t *testing.T) {
@@ -72,12 +73,12 @@ func TestValidUserID_Expired(t *testing.T) {
 	privateKey = loadPrivateKey(filepath.Join("testdata", "private.key"))
 
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.StandardClaims{
-		Audience: Audience,
-		Id:       uuid.New().String(),
-		IssuedAt: time.Now().Unix(),
-		Issuer:   Issuer,
+		Audience:  Audience,
+		Id:        uuid.New().String(),
+		IssuedAt:  time.Now().Unix(),
+		Issuer:    Issuer,
 		ExpiresAt: time.Now().Add(time.Hour * -1).Unix(),
-		Subject:  "15",
+		Subject:   "15",
 	})
 
 	signedToken, err := token.SignedString(privateKey)

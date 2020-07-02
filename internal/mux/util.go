@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 const maxRows = 100
@@ -153,10 +154,10 @@ func assertDo(t *testing.T, req *http.Request, respObj interface{}, statusCode i
 	return resp
 }
 
-func assertGet(t *testing.T, ts *httptest.Server, path string, respObj interface{}, statusCode int, signedJWT ...string) *http.Response {
+func assertGetWithResp(t *testing.T, ts *httptest.Server, path string, respObj interface{}, statusCode int, signedJWT ...string) *http.Response {
 	t.Helper()
 
-	req, err := http.NewRequest(http.MethodGet, ts.URL + path, nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
 	if err != nil {
 		t.Error(err)
 		return nil
@@ -165,7 +166,13 @@ func assertGet(t *testing.T, ts *httptest.Server, path string, respObj interface
 	return assertDo(t, req, respObj, statusCode, signedJWT...)
 }
 
-func assertPost(t *testing.T, ts *httptest.Server, path string, payload interface{}, respObj interface{}, statusCode int, signedJWT ...string) *http.Response {
+func assertGet(t *testing.T, ts *httptest.Server, path string, respObj interface{}, statusCode int, signedJWT ...string) {
+	t.Helper()
+	resp := assertGetWithResp(t, ts, path, respObj, statusCode, signedJWT...)
+	_ = resp.Body.Close()
+}
+
+func assertPostWithResp(t *testing.T, ts *httptest.Server, path string, payload interface{}, respObj interface{}, statusCode int, signedJWT ...string) *http.Response {
 	t.Helper()
 
 	var body io.Reader
@@ -189,4 +196,10 @@ func assertPost(t *testing.T, ts *httptest.Server, path string, payload interfac
 	req.Header.Set("Content-Type", "application/json")
 
 	return assertDo(t, req, respObj, statusCode, signedJWT...)
+}
+
+func assertPost(t *testing.T, ts *httptest.Server, path string, payload interface{}, respObj interface{}, statusCode int, signedJWT ...string) {
+	t.Helper()
+	resp := assertPostWithResp(t, ts, path, payload, respObj, statusCode, signedJWT...)
+	resp.Body.Close()
 }

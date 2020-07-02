@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"net/http/httptest"
 	"mondaynightpoker-server/pkg/table"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -105,7 +105,6 @@ func Test_getTableUUID(t *testing.T) {
 
 	tbl, _ := p1.CreateTable(context.Background(), "My Table")
 	_, _ = p2.Join(context.Background(), tbl)
-
 
 	path := fmt.Sprintf("/table/%s", tbl.UUID)
 	var respObj getTableUUIDResponse

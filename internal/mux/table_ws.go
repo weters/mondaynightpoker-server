@@ -2,13 +2,14 @@ package mux
 
 import (
 	"encoding/json"
-	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
-	"net/http"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 )
 
 const writeWait = time.Second * 10

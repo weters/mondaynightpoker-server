@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
-	"net/http"
-	"net/http/httptest"
-	"os"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +22,7 @@ type mockRecaptcha struct {
 	token string
 }
 
-func newMockRecaptcha(valid bool) *mockRecaptcha { return &mockRecaptcha{valid: valid}}
+func newMockRecaptcha(valid bool) *mockRecaptcha { return &mockRecaptcha{valid: valid} }
 
 func (m *mockRecaptcha) Verify(token string) error {
 	m.token = token
@@ -62,16 +62,16 @@ func Test_postPlayer(t *testing.T) {
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", playerPayload{
 		DisplayName: "&",
-		Email:    "",
-		Password: "",
+		Email:       "",
+		Password:    "",
 	}, &obj, 400)
 	assert.Equal(t, "display name must only contain letters, numbers, and spaces, and be 40 characters or less", obj.Message)
 
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", playerPayload{
 		DisplayName: strings.Repeat("A", 41),
-		Email:    "",
-		Password: "",
+		Email:       "",
+		Password:    "",
 	}, &obj, 400)
 	assert.Equal(t, "display name must only contain letters, numbers, and spaces, and be 40 characters or less", obj.Message)
 
@@ -104,8 +104,8 @@ func Test_postPlayer(t *testing.T) {
 	// test display name
 	email = util.RandomEmail()
 	assertPost(t, ts, "/player", playerPayload{
-		Email:    email,
-		Password: "123456",
+		Email:       email,
+		Password:    "123456",
 		DisplayName: "Tommy",
 	}, &pObj, 201)
 	assert.Greater(t, pObj.ID, int64(0))
@@ -115,7 +115,7 @@ func Test_postPlayer(t *testing.T) {
 	m.config.playerCreateDelay = time.Hour
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", playerPayload{
-		Email: util.RandomEmail(),
+		Email:    util.RandomEmail(),
 		Password: "123456",
 	}, &obj, 400)
 	assert.Equal(t, "please wait before creating another player", obj.Message)
@@ -244,7 +244,6 @@ func Test_getPlayers(t *testing.T) {
 	_, _ = player()
 
 	assertGet(t, ts, "/player", nil, 403, j2)
-
 
 	var players []*playerWithEmail
 	assertGet(t, ts, "/player?start=0&rows=4", &players, 200, j1)

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"net/http"
-	"os"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
+	"net/http"
+	"os"
 	"testing"
 )
 
@@ -24,7 +24,7 @@ func Test_remoteAddr(t *testing.T) {
 
 func Test_parsePaginationOptions(t *testing.T) {
 	req := func(queryString string) *http.Request {
-		req, _ := http.NewRequest(http.MethodGet, "https://example.domain/" + queryString, nil)
+		req, _ := http.NewRequest(http.MethodGet, "https://example.domain/"+queryString, nil)
 		return req
 	}
 

@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/lib/pq"
-	"github.com/synacor/argon2id"
 	"mondaynightpoker-server/pkg/db"
 	"time"
+
+	"github.com/lib/pq"
+	"github.com/synacor/argon2id"
 )
 
 const playerColumns = `
@@ -260,4 +261,3 @@ LIMIT $2`
 
 	return players, nil
 }
-
