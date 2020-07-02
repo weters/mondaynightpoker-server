@@ -63,24 +63,20 @@ func (h *HandAnalyzer) analyzeHand() {
 
 	nCards := len(h.cards)
 	for i, card := range h.cards {
-		// --- Straight Flush Check ---
 		if h.straightFlush == 0 {
 			h.checkStraight(card, sfTracker[card.Suit], deck.HighAce, &h.straightFlush)
 		}
 
-		// --- Straight Check ---
 		if h.straight == 0 {
 			h.checkStraight(card, &sTracker, deck.HighAce, &h.straight)
 		}
 
-		// --- Flush Check ---
 		if h.flush == nil {
 			h.checkFlush(card, suitCounts)
 		}
 
-		// --- One Pair, Two pair, Trips, and Quads Check ---
 		isLastCard := i+1 == nCards
-		h.checkPairs(card, &prevRank, &numOfRank, isLastCard)
+		h.checkPairs(card, isLastCard, &prevRank, &numOfRank)
 	}
 
 	// check for straights and sTracker flushes with a low-ace
@@ -223,7 +219,7 @@ func (h *HandAnalyzer) checkFlush(card *deck.Card, suitCounts map[deck.Suit][]in
 	}
 }
 
-func (h *HandAnalyzer) checkPairs(card *deck.Card, prevRank, numOfRank *int, isLastCard bool) {
+func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, numOfRank *int) {
 	if card.Rank == *prevRank {
 		*numOfRank++
 	}
