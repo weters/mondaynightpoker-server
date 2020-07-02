@@ -16,4 +16,8 @@ Variable | Default | Description
 ## Supported Card Games
 
 * Bourré
-* Pass the Poop - [work in progress](https://github.com/weters/mondaynightpoker-server/tree/pass-the-poop)
+* Pass the Poop
+* Poker (work in progress)
+  * Five-card draw
+  * Seven-card stud
+  * Little L
