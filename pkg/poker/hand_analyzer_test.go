@@ -233,12 +233,6 @@ func TestHandAnalyzer_GetHand(t *testing.T) {
 	assert.Equal(t, "Straight", h.GetHand().String())
 }
 
-func TestHand_String(t *testing.T) {
-	assert.PanicsWithValue(t, "unknown hand: -1", func() {
-		_ = Hand(-1).String()
-	})
-}
-
 func BenchmarkNewHandAnalyzer(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		h := NewHandAnalyzer(5, deck.CardsFromString("3s,5s,6h,7h,11c,12c,14h"))
