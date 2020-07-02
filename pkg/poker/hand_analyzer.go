@@ -79,7 +79,7 @@ func (h *HandAnalyzer) analyzeHand() {
 		h.checkPairs(card, isLastCard, &prevRank, &numOfRank)
 	}
 
-	// check for straights and sTracker flushes with a low-ace
+	// check for straights and straight-flushes with a low-ace
 	for _, card := range h.cards {
 		if card.Rank != deck.Ace {
 			break
