@@ -92,10 +92,3 @@ func TestCardsFromString(t *testing.T) {
 		CardsFromString("2c,3s,4x")
 	})
 }
-
-func TestSuit_Int(t *testing.T) {
-	assert.Equal(t, 1, Clubs.Int())
-	assert.Equal(t, 2, Hearts.Int())
-	assert.Equal(t, 4, Diamonds.Int())
-	assert.Equal(t, 8, Spades.Int())
-}

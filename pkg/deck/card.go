@@ -18,22 +18,6 @@ const (
 	Spades   Suit = "spades"
 )
 
-// Int returns the integer representation
-func (s Suit) Int() int {
-	switch s {
-	case Clubs:
-		return 1
-	case Hearts:
-		return 1 << 1
-	case Diamonds:
-		return 1 << 2
-	case Spades:
-		return 1 << 3
-	}
-
-	return 0
-}
-
 // Card is an individual playing card
 type Card struct {
 	Rank int  `json:"rank"`
