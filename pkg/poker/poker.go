@@ -57,12 +57,14 @@ func (h Hand) String() string {
 
 // HandAnalyzer can analyze a hand
 type HandAnalyzer struct {
-	size  int
-	cards []*deck.Card
-	flush []int
-	quads []int
-	trips []int
-	pairs []int
+	size          int
+	cards         []*deck.Card
+	flush         []int
+	quads         []int
+	trips         []int
+	pairs         []int
+	straightFlush int
+	straight      int
 
 	hand Hand
 }
@@ -94,22 +96,7 @@ func NewHandAnalyzer(size int, cards []*deck.Card) *HandAnalyzer {
 	}
 
 	h.analyze()
-
-	if _, ok := h.GetFourOfAKind(); ok {
-		h.hand = FourOfAKind
-	} else if _, ok := h.GetFullHouse(); ok {
-		h.hand = FullHouse
-	} else if _, ok := h.GetFlush(); ok {
-		h.hand = Flush
-	} else if _, ok := h.GetThreeOfAKind(); ok {
-		h.hand = ThreeOfAKind
-	} else if _, ok := h.GetTwoPair(); ok {
-		h.hand = TwoPair
-	} else if _, ok := h.GetPair(); ok {
-		h.hand = OnePair
-	} else {
-		h.hand = HighCard
-	}
+	h.determineHand()
 
 	return h
 }
@@ -195,67 +182,163 @@ func (h *HandAnalyzer) GetFlush() ([]int, bool) {
 
 // GetRoyalFlush will return true if there's a royal flush
 func (h *HandAnalyzer) GetRoyalFlush() bool {
-	return false
+	return h.straightFlush > 0 && h.straightFlush == deck.Ace
 }
 
 // GetStraightFlush will return the best straight flush, if possible
 func (h *HandAnalyzer) GetStraightFlush() (int, bool) {
+	if h.straightFlush > 0 {
+		return h.straightFlush, true
+	}
+
 	return 0, false
 }
 
 // GetStraight will return the best straight, if possible
 func (h *HandAnalyzer) GetStraight() (int, bool) {
+	if h.straight > 0 {
+		return h.straight, true
+	}
+
 	return 0, false
 }
 
 func (h *HandAnalyzer) analyze() {
+	// keeps track of flushes
 	suitCounts := make(map[deck.Suit][]int)
 
+	// straight-flush tracker
+	sfTracker := map[deck.Suit]*straightTracker{
+		deck.Clubs:    {},
+		deck.Diamonds: {},
+		deck.Hearts:   {},
+		deck.Spades:   {},
+	}
+
+	// straight tracker
+	sTracker := straightTracker{}
+
+	// keeps track of pairs, trips, and quads
 	prevRank := math.MaxInt8
 	numOfRank := 0
 
-	quads := make([]int, 0)
-	trips := make([]int, 0)
-	pairs := make([]int, 0)
-
 	nCards := len(h.cards)
 	for i, card := range h.cards {
-		if card.Rank == prevRank {
-			numOfRank++
+		// --- Straight Flush Check ---
+		if h.straightFlush == 0 {
+			h.checkStraight(card, sfTracker[card.Suit], deck.HighAce, &h.straightFlush)
 		}
 
-		// if the card is no longer the same rank, or we're at the end
-		// check the longest group of cards we can form
-		if card.Rank != prevRank || i+1 == nCards {
-			switch numOfRank {
-			case 4:
-				quads = append(quads, prevRank)
-			case 3:
-				trips = append(trips, prevRank)
-			case 2:
-				pairs = append(pairs, prevRank)
-			}
-
-			numOfRank = 1
+		// --- Straight Check ---
+		if h.straight == 0 {
+			h.checkStraight(card, &sTracker, deck.HighAce, &h.straight)
 		}
 
-		prevRank = card.Rank
-
+		// --- Flush Check ---
 		if h.flush == nil {
-			ranks, ok := suitCounts[card.Suit]
-			if !ok {
-				ranks = make([]int, 0, 1)
-			}
-			ranks = append(ranks, card.Rank)
-			suitCounts[card.Suit] = ranks
-
-			if len(ranks) >= h.size {
-				h.flush = ranks
-			}
+			h.checkFlush(card, suitCounts)
 		}
+
+		// --- One Pair, Two pair, Trips, and Quads Check ---
+		isLastCard := i+1 == nCards
+		h.checkPairs(card, &prevRank, &numOfRank, isLastCard)
 	}
 
-	h.quads = quads
-	h.trips = trips
-	h.pairs = pairs
+	// check for straights and sTracker flushes with a low-ace
+	for _, card := range h.cards {
+		if card.Rank != deck.Ace {
+			break
+		}
+
+		if h.straightFlush == 0 {
+			h.checkStraight(card, sfTracker[card.Suit], deck.LowAce, &h.straightFlush)
+		}
+
+		if h.straight == 0 {
+			h.checkStraight(card, &sTracker, deck.LowAce, &h.straight)
+		}
+	}
+}
+
+func (h *HandAnalyzer) checkFlush(card *deck.Card, suitCounts map[deck.Suit][]int) {
+	ranks, ok := suitCounts[card.Suit]
+	if !ok {
+		ranks = make([]int, 0, 1)
+	}
+	ranks = append(ranks, card.Rank)
+	suitCounts[card.Suit] = ranks
+
+	if len(ranks) >= h.size {
+		h.flush = ranks
+	}
+}
+
+func (h *HandAnalyzer) checkPairs(card *deck.Card, prevRank, numOfRank *int, isLastCard bool) {
+	if card.Rank == *prevRank {
+		*numOfRank++
+	}
+
+	// if the card is no longer the same rank, or we're at the end
+	// check the longest group of cards we can form
+	if card.Rank != *prevRank || isLastCard {
+		switch *numOfRank {
+		case 4:
+			if h.quads == nil {
+				h.quads = make([]int, 0, 1)
+			}
+
+			h.quads = append(h.quads, *prevRank)
+		case 3:
+			if h.trips == nil {
+				h.trips = make([]int, 0, 1)
+			}
+
+			h.trips = append(h.trips, *prevRank)
+		case 2:
+			if h.pairs == nil {
+				h.pairs = make([]int, 0, 1)
+			}
+
+			h.pairs = append(h.pairs, *prevRank)
+		}
+
+		*numOfRank = 1
+	}
+
+	*prevRank = card.Rank
+}
+
+func (h *HandAnalyzer) determineHand() {
+	if h.GetRoyalFlush() {
+		h.hand = RoyalFlush
+	} else if _, ok := h.GetStraightFlush(); ok {
+		h.hand = StraightFlush
+	} else if _, ok := h.GetFourOfAKind(); ok {
+		h.hand = FourOfAKind
+	} else if _, ok := h.GetFullHouse(); ok {
+		h.hand = FullHouse
+	} else if _, ok := h.getThreeCardPokerStraight(); ok {
+		// in three card poker, a straight is better than a flush
+		h.hand = ThreeCardPokerStraight
+	} else if _, ok := h.GetFlush(); ok {
+		h.hand = Flush
+	} else if _, ok := h.GetStraight(); ok {
+		h.hand = Straight
+	} else if _, ok := h.GetThreeOfAKind(); ok {
+		h.hand = ThreeOfAKind
+	} else if _, ok := h.GetTwoPair(); ok {
+		h.hand = TwoPair
+	} else if _, ok := h.GetPair(); ok {
+		h.hand = OnePair
+	} else {
+		h.hand = HighCard
+	}
+}
+
+func (h *HandAnalyzer) getThreeCardPokerStraight() (int, bool) {
+	if h.size > 3 {
+		return 0, false
+	}
+
+	return h.GetStraight()
 }
