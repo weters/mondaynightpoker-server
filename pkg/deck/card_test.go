@@ -61,3 +61,41 @@ func TestCard_AceLowRank(t *testing.T) {
 	card.Rank = 14
 	assert.Equal(t, 1, card.AceLowRank())
 }
+
+func TestCardFromString(t *testing.T) {
+	c := CardFromString("2c")
+	assert.Equal(t, 2, c.Rank)
+	assert.Equal(t, Clubs, c.Suit)
+
+	c = CardFromString("3d")
+	assert.Equal(t, 3, c.Rank)
+	assert.Equal(t, Diamonds, c.Suit)
+
+	c = CardFromString("4h")
+	assert.Equal(t, 4, c.Rank)
+	assert.Equal(t, Hearts, c.Suit)
+
+	c = CardFromString("14S")
+	assert.Equal(t, 14, c.Rank)
+	assert.Equal(t, Spades, c.Suit)
+
+	assert.PanicsWithValue(t, "could not parse card: 15d", func() {
+		CardFromString("15d")
+	})
+}
+
+func TestCardsFromString(t *testing.T) {
+	cards := CardsFromString("2c,3s")
+	assert.Equal(t, "2c,3s", CardsToString(cards))
+
+	assert.PanicsWithValue(t, "could not parse card: 4x", func() {
+		CardsFromString("2c,3s,4x")
+	})
+}
+
+func TestSuit_Int(t *testing.T) {
+	assert.Equal(t, 1, Clubs.Int())
+	assert.Equal(t, 2, Hearts.Int())
+	assert.Equal(t, 4, Diamonds.Int())
+	assert.Equal(t, 8, Spades.Int())
+}
