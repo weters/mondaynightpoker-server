@@ -137,14 +137,15 @@ func (h *HandAnalyzer) GetFullHouse() ([]int, bool) {
 
 	pair, ok := h.GetPair()
 	if !ok {
-		if len(h.trips) >= 2 {
-			pair = h.trips[1]
-		} else {
+		if len(h.trips) == 1 {
+			// could not find a pair from a second set of trips
 			return nil, false
 		}
-	}
 
-	if len(h.trips) >= 2 && h.trips[1] > pair {
+		pair = h.trips[1]
+	} else if len(h.trips) >= 2 && h.trips[1] > pair {
+		// in an 8-card hand, we may have two sets of trips and a sepaarate pair
+		// in that case, let's make sure we grab the better pair from the trips
 		pair = h.trips[1]
 	}
 
