@@ -71,7 +71,7 @@ jobs:
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         with:
-          args: set image deploy mondaynightpoker-server mondaynightpoker-server=${{ env.IMAGE }}:${{ env.VERSION }}# --record
+          args: set image deploy mondaynightpoker-server mondaynightpoker-server=${{ env.IMAGE }}:${{ env.VERSION }} --record
 
       - name: Kubernetes Rollout Status
         uses: actions-hub/kubectl@master
