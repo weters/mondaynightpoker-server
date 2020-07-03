@@ -1,4 +1,4 @@
-package poker
+package handanalyzer
 
 import "mondaynightpoker-server/pkg/deck"
 

@@ -1,4 +1,4 @@
-package poker
+package handanalyzer
 
 import (
 	"math"
@@ -20,8 +20,8 @@ type HandAnalyzer struct {
 	hand Hand
 }
 
-// NewHandAnalyzer will return a new HandAnalyzer instance
-func NewHandAnalyzer(size int, cards []*deck.Card) *HandAnalyzer {
+// New will return a new HandAnalyzer instance
+func New(size int, cards []*deck.Card) *HandAnalyzer {
 	newCards := make([]*deck.Card, len(cards))
 	copy(newCards, cards)
 
