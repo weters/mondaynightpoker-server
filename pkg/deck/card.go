@@ -118,6 +118,10 @@ func CardFromString(s string) *Card {
 
 // CardsFromString will returns a slice of cards
 func CardsFromString(s string) []*Card {
+	if s == "" {
+		return []*Card{}
+	}
+
 	cardStrings := strings.Split(s, ",")
 	cards := make([]*Card, len(cardStrings))
 	for i, card := range cardStrings {
