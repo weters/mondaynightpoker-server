@@ -9,7 +9,21 @@ import (
 	"strings"
 )
 
+// ErrNotPlayersTurn is an error when a player attempts to act out of turn
+var ErrNotPlayersTurn = errors.New("it is not your turn")
+
 const maxParticipants = 10
+
+type stage int
+
+const (
+	stageTradeIn stage = iota // nolint
+	stageBeforeFirstTurn
+	stageBeforeSecondTurn
+	stageBeforeThirdTurn
+	stageFinalBettingRound // nolint
+	stageRevealWinner
+)
 
 // seed of 0 means truly random shuffle
 // setting to a global so we can override in a test
@@ -17,23 +31,19 @@ var seed int64 = 0
 
 // Game represents an individual game of Little L
 type Game struct {
-	playerIDs        []int64
-	idToParticipant  map[int64]*Participant
-	options          Options
-	logChan          chan []*playable.LogMessage
-	tradeInsBitField int
-	deck             *deck.Deck
-	decisionIndex    int
-	pot              int
-	currentBet       int
-	// stage 0 = trade-in
-	// stage 1 pre-turn
-	// stage 2 after card 1 flip
-	// stage 3 after card 2 flip
-	// stage 4 final betting round after card 3 flip
-	stage     int
-	community []*deck.Card
-	discards  []*deck.Card
+	playerIDs          []int64
+	idToParticipant    map[int64]*Participant
+	options            Options
+	logChan            chan []*playable.LogMessage
+	tradeInsBitField   int
+	deck               *deck.Deck
+	decisionStartIndex int
+	decisionCount      int
+	pot                int
+	currentBet         int
+	stage              stage
+	community          []*deck.Card
+	discards           []*deck.Card
 }
 
 // NewGame returns a new instance of the game
@@ -139,13 +149,33 @@ func (g *Game) GetAllowedTradeIns() string {
 	return strings.Join(tradeIns, ", ")
 }
 
+// GetCommunityCards will return the community cards
+// A card will be nil if we have not progressed far enough in the game
+func (g *Game) GetCommunityCards() []*deck.Card {
+	cards := make([]*deck.Card, 3)
+	if g.stage > stageBeforeFirstTurn {
+		cards[0] = g.community[0]
+	}
+
+	if g.stage > stageBeforeSecondTurn {
+		cards[1] = g.community[1]
+	}
+
+	if g.stage > stageBeforeThirdTurn {
+		cards[2] = g.community[2]
+	}
+
+	return cards
+}
+
 // GetCurrentTurn returns the current participant who needs to make a decision
 func (g *Game) GetCurrentTurn() *Participant {
-	if g.decisionIndex >= len(g.playerIDs) {
+	if g.decisionCount >= len(g.playerIDs) {
 		return nil
 	}
 
-	p := g.idToParticipant[g.playerIDs[g.decisionIndex]]
+	index := (g.decisionStartIndex + g.decisionCount) % len(g.playerIDs)
+	p := g.idToParticipant[g.playerIDs[index]]
 	if p.didFold {
 		panic("decision index is on a folded player")
 	}
@@ -158,22 +188,106 @@ func (g *Game) IsStageOver() bool {
 	return g.GetCurrentTurn() == nil
 }
 
+// NextStage will advance the game to the next stage
+func (g *Game) NextStage() error {
+	if !g.IsStageOver() {
+		return errors.New("stage is not over")
+	}
+
+	if g.stage == stageRevealWinner {
+		return errors.New("cannot advance the stage")
+	}
+
+	for _, p := range g.idToParticipant {
+		p.balance -= p.currentBet
+	}
+
+	g.stage++
+	g.reset()
+	return nil
+}
+
+// ParticipantBets handles both bets and raises
+func (g *Game) ParticipantBets(p *Participant, bet int) error {
+	if g.GetCurrentTurn() != p {
+		return ErrNotPlayersTurn
+	}
+
+	if bet > g.pot {
+		return fmt.Errorf("your bet (%d¢) must not exceed the current pot (%d¢)", bet, g.pot)
+	}
+
+	if bet < g.options.Ante {
+		return fmt.Errorf("your bet must at least match the ante (%d¢)", g.options.Ante)
+	}
+
+	if g.currentBet > 0 && bet < g.currentBet*2 {
+		return fmt.Errorf("your raise (%d¢) must be at least equal to the previous bet (%d¢)", bet, g.currentBet)
+	}
+
+	p.currentBet = bet
+	g.currentBet = bet
+
+	g.setDecisionIndexToCurrentTurn()
+	g.advanceDecision()
+
+	return nil
+}
+
+// setDecisionIndexToCurrentTurn will update the decision index to the current player's turn
+// This will happen when a player raises because we'll need to go around the table again
+func (g *Game) setDecisionIndexToCurrentTurn() {
+	currentIndex := (g.decisionStartIndex + g.decisionCount) % len(g.playerIDs)
+	g.decisionStartIndex = currentIndex
+	g.decisionCount = 0
+}
+
+// ParticipantCalls handles when the player calls the action
+func (g *Game) ParticipantCalls(p *Participant) error {
+	if g.GetCurrentTurn() != p {
+		return ErrNotPlayersTurn
+	}
+
+	p.currentBet = g.currentBet
+	g.advanceDecision()
+	return nil
+}
+
+// ParticipantFolds handles when a player folds their hand
+func (g *Game) ParticipantFolds(p *Participant) error {
+	if g.GetCurrentTurn() != p {
+		return ErrNotPlayersTurn
+	}
+
+	p.didFold = true
+	g.advanceDecision()
+	return nil
+}
+
 // reset should be called when we enter a new stage
 func (g *Game) reset() {
 	// find first live player
-	g.decisionIndex = -1
-	g.advanceDecision()
+	g.decisionStartIndex = 0
+	g.decisionCount = 0
+	g.advanceDecisionIfPlayerFolded()
 
 	g.currentBet = 0
 }
 
 func (g *Game) advanceDecision() {
-	// increment the decision index until we find the first player who hasn't folded, or we reached the end
-	i := 0
-	for i = g.decisionIndex + 1; i < len(g.playerIDs) && g.idToParticipant[g.playerIDs[i]].didFold; i++ {
-		// noop
+	g.decisionCount++
+	g.advanceDecisionIfPlayerFolded()
+}
+
+func (g *Game) advanceDecisionIfPlayerFolded() {
+	nPlayers := len(g.playerIDs)
+	for ; g.decisionCount < nPlayers; g.decisionCount++ {
+		playerIndex := (g.decisionStartIndex + g.decisionCount) % nPlayers
+		p := g.idToParticipant[g.playerIDs[playerIndex]]
+		if !p.didFold {
+			break
+		}
 	}
-	g.decisionIndex = i
 }
 
 func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) error {
@@ -182,7 +296,7 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 	}
 
 	if g.GetCurrentTurn() != p {
-		return errors.New("it is not your turn")
+		return ErrNotPlayersTurn
 	}
 
 	if !g.CanTrade(len(cards)) {

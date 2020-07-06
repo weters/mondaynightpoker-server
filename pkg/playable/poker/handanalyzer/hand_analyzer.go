@@ -202,8 +202,114 @@ func (h *HandAnalyzer) GetPair() (int, bool) {
 }
 
 // GetHighCard will return the high card
-func (h *HandAnalyzer) GetHighCard() (int, bool) {
-	return h.cards[0].Rank, true
+func (h *HandAnalyzer) GetHighCard() ([]int, bool) {
+	cards := make([]int, h.size)
+	for i := 0; i < h.size; i++ {
+		if i < len(h.cards) {
+			cards[i] = h.cards[i].Rank
+		}
+	}
+	return cards, true
+}
+
+func calculateStrength(hand Hand, cards []int) int {
+	fiveCards := make([]int, 5)
+	copy(fiveCards, cards)
+
+	strength := math.Pow(15, 5) * float64(hand)
+	for i := 0; i < 5; i++ {
+		val := fiveCards[4-i]
+		strength += math.Pow(15, float64(i)) * float64(val)
+	}
+
+	return int(strength)
+}
+
+// GetStrength returns the strength of the hand
+func (h *HandAnalyzer) GetStrength() int {
+	hand := h.GetHand()
+
+	switch hand {
+	case HighCard:
+		c, _ := h.GetHighCard()
+		return calculateStrength(hand, c)
+	case OnePair:
+		pair, _ := h.GetPair()
+		hc := make([]int, 0)
+		for _, card := range h.cards {
+			if card.Rank == pair {
+				continue
+			}
+
+			hc = append(hc, card.Rank)
+			if len(hc) == h.size-2 {
+				break
+			}
+		}
+		return calculateStrength(hand, append([]int{pair}, hc...))
+	case TwoPair:
+		twoPair, _ := h.GetTwoPair()
+		hc := 0
+		for _, card := range h.cards {
+			if card.Rank == twoPair[0] || card.Rank == twoPair[1] {
+				continue
+			}
+
+			hc = card.Rank
+			break
+		}
+		return calculateStrength(hand, []int{twoPair[0], twoPair[1], hc})
+	case ThreeOfAKind:
+		trips, _ := h.GetThreeOfAKind()
+		hc := make([]int, 0)
+		for _, card := range h.cards {
+			if card.Rank == trips {
+				continue
+			}
+
+			hc = append(hc, card.Rank)
+			if len(hc) >= 2 {
+				break
+			}
+		}
+		return calculateStrength(hand, append([]int{trips}, hc...))
+	case Straight:
+		s, _ := h.GetStraight()
+		return calculateStrength(hand, []int{s})
+	case Flush:
+		f, _ := h.GetFlush()
+		return calculateStrength(hand, f)
+	case ThreeCardPokerStraight:
+		s, _ := h.getThreeCardPokerStraight()
+		return calculateStrength(hand, []int{s})
+	case FullHouse:
+		fh, _ := h.GetFullHouse()
+		return calculateStrength(hand, fh)
+	case FourOfAKind:
+		fk, _ := h.GetFourOfAKind()
+		found := 0
+		hc := 0
+		for _, c := range h.cards {
+			if c.Rank == fk {
+				found++
+				if found <= 4 {
+					continue
+				}
+			}
+
+			hc = c.Rank
+			break
+		}
+
+		return calculateStrength(hand, []int{fk, hc})
+	case StraightFlush:
+		s, _ := h.GetStraightFlush()
+		return calculateStrength(hand, []int{s})
+	case RoyalFlush:
+		return calculateStrength(hand, []int{})
+	}
+
+	panic("unknown hand")
 }
 
 func (h *HandAnalyzer) checkFlush(card *deck.Card, suitCounts map[deck.Suit][]int) {
@@ -228,6 +334,8 @@ func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, nu
 	// check the longest group of cards we can form
 	if card.Rank != *prevRank || isLastCard {
 		switch *numOfRank {
+		case 5:
+			fallthrough
 		case 4:
 			if h.quads == nil {
 				h.quads = make([]int, 0, 1)

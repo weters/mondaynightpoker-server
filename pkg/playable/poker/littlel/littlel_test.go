@@ -129,13 +129,16 @@ func createTradeHelperFunc(game *Game) func(playerID int64, cards string) error 
 	}
 }
 
-func TestGame_reset(t *testing.T) {
+func TestGame_NextStage(t *testing.T) {
 	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	assert.EqualError(t, game.NextStage(), "stage is not over")
+
 	game.currentBet = 25
-	game.decisionIndex = 3
+	game.decisionCount = 3
 	game.idToParticipant[1].didFold = true
-	game.reset()
+	assert.NoError(t, game.NextStage())
 
 	assert.Equal(t, 0, game.currentBet)
-	assert.Equal(t, 1, game.decisionIndex)
+	assert.Equal(t, 1, game.decisionCount)
+	assert.Equal(t, 0, game.decisionStartIndex)
 }

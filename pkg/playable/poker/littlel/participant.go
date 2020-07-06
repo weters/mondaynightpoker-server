@@ -8,6 +8,9 @@ type Participant struct {
 	didFold  bool
 	balance  int
 	hand     deck.Hand
+
+	// currentBet is how much the player has bet in the current round
+	currentBet int
 }
 
 func newParticipant(id int64, ante int) *Participant {
