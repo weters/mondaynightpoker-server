@@ -1,6 +1,8 @@
 package handanalyzer
 
 import (
+	"fmt"
+	"log"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
 
@@ -241,91 +243,64 @@ func BenchmarkNewHandAnalyzer(b *testing.B) {
 }
 
 func TestHandAnalyzer_GetStrength(t *testing.T) {
-	h := New(5, deck.CardsFromString("14s,13c,12d,11s,9c"))
-	assert.Equal(t, 755499, h.GetStrength())
-	h = New(5, deck.CardsFromString("14s,13c,12d,11s,9c,2c"))
-	highCard := h.GetStrength()
-	assert.Equal(t, 755499, highCard)
+	type testHand struct {
+		hand, name string
+	}
 
-	h = New(5, deck.CardsFromString("2c,2c,12c,13h,14s"))
-	onePair := h.GetStrength()
-	assert.Equal(t, 910980, onePair)
-	assert.Greater(t, onePair, highCard)
+	prevStrength := 0
+	var prevTestHand testHand
 
-	h = New(5, deck.CardsFromString("3c,3c,2c,4c,5h"))
-	onePairHigher := h.GetStrength()
-	assert.Equal(t, 929055, onePairHigher)
-	assert.Greater(t, onePairHigher, onePair)
+	checkStrength := func(hands []testHand) {
+		newHA := func(s string) *HandAnalyzer {
+			cards := deck.CardsFromString(s)
+			return New(len(cards), cards)
+		}
 
-	h = New(5, deck.CardsFromString("14s,14c,13h,12d,11c"))
-	onePairHighest := h.GetStrength()
+		for _, h := range hands {
+			hand := newHA(h.hand)
+			strength := hand.GetStrength()
+			if !assert.Greater(t, strength, prevStrength, fmt.Sprintf("%s is greater than %s", h.name, prevTestHand.name)) {
+				log.Printf("previous hand: %s (%s)", prevTestHand.hand, newHA(prevTestHand.hand).GetHand())
+				log.Printf("current hand: %s (%s)", h.hand, hand.GetHand())
+			}
 
-	h = New(5, deck.CardsFromString("2c,2h,3c,3h,4s"))
-	twoPairLowest := h.GetStrength()
-	assert.Greater(t, twoPairLowest, onePairHighest)
+			prevStrength = strength
+			prevTestHand = h
+		}
+	}
 
-	h = New(5, deck.CardsFromString("14s,14c,13h,13c,12d"))
-	twoPairHighest := h.GetStrength()
-	h = New(5, deck.CardsFromString("2c,2h,2d,3c,4d"))
-	tripsLowest := h.GetStrength()
-	assert.Greater(t, tripsLowest, twoPairHighest)
-
-	h = New(5, deck.CardsFromString("14s,14c,14d,13c,12s"))
-	tripsHighest := h.GetStrength()
-	h = New(5, deck.CardsFromString("14s,2c,3d,4h,5s"))
-	straightLowest := h.GetStrength()
-	assert.Greater(t, straightLowest, tripsHighest)
-
-	h = New(5, deck.CardsFromString("2c,3d,4h,5s,6c"))
-	straightSecondLowest := h.GetStrength()
-	assert.Greater(t, straightSecondLowest, straightLowest)
-
-	h = New(5, deck.CardsFromString("10c,11d,12h,13s,14c"))
-	straightHighest := h.GetStrength()
-	assert.Greater(t, straightHighest, straightLowest)
-	h = New(5, deck.CardsFromString("2c,3c,4c,5c,7c"))
-	flushLowest := h.GetStrength()
-	assert.Greater(t, flushLowest, straightHighest)
-
-	h = New(5, deck.CardsFromString("14c,13d,12h,11s,10c"))
-	flushHighest := h.GetStrength()
-	h = New(3, deck.CardsFromString("14c,2d,3s"))
-	threeCardStraightLowest := h.GetStrength()
-	assert.Greater(t, threeCardStraightLowest, flushHighest)
-
-	h = New(5, deck.CardsFromString("14c,13d,12s"))
-	threeCardStraightHighest := h.GetStrength()
-	h = New(5, deck.CardsFromString("2c,2d,2h,3c,3d"))
-	fullHouseLowest := h.GetStrength()
-	assert.Greater(t, fullHouseLowest, threeCardStraightHighest)
-
-	h = New(5, deck.CardsFromString("14c,14d,14h,13c,13d"))
-	fullHouseHighest := h.GetStrength()
-	h = New(5, deck.CardsFromString("2c,2d,2h,2s,3c"))
-	fourOfAKindLowest := h.GetStrength()
-	assert.Greater(t, fourOfAKindLowest, fullHouseHighest)
-
-	h = New(5, deck.CardsFromString("2c,2d,2h,2s,5c"))
-	fourOfAKindSecondLowest := h.GetStrength()
-	assert.Greater(t, fourOfAKindSecondLowest, fourOfAKindLowest)
-
-	h = New(5, deck.CardsFromString("3c,3d,3h,3s,3c"))
-	fourOfAKindThirdLowest := h.GetStrength()
-	assert.Greater(t, fourOfAKindThirdLowest, fourOfAKindSecondLowest)
-
-	h = New(5, deck.CardsFromString("3c,3d,3h,3s,4c"))
-	fourOfAKindFourthLowest := h.GetStrength()
-	assert.Greater(t, fourOfAKindFourthLowest, fourOfAKindThirdLowest)
-
-	h = New(5, deck.CardsFromString("14c,2c,3c,4c,5c"))
-	straightFlushLowest := h.GetStrength()
-	assert.Greater(t, straightFlushLowest, fullHouseHighest)
-
-	h = New(5, deck.CardsFromString("13c,12c,11c,10c,9c"))
-	straightFlushHighest := h.GetStrength()
-	assert.Greater(t, straightFlushHighest, straightFlushLowest)
-
-	h = New(5, deck.CardsFromString("14c,13c,12c,11c,10c"))
-	royalFlush := h.GetStrength()
-	assert.Greater(t, royalFlush, straightFlushHighest)
+	checkStrength([]testHand{
+		{"2c,3c,4c,5c,7d", "high-card (7)"},
+		{"2c,3c,4c,5c,8d", "high-card (8, 5 kicker)"},
+		{"2c,3c,4c,6c,8d", "high-card (8, 6 kicker)"},
+		{"14c,13c,12c,11c,9d", "high-card (ace)"},
+		{"2c,2d,3c,4c,5c", "one-pair (2s w/5 kicker)"},
+		{"2c,2d,3c,4c,6c", "one-pair (2s w/6 kicker)"},
+		{"3c,3d,2c,4c,5c", "one-pair (3s)"},
+		{"14c,14d,13c,12c,11c", "one-pair (aces)"},
+		{"2c,2d,3c,3d,5c", "two-pair (3s and 2s)"},
+		{"2c,2d,4c,4d,3c", "two-pair (4s and 2s)"},
+		{"14c,14d,13c,13d,12c", "two-pair (aces and kings)"},
+		{"2c,2d,2h,3c,4c", "trips (2s)"},
+		{"2c,2d,2h,3c,5c", "trips (2s w/5 kicker)"},
+		{"14c,14d,14h,13c,12c", "trips (aces)"},
+		{"14c,2c,3c,4c,5d", "5-high straight"},
+		{"2c,3c,4c,5d,6c", "6-high straight"},
+		{"10c,11c,12c,13c,14d", "ace-high straight"},
+		{"2c,3c,4c,5c,8c", "8-high flush"},
+		{"2c,3c,4c,6c,8c", "8-high flush (6 kicker)"},
+		{"14c,13c,12c,11c,9c", "ace-high flush"},
+		{"2c,3d,4h", "4-high three-card-straight"},
+		{"14c,13d,12d", "ace-high three-card-straight"},
+		{"2c,2d,2h,3c,3d", "full-house (2s over 3s"},
+		{"2c,2d,3h,3c,3d", "full-house (3s over 2s"},
+		{"14c,14d,14h,13c,13d", "full-house (aces over kings)"},
+		{"2c,2d,2h,2s,2c", "four-of-a-kind (2s w/2 kicker)"},
+		{"2c,2d,2h,2s,3c", "four-of-a-kind (2s w/3 kicker)"},
+		{"14c,14d,14h,14s,13c", "four-of-a-kind (aces w/king kicker)"},
+		{"14c,14d,14h,14s,14c", "four-of-a-kind (aces w/ace kicker)"},
+		{"14c,2c,3c,4c,5c", "straight-flush (5-high)"},
+		{"9c,10c,11c,12c,13c", "straight-flush (king-high)"},
+		{"10c,11c,12c,13c,14c", "royal flush"},
+	})
 }
