@@ -304,3 +304,11 @@ func TestHandAnalyzer_GetStrength(t *testing.T) {
 		{"10c,11c,12c,13c,14c", "royal flush"},
 	})
 }
+
+func TestHandAnalyzer_GetStrength_unknownHand(t *testing.T) {
+	h := New(5, deck.CardsFromString("2c,2d,2h,2s,3c"))
+	h.hand = Hand(-1)
+	assert.PanicsWithValue(t, "unknown hand", func() {
+		h.GetStrength()
+	})
+}
