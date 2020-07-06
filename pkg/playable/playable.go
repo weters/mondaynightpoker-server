@@ -61,10 +61,10 @@ func OK(ctx ...string) *Response {
 
 // PayloadIn is the format we expect from the JS client
 type PayloadIn struct {
-	Action         string                 `json:"action"`
-	Subject        string                 `json:"subject"`
-	Cards          []*deck.Card           `json:"cards"`
-	AdditionalData map[string]interface{} `json:"additionalData"`
+	Action         string         `json:"action"`
+	Subject        string         `json:"subject"`
+	Cards          []*deck.Card   `json:"cards"`
+	AdditionalData AdditionalData `json:"additionalData"`
 	// Context will be passed back on any outgoing message
 	Context string `json:"context"`
 }
@@ -73,4 +73,43 @@ type PayloadIn struct {
 type GameOverDetails struct {
 	BalanceAdjustments map[int64]int
 	Log                interface{}
+}
+
+// AdditionalData provides additional data in a payload
+type AdditionalData map[string]interface{}
+
+// GetString returns a string for the given key
+func (a AdditionalData) GetString(key string) (string, bool) {
+	s, ok := a[key].(string)
+	return s, ok
+}
+
+// GetInt returns an integer value for the given key
+func (a AdditionalData) GetInt(key string) (int, bool) {
+	floatVal, ok := a[key].(float64)
+	if !ok {
+		return 0, false
+	}
+
+	return int(floatVal), true
+}
+
+// GetIntSlice returns a slice of integers
+func (a AdditionalData) GetIntSlice(key string) ([]int, bool) {
+	slice, ok := a[key].([]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	ints := make([]int, len(slice))
+	for i, val := range slice {
+		floatVal, ok := val.(float64)
+		if !ok {
+			return nil, false
+		}
+
+		ints[i] = int(floatVal)
+	}
+
+	return ints, true
 }

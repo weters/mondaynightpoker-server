@@ -25,7 +25,7 @@ func TestGame_CanTrade(t *testing.T) {
 	opts.TradeIns = []int{3, 2, 3, 1}
 	game, err = NewGame("", []int64{1, 2, 3}, opts)
 	assert.NoError(t, err)
-	assert.Equal(t, "1, 2, 3", game.GetAllowedTradeIns())
+	assert.Equal(t, "1, 2, 3", game.GetAllowedTradeIns().String())
 }
 
 func TestNew(t *testing.T) {

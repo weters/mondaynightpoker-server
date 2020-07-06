@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
-	"strconv"
-	"strings"
 )
 
 // ErrNotPlayersTurn is an error when a player attempts to act out of turn
@@ -138,15 +136,15 @@ func (g *Game) CanTrade(count int) bool {
 }
 
 // GetAllowedTradeIns returns the an integer slice of allowed trade-ins
-func (g *Game) GetAllowedTradeIns() string {
-	tradeIns := make([]string, 0, len(g.options.TradeIns))
+func (g *Game) GetAllowedTradeIns() TradeIns {
+	tradeIns := make([]int, 0, len(g.options.TradeIns))
 	for i := 0; i < g.options.InitialDeal; i++ {
 		if g.tradeInsBitField&(1<<i) > 0 {
-			tradeIns = append(tradeIns, strconv.Itoa(i))
+			tradeIns = append(tradeIns, i)
 		}
 	}
 
-	return strings.Join(tradeIns, ", ")
+	return tradeIns
 }
 
 // GetCommunityCards will return the community cards
@@ -337,4 +335,9 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 
 	g.advanceDecision()
 	return nil
+}
+
+// CanRevealCards returns true if all cards are flipped
+func (g *Game) CanRevealCards() bool {
+	return g.stage >= stageRevealWinner
 }

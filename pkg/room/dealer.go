@@ -7,6 +7,7 @@ import (
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/bourre"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
+	"mondaynightpoker-server/pkg/playable/poker/littlel"
 	"mondaynightpoker-server/pkg/table"
 	"sync"
 	"time"
@@ -317,6 +318,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		d.execInRunLoop <- func() {
 			switch msg.Subject {
 			case "bourre":
+				logrus.WithField("game", "bourré").Info("starting game")
 				if err := d.createBourreGame(msg.AdditionalData); err != nil {
 					c.Send(newErrorResponse(msg.Context, err))
 					return
@@ -325,7 +327,17 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				c.Send(playable.OK(msg.Context))
 				return
 			case "pass-the-poop":
+				logrus.WithField("game", "pass-the-poop").Info("starting game")
 				if err := d.createPassThePoopGame(msg.AdditionalData); err != nil {
+					c.Send(newErrorResponse(msg.Context, err))
+					return
+				}
+
+				c.Send(playable.OK(msg.Context))
+				return
+			case "little-l":
+				logrus.WithField("game", "little-l").Info("starting game")
+				if err := d.createLittleL(msg.AdditionalData); err != nil {
 					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
@@ -523,17 +535,13 @@ func (d *Dealer) getNextPlayersIDsForGame() ([]int64, error) {
 	return playerIDs, nil
 }
 
-func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
+func (d *Dealer) createBourreGame(additionalData playable.AdditionalData) error {
 	playerIDs, err := d.getNextPlayersIDsForGame()
 	if err != nil {
 		return err
 	}
 
-	ante := 0
-	if rawAnte, ok := additionalData["ante"]; ok {
-		ante = int(rawAnte.(float64))
-	}
-
+	ante, _ := additionalData.GetInt("ante")
 	game, err := bourre.NewGame(d.table.UUID, playerIDs, bourre.Options{Ante: ante})
 	if err != nil {
 		return err
@@ -549,23 +557,53 @@ func (d *Dealer) createBourreGame(additionalData map[string]interface{}) error {
 	return nil
 }
 
-func (d *Dealer) createPassThePoopGame(additionalData map[string]interface{}) error {
+func (d *Dealer) createLittleL(additionalData playable.AdditionalData) error {
 	playerIDs, err := d.getNextPlayersIDsForGame()
 	if err != nil {
 		return err
 	}
 
-	ante := 0
-	if rawAnte, ok := additionalData["ante"]; ok {
-		ante = int(rawAnte.(float64))
+	opts := littlel.DefaultOptions()
+	if ante, _ := additionalData.GetInt("ante"); ante > 0 {
+		opts.Ante = ante
 	}
 
+	if initialDeal, _ := additionalData.GetInt("initialDeal"); initialDeal > 0 {
+		opts.InitialDeal = initialDeal
+	}
+
+	if tradeIns, ok := additionalData.GetIntSlice("tradeIns"); ok {
+		opts.TradeIns = tradeIns
+	}
+
+	game, err := littlel.NewGame(d.table.UUID, playerIDs, opts)
+	if err != nil {
+		return err
+	}
+
+	if err := game.DealCards(); err != nil {
+		return err
+	}
+
+	d.game = game
+	d.stateChanged <- stateGameEvent
+
+	return nil
+}
+
+func (d *Dealer) createPassThePoopGame(additionalData playable.AdditionalData) error {
+	playerIDs, err := d.getNextPlayersIDsForGame()
+	if err != nil {
+		return err
+	}
+
+	ante, _ := additionalData.GetInt("ante")
 	if ante <= 0 {
 		return errors.New("ante must be greater than 0")
 	}
 
-	edition, ok := additionalData["edition"].(string)
-	if !ok {
+	edition, _ := additionalData.GetString("edition")
+	if edition == "" {
 		return errors.New("edition is required")
 	}
 
@@ -580,9 +618,8 @@ func (d *Dealer) createPassThePoopGame(additionalData map[string]interface{}) er
 		opts.Edition = &passthepoop.PairsEdition{}
 	}
 
-	lives, _ := additionalData["lives"].(float64)
-	if lives > 0 {
-		opts.Lives = int(lives)
+	if lives, _ := additionalData.GetInt("lives"); lives > 0 {
+		opts.Lives = lives
 	}
 
 	game, err := passthepoop.NewGame(d.table.UUID, playerIDs, opts)
