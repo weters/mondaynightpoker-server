@@ -108,10 +108,10 @@ func TestGame_TradeCardsForParticipant_UsingDiscards(t *testing.T) {
 	assertHand(t, game, 1, "8c,11c,10s,11s")
 
 	assert.NoError(t, trade(2, "3c,6c"))
-	assertHand(t, game, 2, "9c,12c,2c,5c")
+	assertHand(t, game, 2, "2c,5c,9c,12c")
 
 	assert.NoError(t, trade(3, "4c,7c"))
-	assertHand(t, game, 3, "10c,13c,3c,6c")
+	assertHand(t, game, 3, "3c,6c,10c,13c")
 
 	assert.True(t, game.IsStageOver())
 }

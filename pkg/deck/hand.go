@@ -2,10 +2,27 @@ package deck
 
 import (
 	"math"
+	"strings"
 )
 
 // Hand represents a collection of cards
 type Hand []*Card
+
+func (h Hand) Len() int {
+	return len(h)
+}
+
+func (h Hand) Less(i, j int) bool {
+	if cmp := strings.Compare(string(h[i].Suit), string(h[j].Suit)); cmp != 0 {
+		return cmp < 0
+	}
+
+	return h[i].Rank < h[j].Rank
+}
+
+func (h Hand) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
 
 // AddCard adds a card to the hand
 func (h *Hand) AddCard(card *Card) {

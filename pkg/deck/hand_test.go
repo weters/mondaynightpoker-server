@@ -2,8 +2,16 @@ package deck
 
 import (
 	"github.com/stretchr/testify/assert"
+	"sort"
 	"testing"
 )
+
+func TestHand_Sort(t *testing.T) {
+	hand := Hand(CardsFromString("14c,14s,14h,14d,2d,2h,2s,2c"))
+	assert.Equal(t, "14c,14s,14h,14d,2d,2h,2s,2c", CardsToString(hand))
+	sort.Sort(hand)
+	assert.Equal(t, "2c,14c,2d,14d,2h,14h,2s,14s", CardsToString(hand))
+}
 
 func TestHand_HasCard(t *testing.T) {
 	hand := Hand(CardsFromString("2c,3c,4d"))

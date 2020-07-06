@@ -1,6 +1,8 @@
 package littlel
 
-import "mondaynightpoker-server/pkg/deck"
+import (
+	"mondaynightpoker-server/pkg/deck"
+)
 
 type participantJSON struct {
 	PlayerID   int64     `json:"playerId"`
@@ -8,6 +10,7 @@ type participantJSON struct {
 	Balance    int       `json:"balance"`
 	CurrentBet int       `json:"currentBet"`
 	Hand       deck.Hand `json:"hand"`
+	HandRank   string    `json:"handRank"`
 }
 
 // GameState is the state of the game
@@ -24,6 +27,7 @@ type GameState struct {
 
 // State represents the state of the game and the state of the current player
 type State struct {
-	Participant *Participant `json:"participant"`
-	GameState   *GameState   `json:"gameState"`
+	Participant *participantJSON `json:"participant"`
+	GameState   *GameState       `json:"gameState"`
+	Actions     []Action         `json:"actions"`
 }

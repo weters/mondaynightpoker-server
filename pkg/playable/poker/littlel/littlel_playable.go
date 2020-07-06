@@ -1,16 +1,28 @@
 package littlel
 
 import (
+	"errors"
 	"fmt"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
 // --- Playable Interface ---
 
 // Action performs a game action on behalf of the player
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
+	p, ok := g.idToParticipant[playerID]
+	if !ok {
+		return nil, false, errors.New("participant is not in the game")
+	}
+
 	switch message.Action {
 	case "trade":
+		if err := g.tradeCardsForParticipant(p, message.Cards); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
 	}
 
 	return nil, false, fmt.Errorf("unknown action: %s", message.Action)
@@ -26,7 +38,14 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	}
 
 	s := State{
-		Participant: p,
+		Participant: &participantJSON{
+			PlayerID:   p.PlayerID,
+			DidFold:    p.didFold,
+			Balance:    p.balance,
+			CurrentBet: p.currentBet,
+			Hand:       p.hand,
+			HandRank:   handanalyzer.New(3, p.hand).GetHand().String(), // nolint: FIXME
+		},
 		GameState: &GameState{
 			Participants: make([]*participantJSON, 0),
 			Stage:        g.stage,
@@ -37,6 +56,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			InitialDeal:  g.options.InitialDeal,
 			Community:    g.GetCommunityCards(),
 		},
+		Actions: g.getActionsForPlayer(playerID),
 	}
 
 	for _, id := range g.playerIDs {

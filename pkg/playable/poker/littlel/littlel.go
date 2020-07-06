@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"sort"
 )
 
 // ErrNotPlayersTurn is an error when a player attempts to act out of turn
@@ -99,6 +100,10 @@ func (g *Game) DealCards() error {
 
 			g.idToParticipant[id].hand.AddCard(card)
 		}
+	}
+
+	for _, p := range g.idToParticipant {
+		sort.Sort(p.hand)
 	}
 
 	community := make([]*deck.Card, 3)
@@ -333,6 +338,8 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 	}
 	g.discards = append(g.discards, discards...)
 
+	sort.Sort(p.hand)
+
 	g.advanceDecision()
 	return nil
 }
@@ -340,4 +347,31 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 // CanRevealCards returns true if all cards are flipped
 func (g *Game) CanRevealCards() bool {
 	return g.stage >= stageRevealWinner
+}
+
+func (g *Game) getActionsForPlayer(playerID int64) []Action {
+	p, ok := g.idToParticipant[playerID]
+	if !ok {
+		// viewer
+		return nil
+	}
+
+	actions := make([]Action, 0)
+	if p == g.GetCurrentTurn() {
+		if g.stage == stageTradeIn {
+			actions = append(actions, ActionTrade)
+		} else {
+			if g.currentBet == 0 {
+				actions = append(actions, ActionCheck, ActionBet, ActionFold)
+			} else {
+				actions = append(actions, ActionCall, ActionRaise, ActionFold)
+			}
+		}
+	}
+
+	if g.IsStageOver() {
+		actions = append(actions, ActionNextStage)
+	}
+
+	return actions
 }
