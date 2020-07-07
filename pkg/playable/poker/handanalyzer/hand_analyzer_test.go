@@ -326,6 +326,11 @@ func TestHandAnalyzer_getThreeCardPokerThreeOfAKind(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 3, trips)
 
+	h = New(3, deck.CardsFromString("2c,2d,2h,2s,3c"))
+	trips, ok = h.getThreeCardPokerThreeOfAKind()
+	assert.True(t, ok)
+	assert.Equal(t, 2, trips)
+
 	// don't allow three card in five card game
 	h = New(5, deck.CardsFromString("2c,3d,3h,3s,4c"))
 	trips, ok = h.getThreeCardPokerThreeOfAKind()

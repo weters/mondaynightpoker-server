@@ -158,6 +158,11 @@ func (h *HandAnalyzer) getThreeCardPokerThreeOfAKind() (int, bool) {
 		return 0, false
 	}
 
+	i, ok := h.GetFourOfAKind()
+	if ok {
+		return i, ok
+	}
+
 	return h.GetThreeOfAKind()
 }
 
