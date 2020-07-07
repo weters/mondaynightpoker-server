@@ -187,13 +187,13 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantBets(p(2), 25))
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(2)))
 
-	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+1), "your bet (76¢) must not exceed the current pot (75¢)")
+	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+game.options.Ante), "your bet (100¢) must not exceed the current pot (75¢)")
 	assert.NoError(t, game.ParticipantChecks(p(1)))
 	assert.EqualError(t, game.ParticipantCalls(p(2)), "you cannot call without an active bet")
-	assert.EqualError(t, game.ParticipantBets(p(2), 1), "your bet must at least match the ante (25¢)")
+	assert.EqualError(t, game.ParticipantBets(p(2), 0), "your bet must at least match the ante (25¢)")
 	assert.NoError(t, game.ParticipantBets(p(2), 75))
 	assert.EqualError(t, game.ParticipantChecks(p(3)), "you cannot check with an active bet")
-	assert.EqualError(t, game.ParticipantBets(p(3), 149), "your raise (149¢) must be at least equal to double the previous bet (150¢)")
+	assert.EqualError(t, game.ParticipantBets(p(3), 125), "your raise (125¢) must be at least equal to double the previous bet (150¢)")
 	assert.NoError(t, game.ParticipantBets(p(3), 150))
 	assert.NoError(t, game.ParticipantFolds(p(1)))
 	assert.NoError(t, game.ParticipantCalls(p(2)))
@@ -360,4 +360,19 @@ func TestGame_endOfStageAdjustments(t *testing.T) {
 	assert.PanicsWithValue(t, "already ran endOfStageAdjustments() for stage: 0", func() {
 		_ = game.NextStage()
 	})
+}
+
+func TestGame_ParticipantBets(t *testing.T) {
+	opts := DefaultOptions()
+	opts.Ante = 25
+
+	game, _ := NewGame("", []int64{1, 2}, opts)
+	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
+	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
+	_ = game.NextStage()
+
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of the ante (25¢)")
+	assert.NoError(t, game.ParticipantBets(game.idToParticipant[1], 25))
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your bet must be in multiples of the ante (25¢)")
+	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 50))
 }

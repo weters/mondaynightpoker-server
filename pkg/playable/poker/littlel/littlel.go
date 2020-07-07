@@ -254,6 +254,10 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 		return ErrNotPlayersTurn
 	}
 
+	if bet%g.options.Ante > 0 {
+		return fmt.Errorf("your bet must be in multiples of the ante (%d¢)", g.options.Ante)
+	}
+
 	if bet > g.pot {
 		return fmt.Errorf("your bet (%d¢) must not exceed the current pot (%d¢)", bet, g.pot)
 	}
