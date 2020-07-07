@@ -87,7 +87,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		lastAdjustmentStage: stage(-1),
 	}
 
-	if err := g.parseTradeIns(options.TradeIns); err != nil {
+	if err := g.buildTradeInsBitField(options.TradeIns); err != nil {
 		return nil, err
 	}
 
@@ -126,8 +126,14 @@ func (g *Game) DealCards() error {
 	return nil
 }
 
-// parseTradeins converts an int array into a bitwise int
-func (g *Game) parseTradeIns(values []int) error {
+// buildTradeInsBitField converts an int array into a bitwise int
+func (g *Game) buildTradeInsBitField(values []int) error {
+	// treat empty list as no trades
+	if len(values) == 0 {
+		g.tradeInsBitField = 1
+		return nil
+	}
+
 	tradeIns := 0
 	for _, val := range values {
 		if val < 0 || val > g.options.InitialDeal {
