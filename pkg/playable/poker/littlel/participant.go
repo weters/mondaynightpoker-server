@@ -41,7 +41,7 @@ type BestHand struct {
 
 // GetBestHand returns the best hand the player can make with the exposed community cards
 func (p *Participant) GetBestHand(community []*deck.Card) *BestHand {
-	key := deck.CardsToString(community)
+	key := deck.CardsToString(p.hand) + deck.CardsToString(community)
 	if p.bestHandKey == key {
 		return p.bestHand
 	}
