@@ -3,8 +3,8 @@ package littlel
 import (
 	"errors"
 	"fmt"
+	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
-	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
 // --- Playable Interface ---
@@ -23,6 +23,50 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		return playable.OK(), true, nil
+	case "next-stage":
+		if err := g.NextStage(); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
+	case "check":
+		if err := g.ParticipantChecks(p); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
+	case "fold":
+		if err := g.ParticipantFolds(p); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
+	case "call":
+		if err := g.ParticipantCalls(p); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
+	case "raise":
+		fallthrough
+	case "bet":
+		amount, _ := message.AdditionalData.GetInt("amount")
+		if amount == 0 {
+			return nil, false, errors.New("amount must be > 0")
+		}
+
+		if err := g.ParticipantBets(p, amount); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
+	case "end-game":
+		if !g.IsGameOver() {
+			return nil, false, errors.New("game is not over")
+		}
+
+		g.done = true
+		return playable.OK(), true, nil
 	}
 
 	return nil, false, fmt.Errorf("unknown action: %s", message.Action)
@@ -30,22 +74,26 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 // GetPlayerState returns the state of the player
 func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
-	p := g.idToParticipant[playerID]
-
 	var action int64 = 0
 	if currentTurn := g.GetCurrentTurn(); currentTurn != nil {
 		action = currentTurn.PlayerID
 	}
 
-	s := State{
-		Participant: &participantJSON{
+	p, ok := g.idToParticipant[playerID]
+	var pJSON *participantJSON
+	if ok {
+		pJSON = &participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
 			Balance:    p.balance,
 			CurrentBet: p.currentBet,
 			Hand:       p.hand,
-			HandRank:   handanalyzer.New(3, p.hand).GetHand().String(), // nolint: FIXME
-		},
+			HandRank:   p.GetBestHand(g.GetCommunityCards()).analyzer.GetHand().String(),
+		}
+	}
+
+	s := State{
+		Participant: pJSON,
 		GameState: &GameState{
 			Participants: make([]*participantJSON, 0),
 			Stage:        g.stage,
@@ -69,7 +117,12 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		}
 
 		if g.CanRevealCards() {
-			pJSON.Hand = p.hand
+			if p.didFold {
+				pJSON.HandRank = "Folded"
+			} else {
+				pJSON.Hand = p.hand
+				pJSON.HandRank = p.GetBestHand(g.GetCommunityCards()).analyzer.GetHand().String()
+			}
 		}
 
 		s.GameState.Participants = append(s.GameState.Participants, &pJSON)
@@ -84,7 +137,35 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 
 // GetEndOfGameDetails returns the details at the end of a game
 func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	return nil, false
+	if !g.done {
+		return nil, false
+	}
+
+	c := g.GetCommunityCards()
+	balanceAdjustments := make(map[int64]int)
+	hands := make(map[int64]*participantJSON)
+	for _, p := range g.idToParticipant {
+		balanceAdjustments[p.PlayerID] = p.balance
+		hands[p.PlayerID] = &participantJSON{
+			PlayerID:   p.PlayerID,
+			DidFold:    p.didFold,
+			Balance:    p.balance,
+			CurrentBet: 0,
+			Hand:       p.hand,
+			HandRank:   p.GetBestHand(c).analyzer.GetHand().String(),
+		}
+	}
+
+	return &playable.GameOverDetails{
+		BalanceAdjustments: balanceAdjustments,
+		Log: struct {
+			Hands     map[int64]*participantJSON
+			Community deck.Hand
+		}{
+			Hands:     hands,
+			Community: c,
+		},
+	}, true
 }
 
 // Name returns the name of the game

@@ -3,6 +3,7 @@ package littlel
 import (
 	"errors"
 	"fmt"
+	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"sort"
@@ -43,6 +44,9 @@ type Game struct {
 	stage              stage
 	community          []*deck.Card
 	discards           []*deck.Card
+
+	done    bool
+	winners []*Participant
 }
 
 // NewGame returns a new instance of the game
@@ -177,6 +181,11 @@ func (g *Game) GetCurrentTurn() *Participant {
 		return nil
 	}
 
+	// no more actions
+	if g.stage > stageFinalBettingRound {
+		return nil
+	}
+
 	index := (g.decisionStartIndex + g.decisionCount) % len(g.playerIDs)
 	p := g.idToParticipant[g.playerIDs[index]]
 	if p.didFold {
@@ -189,6 +198,11 @@ func (g *Game) GetCurrentTurn() *Participant {
 // IsStageOver returns true if all participants have had a turn
 func (g *Game) IsStageOver() bool {
 	return g.GetCurrentTurn() == nil
+}
+
+// IsGameOver returns true if the game is over
+func (g *Game) IsGameOver() bool {
+	return g.winners != nil
 }
 
 // NextStage will advance the game to the next stage
@@ -207,6 +221,11 @@ func (g *Game) NextStage() error {
 
 	g.stage++
 	g.reset()
+
+	if g.stage == stageRevealWinner {
+		g.endGame()
+	}
+
 	return nil
 }
 
@@ -225,11 +244,13 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 	}
 
 	if g.currentBet > 0 && bet < g.currentBet*2 {
-		return fmt.Errorf("your raise (%d¢) must be at least equal to the previous bet (%d¢)", bet, g.currentBet)
+		return fmt.Errorf("your raise (%d¢) must be at least equal to double the previous bet (%d¢)", bet, g.currentBet*2)
 	}
 
+	diff := bet - p.currentBet
 	p.currentBet = bet
 	g.currentBet = bet
+	g.pot += diff
 
 	g.setDecisionIndexToCurrentTurn()
 	g.advanceDecision()
@@ -245,13 +266,34 @@ func (g *Game) setDecisionIndexToCurrentTurn() {
 	g.decisionCount = 0
 }
 
+// ParticipantChecks will check for the participant as long as there's no active bet
+func (g *Game) ParticipantChecks(p *Participant) error {
+	if g.GetCurrentTurn() != p {
+		return ErrNotPlayersTurn
+	}
+
+	if g.currentBet != 0 {
+		return errors.New("you cannot check with an active bet")
+	}
+
+	g.advanceDecision()
+	return nil
+}
+
 // ParticipantCalls handles when the player calls the action
 func (g *Game) ParticipantCalls(p *Participant) error {
 	if g.GetCurrentTurn() != p {
 		return ErrNotPlayersTurn
 	}
 
+	if g.currentBet == 0 {
+		return errors.New("you cannot call without an active bet")
+	}
+
+	diff := g.currentBet - p.currentBet
 	p.currentBet = g.currentBet
+	g.pot += diff
+
 	g.advanceDecision()
 	return nil
 }
@@ -263,17 +305,35 @@ func (g *Game) ParticipantFolds(p *Participant) error {
 	}
 
 	p.didFold = true
+
+	stillAlive := 0
+	for _, p := range g.idToParticipant {
+		if !p.didFold {
+			stillAlive++
+		}
+	}
+
+	if stillAlive == 0 {
+		panic("too many players folded")
+	} else if stillAlive == 1 {
+		g.endGame()
+		return nil
+	}
+
 	g.advanceDecision()
 	return nil
 }
 
 // reset should be called when we enter a new stage
 func (g *Game) reset() {
+	for _, p := range g.idToParticipant {
+		p.reset()
+	}
+
 	// find first live player
 	g.decisionStartIndex = 0
 	g.decisionCount = 0
 	g.advanceDecisionIfPlayerFolded()
-
 	g.currentBet = 0
 }
 
@@ -369,9 +429,47 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 		}
 	}
 
-	if g.IsStageOver() {
+	if g.IsGameOver() {
+		actions = append(actions, ActionEndGame)
+	} else if g.IsStageOver() {
 		actions = append(actions, ActionNextStage)
 	}
 
 	return actions
+}
+
+// endGame will handle any end of game actions, calculate winners, etc.
+func (g *Game) endGame() {
+	if g.winners != nil {
+		panic("endGame already called")
+	}
+
+	g.stage = stageRevealWinner
+
+	winners := make([]*Participant, 0, 1)
+	best := math.MinInt32
+	for _, id := range g.playerIDs {
+		p := g.idToParticipant[id]
+		if p.didFold {
+			continue
+		}
+
+		bestHand := p.GetBestHand(g.GetCommunityCards())
+		strength := bestHand.analyzer.GetStrength()
+		if strength == best {
+			winners = append(winners, p)
+		} else if strength > best {
+			winners = []*Participant{p}
+			best = strength
+		}
+	}
+
+	g.winners = winners
+	for _, winner := range winners {
+		winner.balance += g.pot / len(winners)
+	}
+
+	if mod := g.pot % len(winners); mod > 0 {
+		winners[0].balance += mod
+	}
 }

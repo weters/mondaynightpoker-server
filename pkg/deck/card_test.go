@@ -91,6 +91,9 @@ func TestCardsFromString(t *testing.T) {
 	cards = CardsFromString("")
 	assert.Equal(t, []*Card{}, cards)
 
+	cards = CardsFromString("2c,,3c")
+	assert.Equal(t, "2c,,3c", CardsToString(cards))
+
 	assert.PanicsWithValue(t, "could not parse card: 4x", func() {
 		CardsFromString("2c,3s,4x")
 	})

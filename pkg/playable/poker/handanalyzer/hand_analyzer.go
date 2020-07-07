@@ -17,7 +17,8 @@ type HandAnalyzer struct {
 	straightFlush int
 	straight      int
 
-	hand Hand
+	hand     Hand
+	strength int
 }
 
 // New will return a new HandAnalyzer instance
@@ -148,6 +149,14 @@ func (h *HandAnalyzer) GetFullHouse() ([]int, bool) {
 	return []int{trips, pair}, true
 }
 
+func (h *HandAnalyzer) getThreeCardPokerThreeOfAKind() (int, bool) {
+	if h.size > 3 {
+		return 0, false
+	}
+
+	return h.GetThreeOfAKind()
+}
+
 func (h *HandAnalyzer) getThreeCardPokerStraight() (int, bool) {
 	if h.size > 3 {
 		return 0, false
@@ -227,6 +236,15 @@ func calculateStrength(hand Hand, cards []int) int {
 
 // GetStrength returns the strength of the hand
 func (h *HandAnalyzer) GetStrength() int {
+	if h.strength > 0 {
+		return h.strength
+	}
+
+	h.strength = h.getStrength()
+	return h.strength
+}
+
+func (h *HandAnalyzer) getStrength() int {
 	hand := h.GetHand()
 
 	switch hand {
@@ -282,6 +300,9 @@ func (h *HandAnalyzer) GetStrength() int {
 	case ThreeCardPokerStraight:
 		s, _ := h.getThreeCardPokerStraight()
 		return calculateStrength(hand, []int{s})
+	case ThreeCardPokerThreeOfAKind:
+		t, _ := h.getThreeCardPokerThreeOfAKind()
+		return calculateStrength(hand, []int{t})
 	case FullHouse:
 		fh, _ := h.GetFullHouse()
 		return calculateStrength(hand, fh)
@@ -373,6 +394,9 @@ func (h *HandAnalyzer) calculateHand() {
 		h.hand = FourOfAKind
 	} else if _, ok := h.GetFullHouse(); ok {
 		h.hand = FullHouse
+	} else if _, ok := h.getThreeCardPokerThreeOfAKind(); ok {
+		// in three card poker, a three-of-a-kind is better than straight and flush
+		h.hand = ThreeCardPokerThreeOfAKind
 	} else if _, ok := h.getThreeCardPokerStraight(); ok {
 		// in three card poker, a straight is better than a flush
 		h.hand = ThreeCardPokerStraight

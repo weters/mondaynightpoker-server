@@ -142,3 +142,150 @@ func TestGame_NextStage(t *testing.T) {
 	assert.Equal(t, 1, game.decisionCount)
 	assert.Equal(t, 0, game.decisionStartIndex)
 }
+
+func TestGame_ParticipantAction(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	assert.NoError(t, game.DealCards())
+	p := func(id int64) *Participant {
+		return game.idToParticipant[id]
+	}
+
+	assert.Equal(t, 75, game.pot)
+	game.community = deck.CardsFromString("2c,5h,4c")
+	p(1).hand = deck.CardsFromString("14s,13s,12s") // this player will fold with the royal flush, silly-goose
+	p(2).hand = deck.CardsFromString("3c,8d,10c")   // ends up with straight-flush
+	p(3).hand = deck.CardsFromString("9c,9d,9h")    // loses with trips
+
+	// trade-in round
+
+	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
+	assert.NoError(t, game.NextStage())
+
+	// before first card is shown
+
+	assert.Equal(t, []*deck.Card{nil, nil, nil}, game.GetCommunityCards())
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantChecks(p(2)))
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantFolds(p(2)))
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantBets(p(2), 25))
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(2)))
+
+	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+1), "your bet (76¢) must not exceed the current pot (75¢)")
+	assert.NoError(t, game.ParticipantChecks(p(1)))
+	assert.EqualError(t, game.ParticipantCalls(p(2)), "you cannot call without an active bet")
+	assert.EqualError(t, game.ParticipantBets(p(2), 1), "your bet must at least match the ante (25¢)")
+	assert.NoError(t, game.ParticipantBets(p(2), 75))
+	assert.EqualError(t, game.ParticipantChecks(p(3)), "you cannot check with an active bet")
+	assert.EqualError(t, game.ParticipantBets(p(3), 149), "your raise (149¢) must be at least equal to double the previous bet (150¢)")
+	assert.NoError(t, game.ParticipantBets(p(3), 150))
+	assert.NoError(t, game.ParticipantFolds(p(1)))
+	assert.NoError(t, game.ParticipantCalls(p(2)))
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(3)))
+	assert.NoError(t, game.NextStage())
+
+	// before second card is shown
+
+	assert.Equal(t, "2c,,", deck.CardsToString(game.GetCommunityCards()))
+	assert.Equal(t, -25, p(1).balance)
+	assert.Equal(t, -175, p(2).balance)
+	assert.Equal(t, -175, p(3).balance)
+	assert.Equal(t, 375, game.pot)
+
+	assert.NoError(t, game.ParticipantBets(p(2), 25))
+	assert.NoError(t, game.ParticipantBets(p(3), 50))
+	assert.NoError(t, game.ParticipantBets(p(2), 100))
+	assert.NoError(t, game.ParticipantCalls(p(3)))
+	assert.NoError(t, game.NextStage())
+
+	// before third card is shown
+
+	assert.Equal(t, "2c,5h,", deck.CardsToString(game.GetCommunityCards()))
+	assert.Equal(t, -25, p(1).balance)
+	assert.Equal(t, -275, p(2).balance)
+	assert.Equal(t, -275, p(3).balance)
+	assert.Equal(t, 575, game.pot)
+
+	assert.NoError(t, game.ParticipantChecks(p(2)))
+	assert.NoError(t, game.ParticipantChecks(p(3)))
+	assert.NoError(t, game.NextStage())
+
+	// third card is now shown, final round of betting
+
+	assert.Equal(t, "2c,5h,4c", deck.CardsToString(game.GetCommunityCards()))
+	assert.Equal(t, -25, p(1).balance)
+	assert.Equal(t, -275, p(2).balance)
+	assert.Equal(t, -275, p(3).balance)
+	assert.Equal(t, 575, game.pot)
+
+	assert.NoError(t, game.ParticipantChecks(p(2)))
+	assert.NoError(t, game.ParticipantChecks(p(3)))
+	assert.False(t, game.IsGameOver())
+	assert.NoError(t, game.NextStage())
+	assert.True(t, game.IsGameOver())
+
+	// XXX how to handle end of game
+	// put in checks
+
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantChecks(p(2)))
+	assert.Equal(t, -25, p(1).balance)
+	assert.Equal(t, 300, p(2).balance) // won hand
+	assert.Equal(t, -275, p(3).balance)
+	assert.Equal(t, 575, game.pot)
+	assert.Equal(t, 1, len(game.winners))
+	assert.Equal(t, int64(2), game.winners[0].PlayerID)
+}
+
+func TestGame_ParticipantActionTie(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	assert.NoError(t, game.DealCards())
+	p := func(id int64) *Participant {
+		return game.idToParticipant[id]
+	}
+
+	assert.Equal(t, 75, game.pot)
+	game.community = deck.CardsFromString("14s,5h,5s")
+	p(1).hand = deck.CardsFromString("5c,6c,6d")
+	p(2).hand = deck.CardsFromString("5d,6h,6s")
+	p(3).hand = deck.CardsFromString("2c,4d,5h") // loses
+
+	// trade-in round
+
+	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
+	assert.NoError(t, game.NextStage())
+
+	for i := 0; i < 4; i++ {
+		assert.NoError(t, game.ParticipantChecks(p(1)))
+		assert.NoError(t, game.ParticipantChecks(p(2)))
+		assert.NoError(t, game.ParticipantChecks(p(3)))
+		assert.NoError(t, game.NextStage())
+	}
+
+	assert.Equal(t, 2, len(game.winners))
+	assert.Equal(t, []int64{1, 2}, []int64{game.winners[0].PlayerID, game.winners[1].PlayerID})
+	assert.Equal(t, 75, game.pot)
+	assert.Equal(t, 13, p(1).balance)
+	assert.Equal(t, 12, p(2).balance)
+	assert.Equal(t, -25, p(3).balance)
+}
+
+func TestGame_ParticipantActionAllFold(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	assert.NoError(t, game.DealCards())
+	p := func(id int64) *Participant {
+		return game.idToParticipant[id]
+	}
+
+	assert.Equal(t, 75, game.pot)
+	assert.NoError(t, game.ParticipantFolds(p(1)))
+	assert.NoError(t, game.ParticipantFolds(p(2)))
+	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantFolds(p(3)))
+	assert.True(t, game.IsGameOver())
+
+	assert.Equal(t, 75, game.pot)
+	assert.Equal(t, -25, p(1).balance)
+	assert.Equal(t, -25, p(2).balance)
+	assert.Equal(t, 50, p(3).balance)
+}

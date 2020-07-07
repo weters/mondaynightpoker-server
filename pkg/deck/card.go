@@ -85,6 +85,10 @@ var cardRx = regexp.MustCompile(`(?i)^([0-9]|1[0-4])([cdhs])\z`)
 // CardFromString returns a Card from the string.
 // The string must be in the format of <rank><suit> where rank >= 2 and <= 14 and suit in [cdhs]
 func CardFromString(s string) *Card {
+	if s == "" {
+		return nil
+	}
+
 	match := cardRx.FindStringSubmatch(s)
 	if match == nil {
 		panic(fmt.Sprintf("could not parse card: %s", s))
@@ -135,6 +139,11 @@ func CardsFromString(s string) []*Card {
 func CardsToString(cards []*Card) string {
 	c := make([]string, len(cards))
 	for i, card := range cards {
+		if card == nil {
+			c[i] = ""
+			continue
+		}
+
 		var suit string
 		switch card.Suit {
 		case Clubs:

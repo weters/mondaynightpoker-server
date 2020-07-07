@@ -292,6 +292,8 @@ func TestHandAnalyzer_GetStrength(t *testing.T) {
 		{"14c,13c,12c,11c,9c", "ace-high flush"},
 		{"2c,3d,4h", "4-high three-card-straight"},
 		{"14c,13d,12d", "ace-high three-card-straight"},
+		{"2c,2d,2h", "trips (2s in three-card-poker)"},
+		{"14c,14d,14h", "trips (aces in three-card-poker)"},
 		{"2c,2d,2h,3c,3d", "full-house (2s over 3s"},
 		{"2c,2d,3h,3c,3d", "full-house (3s over 2s"},
 		{"14c,14d,14h,13c,13d", "full-house (aces over kings)"},
@@ -311,4 +313,22 @@ func TestHandAnalyzer_GetStrength_unknownHand(t *testing.T) {
 	assert.PanicsWithValue(t, "unknown hand", func() {
 		h.GetStrength()
 	})
+}
+
+func TestHandAnalyzer_getThreeCardPokerThreeOfAKind(t *testing.T) {
+	h := New(3, deck.CardsFromString("2c,3d,3h,3s,4c"))
+	trips, ok := h.getThreeCardPokerThreeOfAKind()
+	assert.True(t, ok)
+	assert.Equal(t, 3, trips)
+
+	// don't allow three card in five card game
+	h = New(5, deck.CardsFromString("2c,3d,3h,3s,4c"))
+	trips, ok = h.getThreeCardPokerThreeOfAKind()
+	assert.False(t, ok)
+	assert.Equal(t, 0, trips)
+
+	h = New(5, deck.CardsFromString("2c,2d,3d,3h,4d"))
+	trips, ok = h.getThreeCardPokerThreeOfAKind()
+	assert.False(t, ok)
+	assert.Equal(t, 0, trips)
 }

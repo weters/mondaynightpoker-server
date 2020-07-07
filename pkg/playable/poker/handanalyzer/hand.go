@@ -13,7 +13,8 @@ const (
 	ThreeOfAKind
 	Straight
 	Flush
-	ThreeCardPokerStraight // in three-card poker, straight beats flush
+	ThreeCardPokerStraight     // in three-card poker, straight beats flush
+	ThreeCardPokerThreeOfAKind // in three-card poker, beats straight and flush
 	FullHouse
 	FourOfAKind
 	StraightFlush
@@ -37,6 +38,8 @@ func (h Hand) String() string {
 		return "Flush"
 	case ThreeCardPokerStraight:
 		return "Straight"
+	case ThreeCardPokerThreeOfAKind:
+		return "Three of a kind"
 	case FullHouse:
 		return "Full house"
 	case FourOfAKind:
