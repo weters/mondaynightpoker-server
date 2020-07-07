@@ -36,6 +36,11 @@ func TestHandAnalyzer_GetFullHouse(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, []int{14, 5}, r)
 
+	h = New(3, deck.CardsFromString("14c,2c,14d,5c,14h,2d,5h"))
+	r, ok = h.GetFullHouse()
+	assert.False(t, ok)
+	assert.Nil(t, r)
+
 	h = New(5, deck.CardsFromString("3c,3d,3h,4c,4d,4h,5c"))
 	r, ok = h.GetFullHouse()
 	assert.True(t, ok)

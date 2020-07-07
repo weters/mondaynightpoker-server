@@ -130,6 +130,10 @@ func (h *HandAnalyzer) GetFullHouse() ([]int, bool) {
 		return nil, false
 	}
 
+	if h.size < 5 {
+		return nil, false
+	}
+
 	trips := h.trips[0]
 
 	pair, ok := h.GetPair()

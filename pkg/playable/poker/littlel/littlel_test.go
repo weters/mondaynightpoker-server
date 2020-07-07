@@ -247,7 +247,7 @@ func TestGame_ParticipantActionTie(t *testing.T) {
 	game.community = deck.CardsFromString("14s,5h,5s")
 	p(1).hand = deck.CardsFromString("5c,6c,6d")
 	p(2).hand = deck.CardsFromString("5d,6h,6s")
-	p(3).hand = deck.CardsFromString("2c,4d,5h") // loses
+	p(3).hand = deck.CardsFromString("2c,4d,8h") // loses
 
 	// trade-in round
 
