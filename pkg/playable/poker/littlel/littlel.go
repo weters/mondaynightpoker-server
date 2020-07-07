@@ -47,6 +47,8 @@ type Game struct {
 
 	done    bool
 	winners []*Participant
+
+	lastAdjustmentStage stage // the last stage an adjustment ran
 }
 
 // NewGame returns a new instance of the game
@@ -76,12 +78,13 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 	}
 
 	g := &Game{
-		options:         options,
-		playerIDs:       append([]int64{}, playerIDs...), // make a copy
-		idToParticipant: idToParticipant,
-		deck:            d,
-		pot:             len(idToParticipant) * options.Ante,
-		discards:        []*deck.Card{},
+		options:             options,
+		playerIDs:           append([]int64{}, playerIDs...), // make a copy
+		idToParticipant:     idToParticipant,
+		deck:                d,
+		pot:                 len(idToParticipant) * options.Ante,
+		discards:            []*deck.Card{},
+		lastAdjustmentStage: stage(-1),
 	}
 
 	if err := g.parseTradeIns(options.TradeIns); err != nil {
@@ -215,9 +218,7 @@ func (g *Game) NextStage() error {
 		return errors.New("cannot advance the stage")
 	}
 
-	for _, p := range g.idToParticipant {
-		p.balance -= p.currentBet
-	}
+	g.endOfStageAdjustments()
 
 	g.stage++
 	g.reset()
@@ -227,6 +228,18 @@ func (g *Game) NextStage() error {
 	}
 
 	return nil
+}
+
+func (g *Game) endOfStageAdjustments() {
+	if g.lastAdjustmentStage == g.stage {
+		panic(fmt.Sprintf("already ran endOfStageAdjustments() for stage: %d", g.stage))
+	}
+
+	g.lastAdjustmentStage = g.stage
+
+	for _, p := range g.idToParticipant {
+		p.balance -= p.currentBet
+	}
 }
 
 // ParticipantBets handles both bets and raises
@@ -316,6 +329,7 @@ func (g *Game) ParticipantFolds(p *Participant) error {
 	if stillAlive == 0 {
 		panic("too many players folded")
 	} else if stillAlive == 1 {
+		g.endOfStageAdjustments()
 		g.endGame()
 		return nil
 	}

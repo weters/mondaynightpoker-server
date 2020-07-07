@@ -289,3 +289,59 @@ func TestGame_ParticipantActionAllFold(t *testing.T) {
 	assert.Equal(t, -25, p(2).balance)
 	assert.Equal(t, 50, p(3).balance)
 }
+
+func TestGame_FoldMidGame(t *testing.T) {
+	opts := DefaultOptions()
+	opts.Ante = 100
+	game, _ := NewGame("", []int64{1, 2, 3, 4, 5}, opts)
+	assert.NoError(t, game.DealCards())
+	p := func(id int64) *Participant {
+		return game.idToParticipant[id]
+	}
+
+	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(4), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(5), []*deck.Card{}))
+	assert.NoError(t, game.NextStage())
+
+	assert.NoError(t, game.ParticipantBets(p(1), 200))
+	assert.NoError(t, game.ParticipantFolds(p(2)))
+	assert.NoError(t, game.ParticipantCalls(p(3)))
+	assert.NoError(t, game.ParticipantCalls(p(4)))
+	assert.NoError(t, game.ParticipantCalls(p(5)))
+	assert.NoError(t, game.NextStage())
+
+	assert.Equal(t, 1300, game.pot)
+
+	assert.NoError(t, game.ParticipantChecks(p(1)))
+	assert.NoError(t, game.ParticipantChecks(p(3)))
+	assert.NoError(t, game.ParticipantChecks(p(4)))
+	assert.NoError(t, game.ParticipantBets(p(5), 1200))
+	assert.NoError(t, game.ParticipantFolds(p(1)))
+	assert.NoError(t, game.ParticipantFolds(p(3)))
+	assert.NoError(t, game.ParticipantFolds(p(4)))
+	assert.True(t, game.IsGameOver())
+
+	assert.Equal(t, 1, len(game.winners))
+
+	assert.Equal(t, -300, p(1).balance)
+	assert.Equal(t, -100, p(2).balance)
+	assert.Equal(t, -300, p(3).balance)
+	assert.Equal(t, -300, p(4).balance)
+	assert.Equal(t, 1000, p(5).balance)
+}
+
+func TestGame_endOfStageAdjustments(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	p := func(id int64) *Participant {
+		return game.idToParticipant[id]
+	}
+	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
+	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
+	game.endOfStageAdjustments()
+	assert.PanicsWithValue(t, "already ran endOfStageAdjustments() for stage: 0", func() {
+		_ = game.NextStage()
+	})
+}
