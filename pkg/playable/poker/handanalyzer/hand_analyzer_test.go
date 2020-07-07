@@ -28,6 +28,12 @@ func TestHandAnalyzer_GetFourOfAKind(t *testing.T) {
 	r, ok = h.GetFourOfAKind()
 	assert.False(t, ok)
 	assert.Equal(t, 0, r)
+
+	// no four-of-a-kind in 3 card poker
+	h = New(3, deck.CardsFromString("2c,2d,2h,2s,3h"))
+	r, ok = h.GetFourOfAKind()
+	assert.False(t, ok)
+	assert.Equal(t, 0, r)
 }
 
 func TestHandAnalyzer_GetFullHouse(t *testing.T) {
@@ -247,6 +253,17 @@ func BenchmarkNewHandAnalyzer(b *testing.B) {
 	}
 }
 
+func TestHandAnalyzer_GetStrength_cache(t *testing.T) {
+	h := New(5, deck.CardsFromString("2c,3c,4c,5c,6c"))
+	assert.Equal(t, 7897500, h.GetStrength())
+
+	h.strength = 1
+	assert.Equal(t, 1, h.GetStrength()) // uses cached value
+
+	h.strength = 0
+	assert.Equal(t, 7897500, h.GetStrength()) // re-calculates
+}
+
 func TestHandAnalyzer_GetStrength(t *testing.T) {
 	type testHand struct {
 		hand, name string
@@ -327,6 +344,7 @@ func TestHandAnalyzer_getThreeCardPokerThreeOfAKind(t *testing.T) {
 	assert.Equal(t, 3, trips)
 
 	h = New(3, deck.CardsFromString("2c,2d,2h,2s,3c"))
+	assert.Equal(t, ThreeCardPokerThreeOfAKind.String(), h.GetHand().String())
 	trips, ok = h.getThreeCardPokerThreeOfAKind()
 	assert.True(t, ok)
 	assert.Equal(t, 2, trips)

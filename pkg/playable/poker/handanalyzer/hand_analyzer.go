@@ -117,6 +117,11 @@ func (h *HandAnalyzer) GetStraightFlush() (int, bool) {
 
 // GetFourOfAKind will return the best four of a kind, if possible
 func (h *HandAnalyzer) GetFourOfAKind() (int, bool) {
+	// cannot get four-of-a-kind in 3 card poker
+	if h.size < 4 {
+		return 0, false
+	}
+
 	if len(h.quads) > 0 {
 		return h.quads[0], true
 	}
@@ -158,9 +163,8 @@ func (h *HandAnalyzer) getThreeCardPokerThreeOfAKind() (int, bool) {
 		return 0, false
 	}
 
-	i, ok := h.GetFourOfAKind()
-	if ok {
-		return i, ok
+	if len(h.quads) > 0 {
+		return h.quads[0], true
 	}
 
 	return h.GetThreeOfAKind()
