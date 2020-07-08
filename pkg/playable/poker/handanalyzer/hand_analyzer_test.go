@@ -112,6 +112,13 @@ func TestHandAnalyzer_GetTwoPair(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, []int{6, 5}, r)
 
+	// no two pair for three-card poker
+	h = New(3, deck.CardsFromString("5c,5d,6h,6d,3h"))
+	r, ok = h.GetTwoPair()
+	assert.False(t, ok)
+	assert.Nil(t, r)
+	assert.Equal(t, "Pair", h.GetHand().String())
+
 	h = New(5, deck.CardsFromString("2c,2c,3h,4h,5d"))
 	r, ok = h.GetTwoPair()
 	assert.False(t, ok)

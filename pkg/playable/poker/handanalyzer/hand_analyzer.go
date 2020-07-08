@@ -207,6 +207,10 @@ func (h *HandAnalyzer) GetThreeOfAKind() (int, bool) {
 
 // GetTwoPair will return the best two pairs, if possible
 func (h *HandAnalyzer) GetTwoPair() ([]int, bool) {
+	if h.size < 5 {
+		return nil, false
+	}
+
 	if len(h.pairs) >= 2 {
 		return h.pairs[0:2], true
 	}
