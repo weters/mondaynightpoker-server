@@ -376,3 +376,46 @@ func TestGame_ParticipantBets(t *testing.T) {
 	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your bet must be in multiples of the ante (25¢)")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 50))
 }
+
+func TestGame_sendEndOfGameLogMessages(t *testing.T) {
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	_ = game.DealCards()
+	game.community = deck.CardsFromString("8h,8d,8s")
+	game.idToParticipant[2].hand = deck.CardsFromString("14s,13s,12s,11c")
+	game.idToParticipant[3].hand = deck.CardsFromString("2c,2h,2d,2s")
+	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
+	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
+	_ = game.tradeCardsForParticipant(game.idToParticipant[3], []*deck.Card{})
+	_ = game.NextStage()
+
+	_ = game.ParticipantFolds(game.idToParticipant[1])
+	for i := 0; i < 4; i++ {
+		assert.NoError(t, game.ParticipantChecks(game.idToParticipant[2]))
+		assert.NoError(t, game.ParticipantChecks(game.idToParticipant[3]))
+
+		if i < 3 {
+			assert.NoError(t, game.NextStage())
+		}
+	}
+
+ForLoop:
+	for {
+		select {
+		case <-game.logChan:
+		default:
+			break ForLoop
+		}
+	}
+
+	assert.NoError(t, game.NextStage())
+	assert.True(t, game.IsGameOver())
+
+	msg := <-game.logChan
+	assert.Equal(t, 3, len(msg))
+	assert.Equal(t, []int64{2}, msg[0].PlayerIDs)
+	assert.Equal(t, "{} had a Royal flush and won ${50}", msg[0].Message)
+	assert.Equal(t, []int64{1}, msg[1].PlayerIDs)
+	assert.Equal(t, "{} folded and lost ${25}", msg[1].Message)
+	assert.Equal(t, []int64{3}, msg[2].PlayerIDs)
+	assert.Equal(t, "{} had a Three of a kind and lost ${25}", msg[2].Message)
+}

@@ -9,6 +9,7 @@ import (
 type Participant struct {
 	PlayerID int64
 	didFold  bool
+	didWin   bool
 	balance  int
 	hand     deck.Hand
 

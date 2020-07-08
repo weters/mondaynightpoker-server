@@ -1,6 +1,8 @@
 package playable
 
 import (
+	"fmt"
+	"github.com/google/uuid"
 	"mondaynightpoker-server/pkg/deck"
 	"time"
 )
@@ -112,4 +114,24 @@ func (a AdditionalData) GetIntSlice(key string) ([]int, bool) {
 	}
 
 	return ints, true
+}
+
+// SimpleLogMessage returns a new LogMessage
+func SimpleLogMessage(playerID int64, format string, a ...interface{}) *LogMessage {
+	var playerIDs []int64
+	if playerID > 0 {
+		playerIDs = []int64{playerID}
+	}
+
+	return &LogMessage{
+		UUID:      uuid.New().String(),
+		PlayerIDs: playerIDs,
+		Message:   fmt.Sprintf(format, a...),
+		Time:      time.Now(),
+	}
+}
+
+// SimpleLogMessageSlice returns a single log message
+func SimpleLogMessageSlice(playerID int64, format string, a ...interface{}) []*LogMessage {
+	return []*LogMessage{SimpleLogMessage(playerID, format, a...)}
 }

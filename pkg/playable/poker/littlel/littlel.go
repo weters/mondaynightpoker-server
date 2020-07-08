@@ -85,11 +85,14 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		pot:                 len(idToParticipant) * options.Ante,
 		discards:            []*deck.Card{},
 		lastAdjustmentStage: stage(-1),
+		logChan:             make(chan []*playable.LogMessage, 256),
 	}
 
 	if err := g.buildTradeInsBitField(options.TradeIns); err != nil {
 		return nil, err
 	}
+
+	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (trade: %s)", g.GetAllowedTradeIns().String())
 
 	return g, nil
 }
@@ -472,13 +475,14 @@ func (g *Game) endGame() {
 
 	winners := make([]*Participant, 0, 1)
 	best := math.MinInt32
+	community := g.GetCommunityCards()
 	for _, id := range g.playerIDs {
 		p := g.idToParticipant[id]
 		if p.didFold {
 			continue
 		}
 
-		bestHand := p.GetBestHand(g.GetCommunityCards())
+		bestHand := p.GetBestHand(community)
 		strength := bestHand.analyzer.GetStrength()
 		if strength == best {
 			winners = append(winners, p)
@@ -491,9 +495,38 @@ func (g *Game) endGame() {
 	g.winners = winners
 	for _, winner := range winners {
 		winner.balance += g.pot / len(winners)
+		winner.didWin = true
 	}
 
 	if mod := g.pot % len(winners); mod > 0 {
 		winners[0].balance += mod
 	}
+
+	g.sendEndOfGameLogMessages()
+}
+
+func (g *Game) sendEndOfGameLogMessages() {
+	community := g.GetCommunityCards()
+
+	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
+	for _, winner := range g.winners {
+		hand := winner.GetBestHand(community).analyzer.GetHand().String()
+		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, winner.balance))
+	}
+
+	for _, playerID := range g.playerIDs {
+		p := g.idToParticipant[playerID]
+		if p.didWin {
+			continue
+		}
+
+		if p.didFold {
+			lms = append(lms, playable.SimpleLogMessage(p.PlayerID, "{} folded and lost ${%d}", -1*p.balance))
+		} else {
+			hand := p.GetBestHand(community).analyzer.GetHand().String()
+			lms = append(lms, playable.SimpleLogMessage(p.PlayerID, "{} had a %s and lost ${%d}", hand, -1*p.balance))
+		}
+	}
+
+	g.logChan <- lms
 }

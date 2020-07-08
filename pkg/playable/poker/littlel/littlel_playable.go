@@ -22,10 +22,16 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
+
 		return playable.OK(), true, nil
 	case "next-stage":
 		if err := g.NextStage(); err != nil {
 			return nil, false, err
+		}
+
+		if !g.IsGameOver() {
+			g.logChan <- playable.SimpleLogMessageSlice(0, "Next stage started")
 		}
 
 		return playable.OK(), true, nil
@@ -34,17 +40,23 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
+
 		return playable.OK(), true, nil
 	case "fold":
 		if err := g.ParticipantFolds(p); err != nil {
 			return nil, false, err
 		}
 
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
+
 		return playable.OK(), true, nil
 	case "call":
 		if err := g.ParticipantCalls(p); err != nil {
 			return nil, false, err
 		}
+
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
 
 		return playable.OK(), true, nil
 	case "raise":
@@ -57,6 +69,12 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 		if err := g.ParticipantBets(p, amount); err != nil {
 			return nil, false, err
+		}
+
+		if message.Action == "raise" {
+			g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} raises to ${%d}", amount)
+		} else {
+			g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
 		}
 
 		return playable.OK(), true, nil
