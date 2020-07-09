@@ -22,6 +22,7 @@ type GameState struct {
 	Pot          int                `json:"pot"`
 	Ante         int                `json:"ante"`
 	CurrentBet   int                `json:"currentBet"`
+	MaxBet       int                `json:"maxBet"`
 	TradeIns     TradeIns           `json:"tradeIns"`
 	InitialDeal  int                `json:"initialDeal"`
 	Community    []*deck.Card       `json:"community"`

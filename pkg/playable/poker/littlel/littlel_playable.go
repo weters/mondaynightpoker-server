@@ -125,6 +125,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			Pot:          g.pot,
 			Ante:         g.options.Ante,
 			CurrentBet:   g.currentBet,
+			MaxBet:       g.getPotLimit(),
 			TradeIns:     g.GetAllowedTradeIns(),
 			InitialDeal:  g.options.InitialDeal,
 			Community:    g.GetCommunityCards(),

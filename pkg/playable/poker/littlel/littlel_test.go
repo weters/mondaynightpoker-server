@@ -375,7 +375,7 @@ func TestGame_ParticipantBets(t *testing.T) {
 
 	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of the ante (25¢)")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[1], 25))
-	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your bet must be in multiples of the ante (25¢)")
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your raise must be in multiples of the ante (25¢)")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 50))
 }
 
