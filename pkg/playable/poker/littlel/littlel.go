@@ -7,6 +7,7 @@ import (
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"sort"
+	"strings"
 )
 
 // ErrNotPlayersTurn is an error when a player attempts to act out of turn
@@ -251,22 +252,31 @@ func (g *Game) endOfStageAdjustments() {
 	}
 }
 
+func (g *Game) getPotLimit() int {
+	return g.pot + g.currentBet
+}
+
 // ParticipantBets handles both bets and raises
 func (g *Game) ParticipantBets(p *Participant, bet int) error {
+	term := strings.ToLower(string(ActionBet))
+	if g.currentBet > 0 {
+		term = strings.ToLower(string(ActionRaise))
+	}
+
 	if g.GetCurrentTurn() != p {
 		return ErrNotPlayersTurn
 	}
 
 	if bet%g.options.Ante > 0 {
-		return fmt.Errorf("your bet must be in multiples of the ante (%d¢)", g.options.Ante)
+		return fmt.Errorf("your %s must be in multiples of the ante (%d¢)", term, g.options.Ante)
 	}
 
-	if bet > g.pot {
-		return fmt.Errorf("your bet (%d¢) must not exceed the current pot (%d¢)", bet, g.pot)
+	if bet > g.getPotLimit() {
+		return fmt.Errorf("your %s (%d¢) must not exceed the pot limit (%d¢)", term, bet, g.getPotLimit())
 	}
 
 	if bet < g.options.Ante {
-		return fmt.Errorf("your bet must at least match the ante (%d¢)", g.options.Ante)
+		return fmt.Errorf("your %s must at least match the ante (%d¢)", term, g.options.Ante)
 	}
 
 	if g.currentBet > 0 && bet < g.currentBet*2 {

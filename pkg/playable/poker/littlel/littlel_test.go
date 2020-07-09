@@ -180,6 +180,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.NoError(t, game.NextStage())
 
 	// before first card is shown
+	// pot = 75¢
 
 	assert.Equal(t, []*deck.Card{nil, nil, nil}, game.GetCommunityCards())
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantChecks(p(2)))
@@ -187,16 +188,17 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantBets(p(2), 25))
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(2)))
 
-	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+game.options.Ante), "your bet (100¢) must not exceed the current pot (75¢)")
+	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+game.options.Ante), "your bet (100¢) must not exceed the pot limit (75¢)")
 	assert.NoError(t, game.ParticipantChecks(p(1)))
 	assert.EqualError(t, game.ParticipantCalls(p(2)), "you cannot call without an active bet")
 	assert.EqualError(t, game.ParticipantBets(p(2), 0), "your bet must at least match the ante (25¢)")
-	assert.NoError(t, game.ParticipantBets(p(2), 75))
+	assert.NoError(t, game.ParticipantBets(p(2), 75)) // pot is now 150¢
 	assert.EqualError(t, game.ParticipantChecks(p(3)), "you cannot check with an active bet")
 	assert.EqualError(t, game.ParticipantBets(p(3), 125), "your raise (125¢) must be at least equal to double the previous bet (150¢)")
-	assert.NoError(t, game.ParticipantBets(p(3), 150))
+	assert.EqualError(t, game.ParticipantBets(p(3), 250), "your raise (250¢) must not exceed the pot limit (225¢)")
+	assert.NoError(t, game.ParticipantBets(p(3), 225)) // pot is now 375¢
 	assert.NoError(t, game.ParticipantFolds(p(1)))
-	assert.NoError(t, game.ParticipantCalls(p(2)))
+	assert.NoError(t, game.ParticipantCalls(p(2))) // pot is now 525¢
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(3)))
 	assert.NoError(t, game.NextStage())
 
@@ -204,23 +206,23 @@ func TestGame_ParticipantAction(t *testing.T) {
 
 	assert.Equal(t, "2c,,", deck.CardsToString(game.GetCommunityCards()))
 	assert.Equal(t, -25, p(1).balance)
-	assert.Equal(t, -175, p(2).balance)
-	assert.Equal(t, -175, p(3).balance)
-	assert.Equal(t, 375, game.pot)
+	assert.Equal(t, -250, p(2).balance)
+	assert.Equal(t, -250, p(3).balance)
+	assert.Equal(t, 525, game.pot)
 
-	assert.NoError(t, game.ParticipantBets(p(2), 25))
-	assert.NoError(t, game.ParticipantBets(p(3), 50))
-	assert.NoError(t, game.ParticipantBets(p(2), 100))
-	assert.NoError(t, game.ParticipantCalls(p(3)))
+	assert.NoError(t, game.ParticipantBets(p(2), 25))  // 550
+	assert.NoError(t, game.ParticipantBets(p(3), 50))  // 600
+	assert.NoError(t, game.ParticipantBets(p(2), 100)) // 675
+	assert.NoError(t, game.ParticipantCalls(p(3)))     // 725
 	assert.NoError(t, game.NextStage())
 
 	// before third card is shown
 
 	assert.Equal(t, "2c,5h,", deck.CardsToString(game.GetCommunityCards()))
 	assert.Equal(t, -25, p(1).balance)
-	assert.Equal(t, -275, p(2).balance)
-	assert.Equal(t, -275, p(3).balance)
-	assert.Equal(t, 575, game.pot)
+	assert.Equal(t, -350, p(2).balance)
+	assert.Equal(t, -350, p(3).balance)
+	assert.Equal(t, 725, game.pot)
 
 	assert.NoError(t, game.ParticipantChecks(p(2)))
 	assert.NoError(t, game.ParticipantChecks(p(3)))
@@ -230,9 +232,9 @@ func TestGame_ParticipantAction(t *testing.T) {
 
 	assert.Equal(t, "2c,5h,4c", deck.CardsToString(game.GetCommunityCards()))
 	assert.Equal(t, -25, p(1).balance)
-	assert.Equal(t, -275, p(2).balance)
-	assert.Equal(t, -275, p(3).balance)
-	assert.Equal(t, 575, game.pot)
+	assert.Equal(t, -350, p(2).balance)
+	assert.Equal(t, -350, p(3).balance)
+	assert.Equal(t, 725, game.pot)
 
 	assert.NoError(t, game.ParticipantChecks(p(2)))
 	assert.NoError(t, game.ParticipantChecks(p(3)))
@@ -245,9 +247,9 @@ func TestGame_ParticipantAction(t *testing.T) {
 
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantChecks(p(2)))
 	assert.Equal(t, -25, p(1).balance)
-	assert.Equal(t, 300, p(2).balance) // won hand
-	assert.Equal(t, -275, p(3).balance)
-	assert.Equal(t, 575, game.pot)
+	assert.Equal(t, 375, p(2).balance) // won hand
+	assert.Equal(t, -350, p(3).balance)
+	assert.Equal(t, 725, game.pot)
 	assert.Equal(t, 1, len(game.winners))
 	assert.Equal(t, int64(2), game.winners[0].PlayerID)
 }
