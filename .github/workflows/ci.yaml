@@ -1,5 +1,9 @@
 on:
-  - push
+  push:
+    branches:
+      - '*'
+    paths:
+      - '**.go'
 env:
   IMAGE: docker.pkg.github.com/weters/mondaynightpoker-server/mondaynightpoker-server
 jobs:

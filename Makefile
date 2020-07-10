@@ -11,5 +11,10 @@ keys: .keys/public.pem
 	openssl rsa -in .keys/private.key -pubout -out .keys/public.pem
 
 .keys/private.key:
-	@mkdir -p .keys
+	mkdir -p .keys
 	openssl genrsa -out .keys/private.key 2048
+
+.PHONY: dev-database
+dev-database:
+	-docker run --name mondaynightpoker -e POSTGRES_HOST_AUTH_METHOD=trust -d -p 5432:5432 postgres:9.4
+	go run ./cmd/migrate
