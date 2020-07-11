@@ -77,7 +77,6 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 
 	d := deck.New()
 	d.Shuffle(seed)
-	logrus.WithField("seed", seed).WithField("deckSeed", d.Seed()).WithField("card", d.Cards[0]).Info("Shuffled")
 
 	idToParticipants := make(map[int64]*Participant)
 	participants := make([]*Participant, len(playerIDs))

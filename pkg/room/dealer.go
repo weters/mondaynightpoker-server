@@ -2,6 +2,7 @@ package room
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mondaynightpoker-server/pkg/playable"
@@ -208,6 +209,21 @@ func (d *Dealer) sendGameData() {
 }
 
 func (d *Dealer) sendLogMessages(messages []*playable.LogMessage) {
+	var gameName string
+	if d.game != nil {
+		gameName = d.game.Name()
+	}
+
+	for _, message := range messages {
+		logrus.WithFields(logrus.Fields{
+			"cards":     message.Cards,
+			"playerIds": message.PlayerIDs,
+			"tableId":   d.table.UUID,
+			"game":      gameName,
+			"message":   message.Message,
+		}).Debug("log sent")
+	}
+
 	d.addLogMessages(messages)
 	for client := range d.clients {
 		client.Send(playable.Response{
@@ -303,6 +319,10 @@ func canPerformActionOnTable(ctx string, c *Client, action action) bool {
 
 // ReceivedMessage is called when a client sends a message to the server
 func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
+	if msgBytes, _ := json.Marshal(msg); msgBytes != nil {
+		logrus.WithField("message", string(msgBytes)).Debug("client message")
+	}
+
 	switch msg.Action {
 	case "createGame":
 		if d.game != nil {
