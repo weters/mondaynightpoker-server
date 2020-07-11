@@ -93,7 +93,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		return nil, err
 	}
 
-	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (trade: %s)", g.GetAllowedTradeIns().String())
+	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
 
 	return g, nil
 }

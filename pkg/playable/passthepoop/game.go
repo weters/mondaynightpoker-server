@@ -119,7 +119,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 
 	gameLog.AddRound(g.startingHand())
 
-	g.sendLogMessage(0, fmt.Sprintf("New game of Pass the Poop: %s Edition started", g.options.Edition.Name()))
+	g.sendLogMessage(0, fmt.Sprintf("New game of Pass the Poop: %s Edition started (ante: ${%d})", g.options.Edition.Name(), g.options.Ante))
 
 	return g, nil
 }
