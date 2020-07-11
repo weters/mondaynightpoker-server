@@ -437,6 +437,7 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 
 	sort.Sort(p.hand)
 
+	p.traded = len(cards)
 	g.advanceDecision()
 	return nil
 }

@@ -12,6 +12,7 @@ type Participant struct {
 	didWin   bool
 	balance  int
 	hand     deck.Hand
+	traded   int
 
 	// currentBet is how much the player has bet in the current round
 	currentBet int

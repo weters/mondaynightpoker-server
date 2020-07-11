@@ -141,6 +141,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			DidFold:    p.didFold,
 			Balance:    p.balance,
 			CurrentBet: p.currentBet,
+			Traded:     p.traded,
 		}
 
 		if g.CanRevealCards() {
@@ -178,6 +179,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 			DidFold:    p.didFold,
 			Balance:    p.balance,
 			CurrentBet: 0,
+			Traded:     p.traded,
 			Hand:       p.hand,
 			HandRank:   p.GetBestHand(c).analyzer.GetHand().String(),
 		}

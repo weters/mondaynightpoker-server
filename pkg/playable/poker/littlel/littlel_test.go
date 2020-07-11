@@ -101,6 +101,7 @@ func TestGame_TradeCardsForParticipant(t *testing.T) {
 	game.stage = 0
 	assert.EqualError(t, trade(2, "2c,5c"), "it is not your turn")
 	assert.NoError(t, trade(1, "2c,5c"))
+	assert.Equal(t, 2, game.idToParticipant[1].traded)
 
 	assert.EqualError(t, trade(2, "2c,5c"), "you do not have 2♣ in your hand")
 	assert.EqualError(t, trade(2, "3c,3c"), "invalid trade-in")
@@ -175,6 +176,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	// trade-in round
 
 	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
+	assert.Equal(t, 0, p(1).traded)
 	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
 	assert.NoError(t, game.NextStage())

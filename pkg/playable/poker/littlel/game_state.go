@@ -9,6 +9,7 @@ type participantJSON struct {
 	DidFold    bool      `json:"didFold"`
 	Balance    int       `json:"balance"`
 	CurrentBet int       `json:"currentBet"`
+	Traded     int       `json:"traded"`
 	Hand       deck.Hand `json:"hand"`
 	HandRank   string    `json:"handRank"`
 }
