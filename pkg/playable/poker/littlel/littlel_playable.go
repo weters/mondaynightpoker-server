@@ -25,13 +25,13 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
 
 		return playable.OK(), true, nil
-	case "next-stage":
-		if err := g.NextStage(); err != nil {
+	case "next-round":
+		if err := g.NextRound(); err != nil {
 			return nil, false, err
 		}
 
 		if !g.IsGameOver() {
-			g.logChan <- playable.SimpleLogMessageSlice(0, "Next stage started")
+			g.logChan <- playable.SimpleLogMessageSlice(0, "Next round started")
 		}
 
 		return playable.OK(), true, nil
@@ -120,7 +120,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		GameState: &GameState{
 			Participants: make([]*participantJSON, 0),
 			DealerID:     g.idToParticipant[g.playerIDs[0]].PlayerID,
-			Stage:        g.stage,
+			Round:        g.round,
 			Action:       action,
 			Pot:          g.pot,
 			Ante:         g.options.Ante,

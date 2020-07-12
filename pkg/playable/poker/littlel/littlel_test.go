@@ -95,10 +95,10 @@ func TestGame_TradeCardsForParticipant(t *testing.T) {
 	trade := createTradeHelperFunc(game)
 	assert.NoError(t, game.DealCards())
 
-	game.stage = 1
-	assert.EqualError(t, trade(2, "2c,5c"), "we are not in the trade-in stage")
+	game.round = 1
+	assert.EqualError(t, trade(2, "2c,5c"), "we are not in the trade-in round")
 
-	game.stage = 0
+	game.round = 0
 	assert.EqualError(t, trade(2, "2c,5c"), "it is not your turn")
 	assert.NoError(t, trade(1, "2c,5c"))
 	assert.Equal(t, 2, game.idToParticipant[1].traded)
@@ -109,7 +109,7 @@ func TestGame_TradeCardsForParticipant(t *testing.T) {
 	assert.NoError(t, trade(2, ""))
 
 	assert.NoError(t, trade(3, "4c,7c"))
-	assert.True(t, game.IsStageOver())
+	assert.True(t, game.IsRoundOver())
 }
 
 func TestGame_TradeCardsForParticipant_UsingDiscards(t *testing.T) {
@@ -130,7 +130,7 @@ func TestGame_TradeCardsForParticipant_UsingDiscards(t *testing.T) {
 	assert.NoError(t, trade(3, "4c,7c"))
 	assertHand(t, game, 3, "3c,6c,10c,13c")
 
-	assert.True(t, game.IsStageOver())
+	assert.True(t, game.IsRoundOver())
 }
 
 func assertHand(t *testing.T, game *Game, playerID int64, hand string) {
@@ -146,14 +146,14 @@ func createTradeHelperFunc(game *Game) func(playerID int64, cards string) error 
 	}
 }
 
-func TestGame_NextStage(t *testing.T) {
+func TestGame_NextRound(t *testing.T) {
 	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
-	assert.EqualError(t, game.NextStage(), "stage is not over")
+	assert.EqualError(t, game.NextRound(), "round is not over")
 
 	game.currentBet = 25
 	game.decisionCount = 3
 	game.idToParticipant[1].didFold = true
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	assert.Equal(t, 0, game.currentBet)
 	assert.Equal(t, 1, game.decisionCount)
@@ -179,7 +179,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.Equal(t, 0, p(1).traded)
 	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	// before first card is shown
 	// pot = 75¢
@@ -202,7 +202,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.NoError(t, game.ParticipantFolds(p(1)))
 	assert.NoError(t, game.ParticipantCalls(p(2))) // pot is now 525¢
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(3)))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	// before second card is shown
 
@@ -216,7 +216,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.NoError(t, game.ParticipantBets(p(3), 50))  // 600
 	assert.NoError(t, game.ParticipantBets(p(2), 100)) // 675
 	assert.NoError(t, game.ParticipantCalls(p(3)))     // 725
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	// before third card is shown
 
@@ -228,7 +228,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 
 	assert.NoError(t, game.ParticipantChecks(p(2)))
 	assert.NoError(t, game.ParticipantChecks(p(3)))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	// third card is now shown, final round of betting
 
@@ -241,7 +241,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.NoError(t, game.ParticipantChecks(p(2)))
 	assert.NoError(t, game.ParticipantChecks(p(3)))
 	assert.False(t, game.IsGameOver())
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 	assert.True(t, game.IsGameOver())
 
 	// XXX how to handle end of game
@@ -274,13 +274,13 @@ func TestGame_ParticipantActionTie(t *testing.T) {
 	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	for i := 0; i < 4; i++ {
 		assert.NoError(t, game.ParticipantChecks(p(1)))
 		assert.NoError(t, game.ParticipantChecks(p(2)))
 		assert.NoError(t, game.ParticipantChecks(p(3)))
-		assert.NoError(t, game.NextStage())
+		assert.NoError(t, game.NextRound())
 	}
 
 	assert.Equal(t, 2, len(game.winners))
@@ -324,14 +324,14 @@ func TestGame_FoldMidGame(t *testing.T) {
 	assert.NoError(t, game.tradeCardsForParticipant(p(3), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(4), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(5), []*deck.Card{}))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	assert.NoError(t, game.ParticipantBets(p(1), 200))
 	assert.NoError(t, game.ParticipantFolds(p(2)))
 	assert.NoError(t, game.ParticipantCalls(p(3)))
 	assert.NoError(t, game.ParticipantCalls(p(4)))
 	assert.NoError(t, game.ParticipantCalls(p(5)))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	assert.Equal(t, 1300, game.pot)
 
@@ -353,16 +353,16 @@ func TestGame_FoldMidGame(t *testing.T) {
 	assert.Equal(t, 1000, p(5).balance)
 }
 
-func TestGame_endOfStageAdjustments(t *testing.T) {
+func TestGame_endOfRoundAdjustments(t *testing.T) {
 	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
 	}
 	assert.NoError(t, game.tradeCardsForParticipant(p(1), []*deck.Card{}))
 	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
-	game.endOfStageAdjustments()
-	assert.PanicsWithValue(t, "already ran endOfStageAdjustments() for stage: 0", func() {
-		_ = game.NextStage()
+	game.endOfRoundAdjustments()
+	assert.PanicsWithValue(t, "already ran endOfRoundAdjustments() for round: 0", func() {
+		_ = game.NextRound()
 	})
 }
 
@@ -373,7 +373,7 @@ func TestGame_ParticipantBets(t *testing.T) {
 	game, _ := NewGame("", []int64{1, 2}, opts)
 	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
 	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
-	_ = game.NextStage()
+	_ = game.NextRound()
 
 	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of the ante (25¢)")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[1], 25))
@@ -390,7 +390,7 @@ func TestGame_sendEndOfGameLogMessages(t *testing.T) {
 	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
 	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
 	_ = game.tradeCardsForParticipant(game.idToParticipant[3], []*deck.Card{})
-	_ = game.NextStage()
+	_ = game.NextRound()
 
 	_ = game.ParticipantFolds(game.idToParticipant[1])
 	for i := 0; i < 4; i++ {
@@ -398,7 +398,7 @@ func TestGame_sendEndOfGameLogMessages(t *testing.T) {
 		assert.NoError(t, game.ParticipantChecks(game.idToParticipant[3]))
 
 		if i < 3 {
-			assert.NoError(t, game.NextStage())
+			assert.NoError(t, game.NextRound())
 		}
 	}
 
@@ -411,7 +411,7 @@ ForLoop:
 		}
 	}
 
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 	assert.True(t, game.IsGameOver())
 
 	msg := <-game.logChan

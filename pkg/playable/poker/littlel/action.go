@@ -16,7 +16,7 @@ const (
 	ActionCall      Action = "call"
 	ActionBet       Action = "bet"
 	ActionRaise     Action = "raise"
-	ActionNextStage Action = "next-stage"
+	ActionNextRound Action = "next-round"
 	ActionEndGame   Action = "end-game"
 )
 
@@ -27,7 +27,7 @@ var allowedActions = map[Action]bool{
 	ActionCall:      true,
 	ActionBet:       true,
 	ActionRaise:     true,
-	ActionNextStage: true,
+	ActionNextRound: true,
 	ActionEndGame:   true,
 }
 
@@ -54,7 +54,7 @@ func (a Action) String() string {
 		return "Bet"
 	case ActionRaise:
 		return "Raise"
-	case ActionNextStage:
+	case ActionNextRound:
 		return "Continue"
 	case ActionEndGame:
 		return "End Game"

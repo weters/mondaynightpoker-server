@@ -30,7 +30,7 @@ func newParticipant(id int64, ante int) *Participant {
 	}
 }
 
-// reset is called after the stage is reset
+// reset is called after the round is reset
 func (p *Participant) reset() {
 	p.currentBet = 0
 }

@@ -65,7 +65,7 @@ func TestParticipant_GetBestHand_CacheAfterTrade(t *testing.T) {
 
 	assert.NoError(t, game.tradeCardsForParticipant(p(1), deck.CardsFromString("3h,9h")))
 	assert.NoError(t, game.tradeCardsForParticipant(p(2), []*deck.Card{}))
-	assert.NoError(t, game.NextStage())
+	assert.NoError(t, game.NextRound())
 
 	assert.Equal(t, handanalyzer.StraightFlush.String(), p(1).GetBestHand(deck.CardsFromString(",,")).analyzer.GetHand().String())
 }

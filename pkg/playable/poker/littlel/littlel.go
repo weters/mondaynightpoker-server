@@ -15,15 +15,15 @@ var ErrNotPlayersTurn = errors.New("it is not your turn")
 
 const maxParticipants = 10
 
-type stage int
+type round int
 
 const (
-	stageTradeIn stage = iota // nolint
-	stageBeforeFirstTurn
-	stageBeforeSecondTurn
-	stageBeforeThirdTurn
-	stageFinalBettingRound // nolint
-	stageRevealWinner
+	roundTradeIn round = iota // nolint
+	roundBeforeFirstTurn
+	roundBeforeSecondTurn
+	roundBeforeThirdTurn
+	roundFinalBettingRound
+	roundRevealWinner
 )
 
 // seed of 0 means truly random shuffle
@@ -42,14 +42,14 @@ type Game struct {
 	decisionCount      int
 	pot                int
 	currentBet         int
-	stage              stage
+	round              round
 	community          []*deck.Card
 	discards           []*deck.Card
 
 	done    bool
 	winners []*Participant
 
-	lastAdjustmentStage stage // the last stage an adjustment ran
+	lastAdjustmentRound round // the last round an adjustment ran
 }
 
 // NewGame returns a new instance of the game
@@ -85,7 +85,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		deck:                d,
 		pot:                 len(idToParticipant) * options.Ante,
 		discards:            []*deck.Card{},
-		lastAdjustmentStage: stage(-1),
+		lastAdjustmentRound: round(-1),
 		logChan:             make(chan []*playable.LogMessage, 256),
 	}
 
@@ -173,15 +173,15 @@ func (g *Game) GetAllowedTradeIns() TradeIns {
 // A card will be nil if we have not progressed far enough in the game
 func (g *Game) GetCommunityCards() []*deck.Card {
 	cards := make([]*deck.Card, 3)
-	if g.stage > stageBeforeFirstTurn {
+	if g.round > roundBeforeFirstTurn {
 		cards[0] = g.community[0]
 	}
 
-	if g.stage > stageBeforeSecondTurn {
+	if g.round > roundBeforeSecondTurn {
 		cards[1] = g.community[1]
 	}
 
-	if g.stage > stageBeforeThirdTurn {
+	if g.round > roundBeforeThirdTurn {
 		cards[2] = g.community[2]
 	}
 
@@ -195,7 +195,7 @@ func (g *Game) GetCurrentTurn() *Participant {
 	}
 
 	// no more actions
-	if g.stage > stageFinalBettingRound {
+	if g.round > roundFinalBettingRound {
 		return nil
 	}
 
@@ -208,8 +208,8 @@ func (g *Game) GetCurrentTurn() *Participant {
 	return p
 }
 
-// IsStageOver returns true if all participants have had a turn
-func (g *Game) IsStageOver() bool {
+// IsRoundOver returns true if all participants have had a turn
+func (g *Game) IsRoundOver() bool {
 	return g.GetCurrentTurn() == nil
 }
 
@@ -218,34 +218,34 @@ func (g *Game) IsGameOver() bool {
 	return g.winners != nil
 }
 
-// NextStage will advance the game to the next stage
-func (g *Game) NextStage() error {
-	if !g.IsStageOver() {
-		return errors.New("stage is not over")
+// NextRound will advance the game to the next round
+func (g *Game) NextRound() error {
+	if !g.IsRoundOver() {
+		return errors.New("round is not over")
 	}
 
-	if g.stage == stageRevealWinner {
-		return errors.New("cannot advance the stage")
+	if g.round == roundRevealWinner {
+		return errors.New("cannot advance the round")
 	}
 
-	g.endOfStageAdjustments()
+	g.endOfRoundAdjustments()
 
-	g.stage++
+	g.round++
 	g.reset()
 
-	if g.stage == stageRevealWinner {
+	if g.round == roundRevealWinner {
 		g.endGame()
 	}
 
 	return nil
 }
 
-func (g *Game) endOfStageAdjustments() {
-	if g.lastAdjustmentStage == g.stage {
-		panic(fmt.Sprintf("already ran endOfStageAdjustments() for stage: %d", g.stage))
+func (g *Game) endOfRoundAdjustments() {
+	if g.lastAdjustmentRound == g.round {
+		panic(fmt.Sprintf("already ran endOfRoundAdjustments() for round: %d", g.round))
 	}
 
-	g.lastAdjustmentStage = g.stage
+	g.lastAdjustmentRound = g.round
 
 	for _, p := range g.idToParticipant {
 		p.balance -= p.currentBet
@@ -352,7 +352,7 @@ func (g *Game) ParticipantFolds(p *Participant) error {
 	if stillAlive == 0 {
 		panic("too many players folded")
 	} else if stillAlive == 1 {
-		g.endOfStageAdjustments()
+		g.endOfRoundAdjustments()
 		g.endGame()
 		return nil
 	}
@@ -361,7 +361,7 @@ func (g *Game) ParticipantFolds(p *Participant) error {
 	return nil
 }
 
-// reset should be called when we enter a new stage
+// reset should be called when we enter a new round
 func (g *Game) reset() {
 	for _, p := range g.idToParticipant {
 		p.reset()
@@ -391,8 +391,8 @@ func (g *Game) advanceDecisionIfPlayerFolded() {
 }
 
 func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) error {
-	if g.stage != 0 {
-		return errors.New("we are not in the trade-in stage")
+	if g.round != 0 {
+		return errors.New("we are not in the trade-in round")
 	}
 
 	if g.GetCurrentTurn() != p {
@@ -444,7 +444,7 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 
 // CanRevealCards returns true if all cards are flipped
 func (g *Game) CanRevealCards() bool {
-	return g.stage >= stageRevealWinner
+	return g.round >= roundRevealWinner
 }
 
 func (g *Game) getActionsForPlayer(playerID int64) []Action {
@@ -456,7 +456,7 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 
 	actions := make([]Action, 0)
 	if p == g.GetCurrentTurn() {
-		if g.stage == stageTradeIn {
+		if g.round == roundTradeIn {
 			actions = append(actions, ActionTrade)
 		} else {
 			if g.currentBet == 0 {
@@ -469,8 +469,8 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 
 	if g.IsGameOver() {
 		actions = append(actions, ActionEndGame)
-	} else if g.IsStageOver() {
-		actions = append(actions, ActionNextStage)
+	} else if g.IsRoundOver() {
+		actions = append(actions, ActionNextRound)
 	}
 
 	return actions
@@ -482,7 +482,7 @@ func (g *Game) endGame() {
 		panic("endGame already called")
 	}
 
-	g.stage = stageRevealWinner
+	g.round = roundRevealWinner
 
 	winners := make([]*Participant, 0, 1)
 	best := math.MinInt32
