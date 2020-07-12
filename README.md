@@ -9,9 +9,9 @@ mondaynightpoker-server is the backend application for the Monday Night Poker si
 * Bourré
 * Pass the Poop
 * Poker (work in progress)
-  * Five-card draw
-  * Seven-card stud
-  * Little L
+  * Five-card draw (coming soon)
+  * Seven-card stud (coming soon)
+  * Little L (done)
 
 ## Getting Started
 
