@@ -110,6 +110,10 @@ func (t *Table) GetActivePlayersShifted(ctx context.Context) ([]*PlayerTable, er
 		}
 	}
 
+	if len(activePlayers) == 0 {
+		return []*PlayerTable{}, nil
+	}
+
 	count, err := t.GetGamesCount(ctx)
 	if err != nil {
 		return nil, err
