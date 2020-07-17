@@ -35,3 +35,19 @@ func TestHand_AddCard(t *testing.T) {
 	h.AddCard(CardFromString("3c"))
 	assert.Equal(t, "14s,3c", CardsToString(h))
 }
+
+func TestHand_LastCard(t *testing.T) {
+	h := Hand(CardsFromString("2c,3d,4h"))
+	assert.Equal(t, "4h", CardToString(h.LastCard()))
+
+	h = make(Hand, 0)
+	assert.Nil(t, h.LastCard())
+}
+
+func TestHand_FirstCard(t *testing.T) {
+	h := Hand(CardsFromString("2c,3d,4h"))
+	assert.Equal(t, "2c", CardToString(h.FirstCard()))
+
+	h = make(Hand, 0)
+	assert.Nil(t, h.FirstCard())
+}

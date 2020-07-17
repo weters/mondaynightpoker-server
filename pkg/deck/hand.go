@@ -61,3 +61,22 @@ func (h *Hand) Discard(card *Card, max ...int) int {
 	*h = newHand
 	return count
 }
+
+// FirstCard returns the first card in the hand or nil if the cards are empty
+func (h Hand) FirstCard() *Card {
+	if len(h) == 0 {
+		return nil
+	}
+
+	return h[0]
+}
+
+// LastCard returns the last card in the hand or nil if the cards are empty
+func (h Hand) LastCard() *Card {
+	n := len(h)
+	if n == 0 {
+		return nil
+	}
+
+	return h[n-1]
+}

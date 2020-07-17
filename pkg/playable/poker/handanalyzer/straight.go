@@ -4,9 +4,7 @@ import "mondaynightpoker-server/pkg/deck"
 
 // used to keep track of the straight progress
 type straightTracker struct {
-	startRank int
-	prevRank  int
-	streak    int
+	streak deck.Hand
 }
 
 // checkStraight will check for a straight
@@ -17,22 +15,28 @@ func (h *HandAnalyzer) checkStraight(card *deck.Card, st *straightTracker, aceVa
 		cardRank = deck.LowAce
 	}
 
-	inStraight := false
-	if cardRank+1 == st.prevRank {
-		inStraight = true
-		st.streak++
-	} else if cardRank == st.prevRank {
-		inStraight = true
+	if len(st.streak) == 0 {
+		st.streak = deck.Hand{card}
+		return
 	}
 
-	if st.streak >= h.size {
-		*val = st.startRank
+	lastCard := st.streak.LastCard()
+	diffInRank := lastCard.Rank - cardRank
+	if diffInRank == 0 {
+		// same rank
+		return
+	} else if diffInRank == 1 {
+		st.streak.AddCard(card)
+	} else {
+		st.streak = deck.Hand{card}
 	}
 
-	if !inStraight {
-		st.streak = 1
-		st.startRank = cardRank
+	if len(st.streak) >= h.size {
+		firstCard := st.streak.FirstCard()
+		rank := firstCard.Rank
+		if firstCard.Rank == deck.Ace && aceValue == deck.LowAce {
+			rank = deck.LowAce
+		}
+		*val = rank
 	}
-
-	st.prevRank = cardRank
 }

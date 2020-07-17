@@ -98,3 +98,12 @@ func TestCardsFromString(t *testing.T) {
 		CardsFromString("2c,3s,4x")
 	})
 }
+
+func TestCardToString(t *testing.T) {
+	assert.Equal(t, "14c", CardToString(&Card{
+		Rank: Ace,
+		Suit: Clubs,
+	}))
+
+	assert.Equal(t, "", CardToString(nil))
+}

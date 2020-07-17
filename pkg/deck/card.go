@@ -135,28 +135,32 @@ func CardsFromString(s string) []*Card {
 	return cards
 }
 
+// CardToString converts a card (Ace of Clubs) to a string (14c)
+func CardToString(card *Card) string {
+	if card == nil {
+		return ""
+	}
+
+	var suit string
+	switch card.Suit {
+	case Clubs:
+		suit = "c"
+	case Hearts:
+		suit = "h"
+	case Diamonds:
+		suit = "d"
+	case Spades:
+		suit = "s"
+	}
+
+	return fmt.Sprintf("%d%s", card.Rank, suit)
+}
+
 // CardsToString will convert a slice of cards to a string in the format of 2c,3h,4s,...
 func CardsToString(cards []*Card) string {
 	c := make([]string, len(cards))
 	for i, card := range cards {
-		if card == nil {
-			c[i] = ""
-			continue
-		}
-
-		var suit string
-		switch card.Suit {
-		case Clubs:
-			suit = "c"
-		case Hearts:
-			suit = "h"
-		case Diamonds:
-			suit = "d"
-		case Spades:
-			suit = "s"
-		}
-
-		c[i] = fmt.Sprintf("%d%s", card.Rank, suit)
+		c[i] = CardToString(card)
 	}
 
 	return strings.Join(c, ",")
