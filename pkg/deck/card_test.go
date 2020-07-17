@@ -66,10 +66,12 @@ func TestCardFromString(t *testing.T) {
 	c := CardFromString("2c")
 	assert.Equal(t, 2, c.Rank)
 	assert.Equal(t, Clubs, c.Suit)
+	assert.False(t, c.IsWild)
 
-	c = CardFromString("3d")
+	c = CardFromString("!3d")
 	assert.Equal(t, 3, c.Rank)
 	assert.Equal(t, Diamonds, c.Suit)
+	assert.True(t, c.IsWild)
 
 	c = CardFromString("4h")
 	assert.Equal(t, 4, c.Rank)
@@ -103,6 +105,12 @@ func TestCardToString(t *testing.T) {
 	assert.Equal(t, "14c", CardToString(&Card{
 		Rank: Ace,
 		Suit: Clubs,
+	}))
+
+	assert.Equal(t, "!14c", CardToString(&Card{
+		Rank:   Ace,
+		Suit:   Clubs,
+		IsWild: true,
 	}))
 
 	assert.Equal(t, "", CardToString(nil))

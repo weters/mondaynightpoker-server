@@ -20,8 +20,9 @@ const (
 
 // Card is an individual playing card
 type Card struct {
-	Rank int  `json:"rank"`
-	Suit Suit `json:"suit"`
+	Rank   int  `json:"rank"`
+	Suit   Suit `json:"suit"`
+	IsWild bool `json:"isWild"`
 }
 
 // face cards
@@ -80,7 +81,7 @@ func (c *Card) AceLowRank() int {
 	return c.Rank
 }
 
-var cardRx = regexp.MustCompile(`(?i)^([0-9]|1[0-4])([cdhs])\z`)
+var cardRx = regexp.MustCompile(`(?i)^(!)?([0-9]|1[0-4])([cdhs])\z`)
 
 // CardFromString returns a Card from the string.
 // The string must be in the format of <rank><suit> where rank >= 2 and <= 14 and suit in [cdhs]
@@ -94,13 +95,15 @@ func CardFromString(s string) *Card {
 		panic(fmt.Sprintf("could not parse card: %s", s))
 	}
 
-	rank, err := strconv.Atoi(match[1])
+	isWild := match[1] == "!"
+
+	rank, err := strconv.Atoi(match[2])
 	if err != nil {
 		panic(fmt.Sprintf("could not parse card `%s`: %v", s, err))
 	}
 
 	var suit Suit
-	switch strings.ToLower(match[2]) {
+	switch strings.ToLower(match[3]) {
 	case "c":
 		suit = Clubs
 	case "d":
@@ -115,8 +118,9 @@ func CardFromString(s string) *Card {
 	}
 
 	return &Card{
-		Rank: rank,
-		Suit: suit,
+		Rank:   rank,
+		Suit:   suit,
+		IsWild: isWild,
 	}
 }
 
@@ -153,7 +157,12 @@ func CardToString(card *Card) string {
 		suit = "s"
 	}
 
-	return fmt.Sprintf("%d%s", card.Rank, suit)
+	isWild := ""
+	if card.IsWild {
+		isWild = "!"
+	}
+
+	return fmt.Sprintf("%s%d%s", isWild, card.Rank, suit)
 }
 
 // CardsToString will convert a slice of cards to a string in the format of 2c,3h,4s,...
