@@ -179,6 +179,25 @@ func TestHandAnalyzer_GetStraightFlush(t *testing.T) {
 	assert.Equal(t, 0, r)
 }
 
+func TestHandAnalyzer_GetStraightFlush_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("2c,3c,4c,5d,6d"))
+	r, ok := h.GetStraightFlush()
+	a.False(ok)
+	a.Equal(0, r)
+
+	h = New(5, deck.CardsFromString("2c,3c,4c,!5d,!6d"))
+	r, ok = h.GetStraightFlush()
+	a.True(ok)
+	a.Equal(6, r)
+
+	h = New(5, deck.CardsFromString("2s,14c,4c,!5d,2c,!6d"))
+	r, ok = h.GetStraightFlush()
+	a.True(ok)
+	a.Equal(5, r)
+}
+
 func TestHandAnalyzer_GetStraight_withWilds(t *testing.T) {
 	a := assert.New(t)
 
