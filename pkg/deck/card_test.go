@@ -115,3 +115,32 @@ func TestCardToString(t *testing.T) {
 
 	assert.Equal(t, "", CardToString(nil))
 }
+
+func TestCard_Wild(t *testing.T) {
+	a := assert.New(t)
+
+	c := CardFromString("!13c")
+	a.Equal(13, c.GetWildRank())
+	a.Equal(Clubs, c.GetWildSuit())
+
+	a.NoError(c.SetWildRank(5))
+	a.NoError(c.SetWildSuit(Diamonds))
+
+	a.Equal(5, c.GetWildRank())
+	a.Equal(Diamonds, c.GetWildSuit())
+
+	c = CardFromString("13c")
+	a.Equal(ErrNotWild, c.SetWildRank(5))
+	a.Equal(ErrNotWild, c.SetWildSuit(Diamonds))
+	a.Equal(13, c.GetWildRank())
+	a.Equal(Clubs, c.GetWildSuit())
+}
+
+func TestCard_Clone(t *testing.T) {
+	c := CardFromString("14s")
+	cp := c.Clone()
+	c.Rank = 13
+	c.Suit = Clubs
+	assert.NotEqual(t, cp.Suit, c.Suit)
+	assert.NotEqual(t, cp.Rank, c.Rank)
+}

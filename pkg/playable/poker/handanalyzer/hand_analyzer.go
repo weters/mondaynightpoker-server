@@ -9,7 +9,8 @@ import (
 // HandAnalyzer can analyze a hand
 type HandAnalyzer struct {
 	size          int
-	cards         []*deck.Card
+	cards         deck.Hand
+	wildCards     deck.Hand
 	flush         []int
 	quads         []int
 	trips         []int
@@ -23,14 +24,26 @@ type HandAnalyzer struct {
 
 // New will return a new HandAnalyzer instance
 func New(size int, cards []*deck.Card) *HandAnalyzer {
-	newCards := make([]*deck.Card, len(cards))
-	copy(newCards, cards)
+	// clone to prevent modifying original
+	sortedCards := make(deck.Hand, len(cards))
+	copy(sortedCards, cards)
+	sort.Sort(sort.Reverse(sortByRank(sortedCards)))
 
-	sort.Sort(sort.Reverse(sortByRank(newCards)))
+	nonWilds := make(deck.Hand, 0, len(sortedCards))
+	wilds := make(deck.Hand, 0, len(sortedCards))
+
+	for _, card := range sortedCards {
+		if card.IsWild {
+			wilds.AddCard(card)
+		} else {
+			nonWilds.AddCard(card)
+		}
+	}
 
 	h := &HandAnalyzer{
-		size:  size,
-		cards: newCards,
+		size:      size,
+		cards:     nonWilds,
+		wildCards: wilds,
 	}
 
 	// the method order here is required

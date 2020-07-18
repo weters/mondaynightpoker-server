@@ -80,3 +80,7 @@ func (h Hand) LastCard() *Card {
 
 	return h[n-1]
 }
+
+func (h Hand) String() string {
+	return CardsToString(h)
+}

@@ -1,11 +1,15 @@
 package deck
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
+
+// ErrNotWild is an error when an wild-type action is attempted on a standard card
+var ErrNotWild = errors.New("the card is not wild")
 
 // Suit represents a card suit
 type Suit string
@@ -23,6 +27,10 @@ type Card struct {
 	Rank   int  `json:"rank"`
 	Suit   Suit `json:"suit"`
 	IsWild bool `json:"isWild"`
+
+	// what the wild card represents
+	wildRank int
+	wildSuit Suit
 }
 
 // face cards
@@ -122,6 +130,51 @@ func CardFromString(s string) *Card {
 		Suit:   suit,
 		IsWild: isWild,
 	}
+}
+
+// SetWildRank will set the intended rank for a wild
+func (c *Card) SetWildRank(rank int) error {
+	if !c.IsWild {
+		return ErrNotWild
+	}
+
+	c.wildRank = rank
+	return nil
+}
+
+// SetWildSuit will set the intended suit for a wild
+func (c *Card) SetWildSuit(suit Suit) error {
+	if !c.IsWild {
+		return ErrNotWild
+	}
+
+	c.wildSuit = suit
+	return nil
+}
+
+// GetWildRank returns the wild rank if set, otherwise returns the intrinsic rank
+func (c *Card) GetWildRank() int {
+	if c.IsWild && c.wildRank > 0 {
+		return c.wildRank
+	}
+
+	return c.Rank
+}
+
+// GetWildSuit returns the wild suit if set, otherwise returns the intrinsic suit
+func (c *Card) GetWildSuit() Suit {
+	if c.IsWild && c.wildSuit != "" {
+		return c.wildSuit
+	}
+
+	return c.Suit
+}
+
+// Clone returns a clone of the card
+// XXX - do we ever use this???
+func (c *Card) Clone() *Card {
+	cp := *c
+	return &cp
 }
 
 // CardsFromString will returns a slice of cards

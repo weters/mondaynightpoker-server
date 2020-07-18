@@ -51,3 +51,8 @@ func TestHand_FirstCard(t *testing.T) {
 	h = make(Hand, 0)
 	assert.Nil(t, h.FirstCard())
 }
+
+func TestHand_String(t *testing.T) {
+	h := Hand(CardsFromString("2c,3d,4h"))
+	assert.Equal(t, "2c,3d,4h", h.String())
+}
