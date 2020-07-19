@@ -163,7 +163,7 @@ func (h *HandAnalyzer) GetFullHouse() ([]int, bool) {
 
 		pair = h.trips[1]
 	} else if len(h.trips) >= 2 && h.trips[1] > pair {
-		// in an 8-card hand, we may have two sets of trips and a sepaarate pair
+		// in an 8-card hand, we may have two sets of trips and a separate pair
 		// in that case, let's make sure we grab the better pair from the trips
 		pair = h.trips[1]
 	}
@@ -371,8 +371,18 @@ func (h *HandAnalyzer) checkFlush(card *deck.Card, suitCounts map[deck.Suit][]in
 	ranks = append(ranks, card.Rank)
 	suitCounts[card.Suit] = ranks
 
-	if len(ranks) >= h.size {
-		h.flush = ranks
+	nWilds := len(h.wildCards)
+	if len(ranks)+nWilds >= h.size {
+		if nWilds > 0 {
+			wilds := make([]int, nWilds)
+			for i := range wilds {
+				wilds[i] = deck.Ace
+			}
+
+			ranks = append(wilds, ranks...)
+		}
+
+		h.flush = ranks[0:h.size]
 	}
 }
 
@@ -383,30 +393,39 @@ func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, nu
 
 	// if the card is no longer the same rank, or we're at the end
 	// check the longest group of cards we can form
+	// Note: the first check in conditional is to make sure we skip the first
+	// card
 	if card.Rank != *prevRank || isLastCard {
-		switch *numOfRank {
-		case 5:
-			fallthrough
-		case 4:
-			if h.quads == nil {
-				h.quads = make([]int, 0, 1)
+		// make sure this isn't the first card
+		if *prevRank != math.MaxInt8 {
+			numOfRankWithWilds := *numOfRank + len(h.wildCards)
+			if numOfRankWithWilds > 4 {
+				numOfRankWithWilds = 4
 			}
 
-			h.quads = append(h.quads, *prevRank)
-		case 3:
-			if h.trips == nil {
-				h.trips = make([]int, 0, 1)
-			}
+			switch numOfRankWithWilds {
+			case 4:
+				if h.quads == nil {
+					h.quads = make([]int, 0, 1)
+				}
 
-			h.trips = append(h.trips, *prevRank)
-		case 2:
-			if h.pairs == nil {
-				h.pairs = make([]int, 0, 1)
-			}
+				h.quads = append(h.quads, *prevRank)
+			case 3:
+				if h.trips == nil {
+					h.trips = make([]int, 0, 1)
+				}
 
-			h.pairs = append(h.pairs, *prevRank)
+				h.trips = append(h.trips, *prevRank)
+			case 2:
+				if h.pairs == nil {
+					h.pairs = make([]int, 0, 1)
+				}
+
+				h.pairs = append(h.pairs, *prevRank)
+			}
 		}
 
+		// reset back to 1 since we changed rank
 		*numOfRank = 1
 	}
 

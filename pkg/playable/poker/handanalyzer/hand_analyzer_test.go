@@ -36,6 +36,29 @@ func TestHandAnalyzer_GetFourOfAKind(t *testing.T) {
 	assert.Equal(t, 0, r)
 }
 
+func TestHandAnalyzer_GetFourOfAKind_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("2c,2d,2h,3c,4c,!14s"))
+	rank, ok := h.GetFourOfAKind()
+	a.True(ok)
+	a.Equal(2, rank)
+
+	h = New(5, deck.CardsFromString("2c,2d,3h,3c,4c,!14s,!14d"))
+	rank, ok = h.GetFourOfAKind()
+	a.True(ok)
+	a.Equal(3, rank)
+}
+
+func TestHandAnalyzer_GetPair_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("2c,4c,8c,10d,!14s"))
+	rank, ok := h.GetPair()
+	a.True(ok)
+	a.Equal(10, rank)
+}
+
 func TestHandAnalyzer_GetFullHouse(t *testing.T) {
 	h := New(5, deck.CardsFromString("14c,2c,14d,5c,14h,2d,5h"))
 	r, ok := h.GetFullHouse()
@@ -75,6 +98,22 @@ func TestHandAnalyzer_GetFullHouse(t *testing.T) {
 	assert.Nil(t, r)
 }
 
+// Note: impossible to get a full house with two wilds as you can always
+// make something better (i.e., four-of-a-kind)
+func TestHandAnalyzer_GetFullHouse_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("2c,2d,5c,5d,!14s"))
+	fh, ok := h.GetFullHouse()
+	a.True(ok)
+	a.Equal([]int{5, 2}, fh)
+
+	h = New(5, deck.CardsFromString("2c,8d,5c,12d,!14s"))
+	fh, ok = h.GetFullHouse()
+	a.False(ok)
+	a.Nil(fh)
+}
+
 func TestHandAnalyzer_GetHighCard(t *testing.T) {
 	h := New(5, deck.CardsFromString("14c,2c,5c,8d,3h"))
 	r, ok := h.GetHighCard()
@@ -94,7 +133,7 @@ func TestHandAnalyzer_GetPair(t *testing.T) {
 	assert.Equal(t, 0, r)
 }
 
-func TestHandAnalyzer_GetTrips(t *testing.T) {
+func TestHandAnalyzer_GetThreeOfAKind(t *testing.T) {
 	h := New(5, deck.CardsFromString("2c,5c,5h,5h,6d,4c,4d,4h"))
 	r, ok := h.GetThreeOfAKind()
 	assert.True(t, ok)
@@ -104,6 +143,20 @@ func TestHandAnalyzer_GetTrips(t *testing.T) {
 	r, ok = h.GetThreeOfAKind()
 	assert.False(t, ok)
 	assert.Equal(t, 0, r)
+}
+
+func TestHandAnalyzer_GetThreeOfAKind_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("2c,2d,3c,4c,!14s"))
+	rank, ok := h.GetThreeOfAKind()
+	a.True(ok)
+	a.Equal(2, rank)
+
+	h = New(5, deck.CardsFromString("2c,3h,8d,!14s,!14d"))
+	rank, ok = h.GetThreeOfAKind()
+	a.True(ok)
+	a.Equal(8, rank)
 }
 
 func TestHandAnalyzer_GetTwoPair(t *testing.T) {
@@ -137,6 +190,30 @@ func TestHandAnalyzer_GetFlush(t *testing.T) {
 	assert.Nil(t, r)
 }
 
+func TestHandAnalyzer_GetFlush_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("2c,4c,6d,8c,10c"))
+	rank, ok := h.GetFlush()
+	a.False(ok)
+	a.Nil(rank)
+
+	h = New(5, deck.CardsFromString("2c,4c,!6d,8c,10c"))
+	rank, ok = h.GetFlush()
+	a.True(ok)
+	a.Equal([]int{14, 10, 8, 4, 2}, rank)
+
+	h = New(5, deck.CardsFromString("2c,4c,!6d,!8c,10c"))
+	rank, ok = h.GetFlush()
+	a.True(ok)
+	a.Equal([]int{14, 14, 10, 4, 2}, rank)
+
+	h = New(5, deck.CardsFromString("2c,4c,!6d,!8c,10d"))
+	rank, ok = h.GetFlush()
+	a.False(ok)
+	a.Nil(rank)
+}
+
 func TestHandAnalyzer_GetRoyalFlush(t *testing.T) {
 	h := New(5, deck.CardsFromString("10s,11s,12s,13s,14s"))
 	assert.True(t, h.GetRoyalFlush())
@@ -149,6 +226,16 @@ func TestHandAnalyzer_GetRoyalFlush(t *testing.T) {
 
 	h = New(3, deck.CardsFromString("14s,13s,12h,12d"))
 	assert.False(t, h.GetRoyalFlush())
+}
+
+func TestHandAnalyzer_GetRoyalFlush_withWilds(t *testing.T) {
+	a := assert.New(t)
+
+	h := New(5, deck.CardsFromString("10c,11c,12c,13c,!2d"))
+	a.True(h.GetRoyalFlush())
+
+	h = New(5, deck.CardsFromString("9c,10c,11c,12c,!2d"))
+	a.False(h.GetRoyalFlush())
 }
 
 // nolint:dupl
@@ -196,6 +283,39 @@ func TestHandAnalyzer_GetStraightFlush_withWilds(t *testing.T) {
 	r, ok = h.GetStraightFlush()
 	a.True(ok)
 	a.Equal(5, r)
+
+	h = New(5, deck.CardsFromString("2c,3c,4c,!5d,6d"))
+	r, ok = h.GetStraightFlush()
+	a.False(ok)
+	a.Equal(0, r)
+}
+
+// nolint:dupl
+func TestHandAnalyzer_GetStraight(t *testing.T) {
+	h := New(5, deck.CardsFromString("2c,3d,4h,5s,6c"))
+	r, ok := h.GetStraight()
+	assert.True(t, ok)
+	assert.Equal(t, 6, r)
+
+	h = New(5, deck.CardsFromString("12c,2d,4h,5s,6c,14d,7d,8h"))
+	r, ok = h.GetStraight()
+	assert.True(t, ok)
+	assert.Equal(t, 8, r)
+
+	h = New(5, deck.CardsFromString("2c,3d,4s,5h,14s"))
+	r, ok = h.GetStraight()
+	assert.True(t, ok)
+	assert.Equal(t, 5, r)
+
+	h = New(3, deck.CardsFromString("2c,14s,3d"))
+	r, ok = h.GetStraight()
+	assert.True(t, ok)
+	assert.Equal(t, 3, r)
+
+	h = New(3, deck.CardsFromString("2c,13s,3d"))
+	r, ok = h.GetStraight()
+	assert.False(t, ok)
+	assert.Equal(t, 0, r)
 }
 
 func TestHandAnalyzer_GetStraight_withWilds(t *testing.T) {
@@ -250,34 +370,6 @@ func TestHandAnalyzer_GetStraight_withWilds(t *testing.T) {
 	r, ok = h.GetStraight()
 	a.True(ok)
 	a.Equal(3, r)
-}
-
-// nolint:dupl
-func TestHandAnalyzer_GetStraight(t *testing.T) {
-	h := New(5, deck.CardsFromString("2c,3d,4h,5s,6c"))
-	r, ok := h.GetStraight()
-	assert.True(t, ok)
-	assert.Equal(t, 6, r)
-
-	h = New(5, deck.CardsFromString("12c,2d,4h,5s,6c,14d,7d,8h"))
-	r, ok = h.GetStraight()
-	assert.True(t, ok)
-	assert.Equal(t, 8, r)
-
-	h = New(5, deck.CardsFromString("2c,3d,4s,5h,14s"))
-	r, ok = h.GetStraight()
-	assert.True(t, ok)
-	assert.Equal(t, 5, r)
-
-	h = New(3, deck.CardsFromString("2c,14s,3d"))
-	r, ok = h.GetStraight()
-	assert.True(t, ok)
-	assert.Equal(t, 3, r)
-
-	h = New(3, deck.CardsFromString("2c,13s,3d"))
-	r, ok = h.GetStraight()
-	assert.False(t, ok)
-	assert.Equal(t, 0, r)
 }
 
 func TestHandAnalyzer_GetHand(t *testing.T) {
