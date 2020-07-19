@@ -28,6 +28,8 @@ func TestNewGame(t *testing.T) {
 	game, err = NewGame("", []int64{1, 2, 3, 4, 5, 6, 7}, DefaultOptions())
 	a.NoError(err)
 	a.NotNil(game)
+	a.Equal(7*25, game.pot)
+	a.Equal(-25, game.idToParticipant[1].balance)
 }
 
 func TestGame_Start(t *testing.T) {
@@ -116,9 +118,6 @@ func TestGame_turns(t *testing.T) {
 	game.advanceDecision()
 	a.Equal(int64(3), game.getCurrentTurn().PlayerID)
 
-	game.advanceDecision()
-	a.Nil(game.getCurrentTurn())
-
 	// reset to test for folds
 	game.decisionStartIndex = 0
 	game.decisionCount = 0
@@ -137,4 +136,139 @@ func TestGame_turns(t *testing.T) {
 	// test end of game
 	game.round = finalBettingRound + 1
 	a.Nil(game.getCurrentTurn(), "no turn if we finished game")
+}
+
+func TestGame_happyPath(t *testing.T) {
+	a := assert.New(t)
+
+	game, err := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	a.NoError(err)
+	a.NotNil(game)
+
+	//                                         1  2  3| 1  2  3| 1  2  3
+	game.deck.Cards = deck.CardsFromString("2c,3c,4c,5c,6c,7c,8c,9c,10c")
+
+	// next 3
+	game.deck.Cards = append(game.deck.Cards, deck.CardsFromString("2h,9h,4h")...) // p2 with pair of 9s
+	game.deck.Cards = append(game.deck.Cards, deck.CardsFromString("2d,8d")...)    // p3 folded
+	game.deck.Cards = append(game.deck.Cards, deck.CardsFromString("2s,3s")...)    // 2 has trips showing
+	// final
+	game.deck.Cards = append(game.deck.Cards, deck.CardsFromString("5s,6s")...)
+
+	a.NoError(game.Start())
+
+	a.Equal(75, game.pot)
+
+	p := createParticipantGetter(game)
+
+	a.Equal(firstBettingRound, game.round)
+	a.NoError(game.participantChecks(p(3))) // 3 is first place because they have high-card
+	a.NoError(game.participantChecks(p(1)))
+	a.NoError(game.participantChecks(p(2)))
+
+	a.Equal(secondBettingRound, game.round)
+	a.NoError(game.participantBets(p(2), 25))
+	a.NoError(game.participantFolds(p(3)))
+	a.NoError(game.participantRaises(p(1), 125)) // $1.25 is the max bet
+	a.NoError(game.participantCalls(p(2)))
+	a.Equal(325, game.pot)
+
+	a.Equal(thirdBettingRound, game.round)
+	a.NoError(game.participantChecks(p(2)))
+	a.NoError(game.participantChecks(p(1)))
+
+	a.Equal(fourthBettingRound, game.round)
+	a.NoError(game.participantChecks(p(1)))
+	a.NoError(game.participantChecks(p(2)))
+
+	a.False(game.isGameOver())
+	a.Equal(finalBettingRound, game.round)
+	a.NoError(game.participantChecks(p(1)))
+	a.NoError(game.participantChecks(p(2)))
+
+	a.Equal(revealWinner, game.round)
+	a.EqualError(game.participantChecks(p(1)), "it is not your turn")
+	a.EqualError(game.participantChecks(p(2)), "it is not your turn")
+	a.True(game.isGameOver())
+
+	a.Equal([]*participant{p(1)}, game.winners)
+	a.Equal(175, p(1).balance)
+	a.Equal(-150, p(2).balance)
+	a.Equal(-25, p(3).balance)
+
+	a.False(p(1).hand[0].State&faceUp > 0)
+	a.False(p(1).hand[1].State&faceUp > 0)
+	a.True(p(1).hand[2].State&faceUp > 0)
+	a.True(p(1).hand[3].State&faceUp > 0)
+	a.True(p(1).hand[4].State&faceUp > 0)
+	a.True(p(1).hand[5].State&faceUp > 0)
+	a.False(p(1).hand[6].State&faceUp > 0)
+}
+
+func createParticipantGetter(game *Game) func(id int64) *participant {
+	return func(id int64) *participant {
+		return game.idToParticipant[id]
+	}
+}
+
+func TestGame_endGame(t *testing.T) {
+	a := assert.New(t)
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	a.NoError(game.Start())
+	p := createParticipantGetter(game)
+
+	p(1).hand = deck.CardsFromString("2c,3c,4c,5c,6c,7c,8c")
+	p(1).didFold = true
+
+	p(2).hand = deck.CardsFromString("10c,10d,10h,9c,9d,8s,7s")
+
+	p(3).hand = deck.CardsFromString("7d,7h,8d,8h,11c,12d,13h")
+	game.endGame()
+
+	a.Equal([]*participant{p(2)}, game.winners)
+	a.Equal(-25, p(1).balance)
+	a.Equal(50, p(2).balance)
+	a.Equal(-25, p(3).balance)
+
+	a.PanicsWithValue("endGame() already called", func() {
+		game.endGame()
+	})
+}
+
+func TestGame_endGame_withTie(t *testing.T) {
+	a := assert.New(t)
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	a.NoError(game.Start())
+	p := createParticipantGetter(game)
+
+	p(1).hand = deck.CardsFromString("2c,3c,4c,5c,6c,7c,8c")
+	p(1).didFold = true
+
+	p(2).hand = deck.CardsFromString("14c,13c,12c,11d,10d,2s,2h")
+
+	p(3).hand = deck.CardsFromString("14d,13d,12d,11c,10c,3s,3h")
+	game.endGame()
+
+	a.Equal([]*participant{p(2), p(3)}, game.winners)
+	a.Equal(-25, p(1).balance)
+	a.Equal(13, p(2).balance)
+	a.Equal(12, p(3).balance)
+}
+
+func TestGame_nextRound_panics(t *testing.T) {
+	a := assert.New(t)
+	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+
+	// we didn't call Start(), so this will panic
+	a.PanicsWithValue("round 1 is not implemented", func() {
+		game.nextRound()
+	})
+
+	game, _ = NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	a.NoError(game.Start())
+	game.deck.Cards = deck.Hand{}
+
+	a.PanicsWithValue("could not deal cards: end of deck reached", func() {
+		game.nextRound()
+	})
 }

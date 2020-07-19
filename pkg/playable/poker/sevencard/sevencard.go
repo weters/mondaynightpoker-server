@@ -12,6 +12,8 @@ const maxParticipants = 7
 
 var seed int64 = 0
 
+var errNotPlayersTurn = errors.New("it is not your turn")
+
 // Game is a single game of seven-card poker
 type Game struct {
 	deck            *deck.Deck
@@ -24,6 +26,11 @@ type Game struct {
 	// TODO: possibly refactor with Little L
 	decisionStartIndex int
 	decisionCount      int
+
+	currentBet int
+	pot        int
+
+	winners []*participant
 }
 
 // NewGame returns a new seven-card poker Game
@@ -43,12 +50,15 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 	d := deck.New()
 	d.Shuffle(seed)
 
-	return &Game{
-		deck:            d,
-		options:         options,
-		playerIDs:       append([]int64{}, playerIDs...), // copy
-		idToParticipant: buildIDToParticipant(playerIDs),
-	}, nil
+	game := &Game{
+		deck:      d,
+		options:   options,
+		playerIDs: append([]int64{}, playerIDs...), // copy
+	}
+
+	game.setupParticipantsAndPot()
+
+	return game, nil
 }
 
 // Start starts the game of Seven-Card poker
@@ -69,10 +79,55 @@ func (g *Game) Start() error {
 	return nil
 }
 
+func (g *Game) nextRound() {
+	g.round++
+	g.currentBet = 0
+
+	for _, p := range g.idToParticipant {
+		p.resetForNewRound()
+	}
+
+	var err error
+	switch g.round {
+	case secondBettingRound:
+		err = g.dealCards(false)
+	case thirdBettingRound:
+		err = g.dealCards(false)
+	case fourthBettingRound:
+		err = g.dealCards(false)
+	case finalBettingRound:
+		err = g.dealCards(true)
+	case revealWinner:
+		g.endGame()
+	default:
+		panic(fmt.Sprintf("round %d is not implemented", g.round))
+	}
+
+	if err != nil {
+		panic(fmt.Sprintf("could not deal cards: %v", err))
+	}
+
+	g.determineFirstToAct()
+}
+
+func (g *Game) isRoundOver() bool {
+	return g.getCurrentTurn() == nil
+}
+
 // advanceDecision moves the decision to the next participant still active
 func (g *Game) advanceDecision() {
 	g.decisionCount++
 	g.advanceDecisionIfPlayerDidFold()
+
+	if g.isRoundOver() {
+		g.nextRound()
+	}
+}
+
+func (g *Game) setDecisionIndexToCurrentTurn() {
+	currentIndex := (g.decisionStartIndex + g.decisionCount) % len(g.playerIDs)
+	g.decisionStartIndex = currentIndex
+	g.decisionCount = 0
 }
 
 // advanceDecisionIfPlayerDidFold will advance the decision to the next participant still active
@@ -159,11 +214,52 @@ func (g *Game) dealCards(faceDown bool) error {
 	return nil
 }
 
-func buildIDToParticipant(playerIDs []int64) map[int64]*participant {
+func (g *Game) setupParticipantsAndPot() {
 	i2p := make(map[int64]*participant)
-	for _, pid := range playerIDs {
-		i2p[pid] = newParticipant(pid)
+	for _, pid := range g.playerIDs {
+		i2p[pid] = newParticipant(pid, g.options.Ante)
 	}
 
-	return i2p
+	g.idToParticipant = i2p
+	g.pot = g.options.Ante * len(i2p)
+}
+
+func (g *Game) isGameOver() bool {
+	return g.winners != nil
+}
+
+func (g *Game) endGame() {
+	if g.winners != nil {
+		panic("endGame() already called")
+	}
+
+	g.round = revealWinner
+
+	winners := make([]*participant, 0)
+	bestStrength := math.MinInt64
+
+	for _, p := range g.idToParticipant {
+		if p.didFold {
+			continue
+		}
+
+		ha := handanalyzer.New(5, p.hand)
+		if s := ha.GetStrength(); s > bestStrength {
+			winners = []*participant{p}
+			bestStrength = s
+		} else if s == bestStrength {
+			winners = append(winners, p)
+		}
+	}
+
+	g.winners = winners
+
+	for _, winner := range winners {
+		winner.didWin = true
+		winner.balance += g.pot / len(winners)
+	}
+
+	if remainder := g.pot % len(winners); remainder > 0 {
+		winners[0].balance += remainder
+	}
 }
