@@ -122,7 +122,7 @@ func (g *Game) determineFirstToAct() {
 
 		hand := make(deck.Hand, 0, len(p.hand))
 		for _, card := range p.hand {
-			if card.BitField&faceUp > 0 {
+			if card.State&faceUp > 0 {
 				hand = append(hand, card)
 			}
 		}
@@ -149,7 +149,7 @@ func (g *Game) dealCards(faceDown bool) error {
 			}
 
 			if !faceDown {
-				card.BitField |= faceUp
+				card.State |= faceUp
 			}
 
 			player.hand.AddCard(card)

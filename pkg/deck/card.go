@@ -27,8 +27,8 @@ type Card struct {
 	Rank   int  `json:"rank"`
 	Suit   Suit `json:"suit"`
 	IsWild bool `json:"isWild"`
-	// BitField allows each game to store arbitrary values on for a card
-	BitField int `json:"-"`
+	// State allows each game to store arbitrary values on for a card
+	State int `json:"-"`
 
 	// what the wild card represents
 	wildRank int

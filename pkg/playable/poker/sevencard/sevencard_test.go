@@ -44,9 +44,9 @@ func TestGame_Start(t *testing.T) {
 	a.Equal("3c,5c,7c", game.idToParticipant[2].hand.String())
 	a.Equal(1, game.decisionStartIndex)
 
-	a.False(game.idToParticipant[1].hand[0].BitField&faceUp > 0)
-	a.False(game.idToParticipant[1].hand[1].BitField&faceUp > 0)
-	a.True(game.idToParticipant[1].hand[2].BitField&faceUp > 0)
+	a.False(game.idToParticipant[1].hand[0].State&faceUp > 0)
+	a.False(game.idToParticipant[1].hand[1].State&faceUp > 0)
+	a.True(game.idToParticipant[1].hand[2].State&faceUp > 0)
 
 	a.EqualError(game.Start(), "the game has already started")
 }
@@ -71,7 +71,7 @@ func TestGame_setFirstToAct(t *testing.T) {
 	game.idToParticipant[3].hand = deck.CardsFromString("14c,14c,14c")
 
 	for _, p := range game.idToParticipant {
-		p.hand[2].BitField |= faceUp
+		p.hand[2].State |= faceUp
 	}
 
 	game.determineFirstToAct()
@@ -91,8 +91,8 @@ func TestGame_setFirstToAct_withMoreCards(t *testing.T) {
 	game.idToParticipant[3].hand = deck.CardsFromString("14c,14c,8c,8d")
 
 	for _, p := range game.idToParticipant {
-		p.hand[2].BitField |= faceUp
-		p.hand[3].BitField |= faceUp
+		p.hand[2].State |= faceUp
+		p.hand[3].State |= faceUp
 	}
 
 	game.determineFirstToAct()
