@@ -5,3 +5,8 @@ package sevencard
 // betting rounds after the third, fourth, fifth, sixth, and final card
 type Stud struct {
 }
+
+// Name returns "Seven-Card Stud"
+func (s *Stud) Name() string {
+	return "Seven-Card Stud"
+}
