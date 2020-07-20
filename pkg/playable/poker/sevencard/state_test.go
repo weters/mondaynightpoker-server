@@ -11,6 +11,7 @@ func TestGame_getPlayerStateByPlayerID(t *testing.T) {
 	_ = game.participantBets(p(1), 25)
 	playerState := game.getPlayerStateByPlayerID(99)
 
+	a.Equal("Seven-Card Stud", playerState.GameState.Name)
 	a.Nil(playerState.Actions)
 	a.Nil(playerState.Participant)
 

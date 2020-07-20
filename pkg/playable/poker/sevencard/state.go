@@ -4,6 +4,7 @@ import "mondaynightpoker-server/pkg/deck"
 
 // GameState contains the state about the game
 type GameState struct {
+	Name         string             `json:"name"`
 	Participants []*participantJSON `json:"participants"`
 	CurrentTurn  int64              `json:"currentTurn"`
 	Round        round              `json:"round"`
@@ -62,6 +63,7 @@ func (g *Game) getGameState() GameState {
 	}
 
 	gs := GameState{
+		Name:         g.Name(),
 		Participants: participants,
 		CurrentTurn:  currentTurn,
 		Round:        g.round,

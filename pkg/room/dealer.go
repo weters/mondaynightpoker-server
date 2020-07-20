@@ -9,6 +9,7 @@ import (
 	"mondaynightpoker-server/pkg/playable/bourre"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
 	"mondaynightpoker-server/pkg/playable/poker/littlel"
+	"mondaynightpoker-server/pkg/playable/poker/sevencard"
 	"mondaynightpoker-server/pkg/table"
 	"sync"
 	"time"
@@ -346,6 +347,15 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 				c.Send(playable.OK(msg.Context))
 				return
+			case "seven-card":
+				logrus.WithField("game", "seven-card").Info("starting game")
+				if err := d.createSevenCard(msg.AdditionalData); err != nil {
+					c.Send(newErrorResponse(msg.Context, err))
+					return
+				}
+
+				c.Send(playable.OK(msg.Context))
+				return
 			case "pass-the-poop":
 				logrus.WithField("game", "pass-the-poop").Info("starting game")
 				if err := d.createPassThePoopGame(msg.AdditionalData); err != nil {
@@ -568,6 +578,32 @@ func (d *Dealer) createBourreGame(additionalData playable.AdditionalData) error 
 	}
 
 	if err := game.Deal(); err != nil {
+		return err
+	}
+
+	d.game = game
+	d.stateChanged <- stateGameEvent
+
+	return nil
+}
+
+func (d *Dealer) createSevenCard(additionalData playable.AdditionalData) error {
+	playerIDs, err := d.getNextPlayersIDsForGame()
+	if err != nil {
+		return err
+	}
+
+	opts := sevencard.DefaultOptions()
+	if ante, _ := additionalData.GetInt("ante"); ante > 0 {
+		opts.Ante = ante
+	}
+
+	game, err := sevencard.NewGame(d.table.UUID, playerIDs, opts)
+	if err != nil {
+		return err
+	}
+
+	if err := game.Start(); err != nil {
 		return err
 	}
 
