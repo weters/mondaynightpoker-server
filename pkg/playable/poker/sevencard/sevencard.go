@@ -83,10 +83,13 @@ func (g *Game) Start() error {
 		}
 	}
 
+	g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(0, "New game of %s started (ante: ${%d})", g.Name(), g.options.Ante))
+
 	g.determineFirstToAct()
 	g.round++
 
-	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of %s started (ante: ${%d})", g.Name(), g.options.Ante)
+	g.logChan <- g.pendingLogs
+	g.pendingLogs = make([]*playable.LogMessage, 0)
 
 	return nil
 }
@@ -188,6 +191,7 @@ func (g *Game) getCurrentTurn() *participant {
 // determineFirstToAct will set the decisionStartIndex to the best visible hand who hasn't folded
 func (g *Game) determineFirstToAct() {
 	bestStrength := math.MinInt64
+	var handName string
 	bestIndex := 0
 
 	for index, id := range g.playerIDs {
@@ -208,11 +212,15 @@ func (g *Game) determineFirstToAct() {
 		if strength > bestStrength {
 			bestStrength = strength
 			bestIndex = index
+			handName = ha.GetHand().String()
 		}
 	}
 
 	g.decisionStartIndex = bestIndex
 	g.decisionCount = 0
+
+	id := g.playerIDs[bestIndex]
+	g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(id, "{} is first to act (%s)", handName))
 }
 
 func (g *Game) dealCards(faceDown bool) error {
