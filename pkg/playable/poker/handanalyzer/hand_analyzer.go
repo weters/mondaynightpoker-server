@@ -148,7 +148,7 @@ func (h *HandAnalyzer) GetFullHouse() ([]int, bool) {
 		return nil, false
 	}
 
-	if h.size < 5 {
+	if h.size < 5 || len(h.cards)+len(h.wildCards) < 5 {
 		return nil, false
 	}
 
