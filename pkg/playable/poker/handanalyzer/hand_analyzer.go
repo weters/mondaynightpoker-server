@@ -73,7 +73,7 @@ func (h *HandAnalyzer) analyzeHand() {
 
 	// keeps track of pairs, trips, and quads
 	prevRank := math.MaxInt8
-	numOfRank := 0
+	numOfRank := 1
 
 	nCards := len(h.cards)
 	for i, card := range h.cards {
@@ -397,7 +397,12 @@ func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, nu
 	// card
 	if card.Rank != *prevRank || isLastCard {
 		// make sure this isn't the first card
-		if *prevRank != math.MaxInt8 {
+		if *prevRank != math.MaxInt8 || isLastCard {
+			// this may happen if all our cards except one is a wild
+			if isLastCard && *prevRank == math.MaxInt8 {
+				*prevRank = card.Rank
+			}
+
 			numOfRankWithWilds := *numOfRank + len(h.wildCards)
 			if numOfRankWithWilds > 4 {
 				numOfRankWithWilds = 4

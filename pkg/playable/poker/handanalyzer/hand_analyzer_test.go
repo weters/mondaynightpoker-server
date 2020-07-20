@@ -162,6 +162,11 @@ func TestHandAnalyzer_GetThreeOfAKind_withWilds(t *testing.T) {
 	rank, ok = h.GetThreeOfAKind()
 	a.True(ok)
 	a.Equal(8, rank)
+
+	h = New(5, deck.CardsFromString("!8c,!8d,2s"))
+	rank, ok = h.GetThreeOfAKind()
+	a.True(ok)
+	a.Equal(2, rank)
 }
 
 func TestHandAnalyzer_GetTwoPair(t *testing.T) {
