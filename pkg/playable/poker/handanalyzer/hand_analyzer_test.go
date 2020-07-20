@@ -508,8 +508,10 @@ func TestHandAnalyzer_GetStrength(t *testing.T) {
 		{"14c,14d,14h,13c,13d", "full-house (aces over kings)"},
 		{"2c,2d,2h,2s,2c", "four-of-a-kind (2s w/2 kicker)"},
 		{"2c,2d,2h,2s,3c", "four-of-a-kind (2s w/3 kicker)"},
+		{"2c,2d,2h,!3s,!2c", "four-of-a-kind (2s w/wild kicker)"},
+		{"14c,14d,14h,14s,12c", "four-of-a-kind (aces w/queen kicker)"},
 		{"14c,14d,14h,14s,13c", "four-of-a-kind (aces w/king kicker)"},
-		{"14c,14d,14h,14s,14c", "four-of-a-kind (aces w/ace kicker)"},
+		{"14c,14d,14h,14s,!2c", "four-of-a-kind (aces w/wild kicker)"},
 		{"14c,2c,3c,4c,5c", "straight-flush (5-high)"},
 		{"9c,10c,11c,12c,13c", "straight-flush (king-high)"},
 		{"10c,11c,12c,13c,14c", "royal flush"},
@@ -546,4 +548,65 @@ func TestHandAnalyzer_getThreeCardPokerThreeOfAKind(t *testing.T) {
 	trips, ok = h.getThreeCardPokerThreeOfAKind()
 	assert.False(t, ok)
 	assert.Equal(t, 0, trips)
+}
+
+func TestHandAnalyzer_updatePairsWithWilds(t *testing.T) {
+	a := assert.New(t)
+
+	isFourOfAKind := func(cards string, expectedRank int) {
+		ha := New(5, deck.CardsFromString(cards))
+		rank, ok := ha.GetFourOfAKind()
+		a.True(ok)
+		a.Equal(expectedRank, rank)
+	}
+
+	isThreeOfAKind := func(cards string, expectedRank int) {
+		ha := New(5, deck.CardsFromString(cards))
+		rank, ok := ha.GetThreeOfAKind()
+		a.True(ok)
+		a.Equal(expectedRank, rank)
+	}
+
+	isPair := func(cards string, expectedRank int) {
+		ha := New(5, deck.CardsFromString(cards))
+		rank, ok := ha.GetPair()
+		a.True(ok)
+		a.Equal(expectedRank, rank)
+	}
+
+	// four wilds
+
+	isFourOfAKind("!3c,!3c,!3c,!3c", deck.Ace)
+	isFourOfAKind("!3c,!3c,!3c,!3c,5c", deck.Ace)
+
+	// three wilds
+
+	isFourOfAKind("2c,!3c,!3c,!3c,4c,4c,4c,4c", 4)
+	isFourOfAKind("2c,2c,!3c,!3c,!3c,4c,4c,4c,4c", 4)
+	isFourOfAKind("2c,2c,2c,!3c,!3c,!3c,4c,4c,4c,4c", 4)
+
+	isFourOfAKind("4c,4c,4c,!3c,!3c,!3c,2c,2c,3c", 4)
+
+	isFourOfAKind("4c,4c,4c,!3c,!3c,!3c,5c,5c,3c", 5)
+	isFourOfAKind("4c,!3c,!3c,!3c", 4)
+
+	isThreeOfAKind("!3c,!3c,!3c", deck.Ace)
+
+	// two wilds
+
+	isFourOfAKind("8c,8c,8c,8c,7c,7c,7c,6c,6c,!5c,!5c", 8)
+	isFourOfAKind("8c,8c,8c,7c,7c,!5c,!5c", 8)
+	isFourOfAKind("8c,8c,7c,7c,7c,!5c,!5c", 8)
+	isThreeOfAKind("9c,7c,!5c,!5c", 9)
+	isPair("!5c,!5c", deck.Ace)
+
+	// one wild
+
+	isFourOfAKind("8c,8c,8c,8c,7c,7c,7c,!2c", 8)
+	isFourOfAKind("8c,8c,7c,7c,7c,!2c", 7)
+	isThreeOfAKind("8c,8c,7c,7c,!2c", 8)
+	isPair("9c,!2c", 9)
+
+	// no wild
+	isPair("9c,9c", 9)
 }

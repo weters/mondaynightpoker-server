@@ -93,6 +93,8 @@ func (h *HandAnalyzer) analyzeHand() {
 		h.checkPairs(card, isLastCard, &prevRank, &numOfRank)
 	}
 
+	h.updatePairsWithWilds()
+
 	// check for straights and straight-flushes with a low-ace
 	for _, card := range h.cards {
 		if card.Rank != deck.Ace {
@@ -358,6 +360,11 @@ func (h *HandAnalyzer) getStrength() int {
 			break
 		}
 
+		// if we have an extra wild, it becomes an Ace kicker
+		if len(h.wildCards) > 0 && found+len(h.wildCards) > 4 {
+			hc = deck.Ace
+		}
+
 		return calculateStrength(hand, []int{fk, hc})
 	case StraightFlush:
 		s, _ := h.GetStraightFlush()
@@ -409,12 +416,12 @@ func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, nu
 				*prevRank = card.Rank
 			}
 
-			numOfRankWithWilds := *numOfRank + len(h.wildCards)
-			if numOfRankWithWilds > 4 {
-				numOfRankWithWilds = 4
+			num := *numOfRank
+			if num > 4 {
+				num = 4
 			}
 
-			switch numOfRankWithWilds {
+			switch num {
 			case 4:
 				if h.quads == nil {
 					h.quads = make([]int, 0, 1)
@@ -441,6 +448,78 @@ func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, nu
 	}
 
 	*prevRank = card.Rank
+}
+
+func getBestRank(ranks []int) int {
+	if len(ranks) > 0 {
+		return ranks[0]
+	}
+
+	return math.MinInt32
+}
+
+func (h *HandAnalyzer) updatePairsWithWilds() {
+	nWilds := len(h.wildCards)
+	if nWilds == 0 {
+		return
+	}
+
+	quadRank := getBestRank(h.quads)
+	tripsRank := getBestRank(h.trips)
+	pairsRank := getBestRank(h.pairs)
+	highCard := 0
+	if len(h.cards) > 0 {
+		highCard = h.cards[0].Rank
+	}
+
+	// make four-of-a-kind
+	if nWilds >= 4 {
+		h.quads = []int{deck.Ace}
+		return
+	}
+
+	switch nWilds {
+	case 3:
+		if quadRank > tripsRank && quadRank > pairsRank && quadRank >= highCard {
+			return
+		} else if tripsRank > pairsRank && tripsRank >= highCard {
+			h.trips = h.trips[1:]
+			h.quads = []int{tripsRank}
+		} else if pairsRank > tripsRank && pairsRank >= highCard {
+			h.pairs = h.pairs[1:]
+			h.quads = []int{pairsRank}
+		} else if highCard > 0 {
+			h.quads = []int{highCard}
+		} else {
+			h.trips = []int{deck.Ace}
+		}
+	case 2:
+		if quadRank > tripsRank && quadRank > pairsRank {
+			return
+		} else if tripsRank > pairsRank {
+			h.quads = []int{tripsRank}
+			h.trips = h.trips[1:]
+		} else if pairsRank > 0 {
+			h.quads = []int{pairsRank}
+			h.pairs = h.pairs[1:]
+		} else if highCard > 0 {
+			h.trips = []int{highCard}
+		} else {
+			h.pairs = []int{deck.Ace}
+		}
+	case 1:
+		if quadRank > tripsRank {
+			return
+		} else if tripsRank > 0 {
+			h.quads = []int{tripsRank}
+			h.trips = h.trips[1:]
+		} else if pairsRank > 0 {
+			h.trips = []int{pairsRank}
+			h.pairs = h.pairs[1:]
+		} else if highCard > 0 {
+			h.pairs = []int{highCard}
+		}
+	}
 }
 
 // calculateHand will determine the best hand
