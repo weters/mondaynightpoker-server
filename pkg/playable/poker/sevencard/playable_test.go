@@ -93,3 +93,28 @@ func TestGame_Action(t *testing.T) {
 	assertActionOK(3, payload("fold"))
 	assertActionOK(3, payload("end-game"))
 }
+
+func TestGame_GetEndOfGameDetails(t *testing.T) {
+	a := assert.New(t)
+
+	game, p := createTestGame()
+
+	a.NoError(game.participantFolds(p(1)))
+	a.NoError(game.participantFolds(p(2)))
+
+	details, isGameOver := game.GetEndOfGameDetails()
+	a.False(isGameOver)
+	a.Nil(details)
+
+	a.NoError(game.participantEndsGame(p(1)))
+
+	details, isGameOver = game.GetEndOfGameDetails()
+	a.True(isGameOver)
+	a.NotNil(details)
+	a.IsType(GameState{}, details.Log)
+	a.Equal(map[int64]int{
+		1: -25,
+		2: -25,
+		3: 50,
+	}, details.BalanceAdjustments)
+}

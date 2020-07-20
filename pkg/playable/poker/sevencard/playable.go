@@ -73,7 +73,21 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 
 // GetEndOfGameDetails returns details about the end of the game if the game is over
 func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	panic("implement me")
+	if !g.done {
+		return nil, false
+	}
+
+	balanceAdjustments := make(map[int64]int)
+	for _, p := range g.idToParticipant {
+		balanceAdjustments[p.PlayerID] = p.balance
+	}
+
+	gameState := g.getGameState()
+
+	return &playable.GameOverDetails{
+		BalanceAdjustments: balanceAdjustments,
+		Log:                gameState,
+	}, true
 }
 
 // LogChan returns a channel where another goroutine can listen for log messages
