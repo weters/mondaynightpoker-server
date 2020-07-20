@@ -61,6 +61,7 @@ func createTestGame() (*Game, func(id int64) *participant) {
 	p(2).hand[2].State |= faceUp
 	p(3).hand[2].State |= faceUp
 
+	game.deck.Cards = deck.CardsFromString("14d,13s,2c,3c,4c,5c,6c")
 	game.determineFirstToAct()
 
 	return game, p

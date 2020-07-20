@@ -33,7 +33,8 @@ type Game struct {
 
 	winners []*participant
 
-	logChan chan []*playable.LogMessage
+	pendingLogs []*playable.LogMessage
+	logChan     chan []*playable.LogMessage
 
 	// done will be set to true if the game has ended, and the players advance
 	done bool
@@ -57,10 +58,11 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 	d.Shuffle(seed)
 
 	game := &Game{
-		deck:      d,
-		options:   options,
-		playerIDs: append([]int64{}, playerIDs...), // copy
-		logChan:   make(chan []*playable.LogMessage, 256),
+		deck:        d,
+		options:     options,
+		playerIDs:   append([]int64{}, playerIDs...), // copy
+		pendingLogs: make([]*playable.LogMessage, 0),
+		logChan:     make(chan []*playable.LogMessage, 256),
 	}
 
 	game.setupParticipantsAndPot()
@@ -83,6 +85,9 @@ func (g *Game) Start() error {
 
 	g.determineFirstToAct()
 	g.round++
+
+	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of %s started (ante: ${%d})", g.Name(), g.options.Ante)
+
 	return nil
 }
 
@@ -94,20 +99,29 @@ func (g *Game) nextRound() {
 		p.resetForNewRound()
 	}
 
+	var cardName string
 	var err error
 	switch g.round {
 	case secondBettingRound:
+		cardName = "fourth street"
 		err = g.dealCards(false)
 	case thirdBettingRound:
+		cardName = "fifth street"
 		err = g.dealCards(false)
 	case fourthBettingRound:
+		cardName = "sixth street"
 		err = g.dealCards(false)
 	case finalBettingRound:
+		cardName = "river"
 		err = g.dealCards(true)
 	case revealWinner:
 		g.endGame()
 	default:
 		panic(fmt.Sprintf("round %d is not implemented", g.round))
+	}
+
+	if cardName != "" {
+		g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(0, "Dealt %s", cardName))
 	}
 
 	if err != nil {
@@ -245,7 +259,8 @@ func (g *Game) endGame() {
 	winners := make([]*participant, 0)
 	bestStrength := math.MinInt64
 
-	for _, p := range g.idToParticipant {
+	for _, id := range g.playerIDs {
+		p := g.idToParticipant[id]
 		if p.didFold {
 			continue
 		}
@@ -269,4 +284,30 @@ func (g *Game) endGame() {
 	if remainder := g.pot % len(winners); remainder > 0 {
 		winners[0].balance += remainder
 	}
+
+	g.sendEndOfGameLogMessages()
+}
+
+func (g *Game) sendEndOfGameLogMessages() {
+	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
+	for _, winner := range g.winners {
+		hand := winner.getHandAnalyzer().GetHand().String()
+		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, winner.balance))
+	}
+
+	for _, playerID := range g.playerIDs {
+		p := g.idToParticipant[playerID]
+		if p.didWin {
+			continue
+		}
+
+		if p.didFold {
+			lms = append(lms, playable.SimpleLogMessage(p.PlayerID, "{} folded and lost ${%d}", -1*p.balance))
+		} else {
+			hand := p.getHandAnalyzer().GetHand().String()
+			lms = append(lms, playable.SimpleLogMessage(p.PlayerID, "{} had a %s and lost ${%d}", hand, -1*p.balance))
+		}
+	}
+
+	g.pendingLogs = append(g.pendingLogs, lms...)
 }

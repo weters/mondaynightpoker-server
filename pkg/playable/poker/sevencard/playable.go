@@ -27,6 +27,8 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		if err := g.participantChecks(p); err != nil {
 			return nil, false, err
 		}
+
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
 	case ActionBet:
 		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount <= 0 {
@@ -36,6 +38,8 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		if err := g.participantBets(p, amount); err != nil {
 			return nil, false, err
 		}
+
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
 	case ActionRaise:
 		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount <= 0 {
@@ -45,18 +49,29 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		if err := g.participantRaises(p, amount); err != nil {
 			return nil, false, err
 		}
+
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} raises to ${%d}", amount)
 	case ActionCall:
 		if err := g.participantCalls(p); err != nil {
 			return nil, false, err
 		}
+
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
 	case ActionFold:
 		if err := g.participantFolds(p); err != nil {
 			return nil, false, err
 		}
+
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
 	case ActionEndGame:
 		if err := g.participantEndsGame(p); err != nil {
 			return nil, false, err
 		}
+	}
+
+	if len(g.pendingLogs) > 0 {
+		g.logChan <- g.pendingLogs
+		g.pendingLogs = make([]*playable.LogMessage, 0)
 	}
 
 	return playable.OK(), true, nil

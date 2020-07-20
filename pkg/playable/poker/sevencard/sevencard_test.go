@@ -233,6 +233,17 @@ func TestGame_endGame(t *testing.T) {
 	a.PanicsWithValue("endGame() already called", func() {
 		game.endGame()
 	})
+
+	m := game.pendingLogs
+	a.Equal(3, len(m))
+	a.Equal("{} had a Full house and won ${50}", m[0].Message)
+	a.Equal([]int64{2}, m[0].PlayerIDs)
+
+	a.Equal("{} folded and lost ${25}", m[1].Message)
+	a.Equal([]int64{1}, m[1].PlayerIDs)
+
+	a.Equal("{} had a Two pair and lost ${25}", m[2].Message)
+	a.Equal([]int64{3}, m[2].PlayerIDs)
 }
 
 func TestGame_endGame_withTie(t *testing.T) {
