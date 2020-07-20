@@ -117,6 +117,11 @@ func TestHandAnalyzer_GetFullHouse_withWilds(t *testing.T) {
 	fh, ok = h.GetFullHouse()
 	a.False(ok)
 	a.Nil(fh)
+
+	h = New(5, deck.CardsFromString("!3d,!3h,13d,6s,4s"))
+	fh, ok = h.GetFullHouse()
+	a.False(ok)
+	a.Nil(fh)
 }
 
 func TestHandAnalyzer_GetHighCard(t *testing.T) {

@@ -148,6 +148,12 @@ func (h *HandAnalyzer) GetFullHouse() ([]int, bool) {
 		return nil, false
 	}
 
+	// it's impossible for a full-house with two wilds as you can
+	// make a better hand
+	if len(h.wildCards) >= 2 {
+		return nil, false
+	}
+
 	if h.size < 5 || len(h.cards)+len(h.wildCards) < 5 {
 		return nil, false
 	}
