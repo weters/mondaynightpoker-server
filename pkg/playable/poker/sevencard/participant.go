@@ -1,10 +1,13 @@
 package sevencard
 
-import "mondaynightpoker-server/pkg/deck"
+import (
+	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
+)
 
 // participant is an individual player in seven-card poker
 type participant struct {
-	PlayerID int64 `json:"playerId"`
+	PlayerID int64
 	hand     deck.Hand
 	didFold  bool
 
@@ -12,6 +15,9 @@ type participant struct {
 	currentBet int
 
 	didWin bool
+
+	handAnalyzer         *handanalyzer.HandAnalyzer
+	handAnalyzerCacheKey string
 }
 
 func newParticipant(playerID int64, ante int) *participant {
@@ -24,4 +30,13 @@ func newParticipant(playerID int64, ante int) *participant {
 
 func (p *participant) resetForNewRound() {
 	p.currentBet = 0
+}
+
+func (p *participant) getHandAnalyzer() *handanalyzer.HandAnalyzer {
+	key := p.hand.String()
+	if p.handAnalyzerCacheKey != key {
+		p.handAnalyzer = handanalyzer.New(5, p.hand)
+	}
+
+	return p.handAnalyzer
 }

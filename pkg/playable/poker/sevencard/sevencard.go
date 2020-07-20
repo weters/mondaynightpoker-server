@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
@@ -31,6 +32,11 @@ type Game struct {
 	pot        int
 
 	winners []*participant
+
+	logChan chan []*playable.LogMessage
+
+	// done will be set to true if the game has ended, and the players advance
+	done bool
 }
 
 // NewGame returns a new seven-card poker Game
@@ -54,6 +60,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		deck:      d,
 		options:   options,
 		playerIDs: append([]int64{}, playerIDs...), // copy
+		logChan:   make(chan []*playable.LogMessage, 256),
 	}
 
 	game.setupParticipantsAndPot()

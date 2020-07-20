@@ -1,9 +1,8 @@
 package passthepoop
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
-
-	"github.com/bmizerany/assert"
 )
 
 func TestParticipant_subtractLife(t *testing.T) {

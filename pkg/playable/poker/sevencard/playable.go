@@ -1,6 +1,9 @@
 package sevencard
 
-import "mondaynightpoker-server/pkg/playable"
+import (
+	"errors"
+	"mondaynightpoker-server/pkg/playable"
+)
 
 // Name returns the name of the game
 func (g *Game) Name() string {
@@ -9,12 +12,63 @@ func (g *Game) Name() string {
 
 // Action performs a game action on behalf of the player
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
-	panic("implement me")
+	action, err := ActionFromString(message.Action)
+	if err != nil {
+		return nil, false, err
+	}
+
+	p, ok := g.idToParticipant[playerID]
+	if !ok {
+		return nil, false, errors.New("you are not in the game")
+	}
+
+	switch action {
+	case ActionCheck:
+		if err := g.participantChecks(p); err != nil {
+			return nil, false, err
+		}
+	case ActionBet:
+		amount, _ := message.AdditionalData.GetInt("amount")
+		if amount <= 0 {
+			return nil, false, errors.New("invalid amount")
+		}
+
+		if err := g.participantBets(p, amount); err != nil {
+			return nil, false, err
+		}
+	case ActionRaise:
+		amount, _ := message.AdditionalData.GetInt("amount")
+		if amount <= 0 {
+			return nil, false, errors.New("invalid amount")
+		}
+
+		if err := g.participantRaises(p, amount); err != nil {
+			return nil, false, err
+		}
+	case ActionCall:
+		if err := g.participantCalls(p); err != nil {
+			return nil, false, err
+		}
+	case ActionFold:
+		if err := g.participantFolds(p); err != nil {
+			return nil, false, err
+		}
+	case ActionEndGame:
+		if err := g.participantEndsGame(p); err != nil {
+			return nil, false, err
+		}
+	}
+
+	return playable.OK(), true, nil
 }
 
 // GetPlayerState returns the player and game state for the specified player
 func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
-	panic("implement me")
+	return &playable.Response{
+		Key:   "game",
+		Value: "seven-card",
+		Data:  g.getPlayerStateByPlayerID(playerID),
+	}, nil
 }
 
 // GetEndOfGameDetails returns details about the end of the game if the game is over
@@ -24,5 +78,5 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 // LogChan returns a channel where another goroutine can listen for log messages
 func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	panic("implement me")
+	return g.logChan
 }

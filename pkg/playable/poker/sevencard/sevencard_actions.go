@@ -89,7 +89,7 @@ func (g *Game) bet(p *participant, betType string, amount, min int) error {
 		return fmt.Errorf("your %s must be divisible by %d", betType, g.options.Ante)
 	}
 
-	if amount > g.pot+g.currentBet {
+	if amount > g.getMaxBet() {
 		return fmt.Errorf("your %s must not exceed %d", betType, g.pot+g.currentBet)
 	}
 
@@ -104,4 +104,19 @@ func (g *Game) bet(p *participant, betType string, amount, min int) error {
 	g.setDecisionIndexToCurrentTurn()
 	g.advanceDecision()
 	return nil
+}
+
+func (g *Game) participantEndsGame(p *participant) error {
+	_ = p
+
+	if !g.isGameOver() {
+		return errors.New("game is not over")
+	}
+
+	g.done = true
+	return nil
+}
+
+func (g *Game) getMaxBet() int {
+	return g.pot + g.currentBet
 }
