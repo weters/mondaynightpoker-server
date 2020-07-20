@@ -13,7 +13,7 @@ mondaynightpoker-server is the backend application for the Monday Night Poker si
     * Follow the Queen
     * Baseball
     * Blind Baseball
-    * Seven-card Stud
+    * Seven-card Stud (done)
     * Low Card Wild
   * Little L (done)
   * Five-card draw (coming soon)
