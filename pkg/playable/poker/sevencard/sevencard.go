@@ -119,6 +119,7 @@ func (g *Game) nextRound() {
 		err = g.dealCards(true)
 	case revealWinner:
 		g.endGame()
+		return
 	default:
 		panic(fmt.Sprintf("round %d is not implemented", g.round))
 	}

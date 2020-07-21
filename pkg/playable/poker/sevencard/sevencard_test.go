@@ -186,11 +186,15 @@ func TestGame_happyPath(t *testing.T) {
 	a.NoError(game.participantChecks(p(1)))
 	a.NoError(game.participantChecks(p(2)))
 
+	<-game.logChan
+
 	a.Equal(revealWinner, game.round)
 	a.EqualError(game.participantChecks(p(1)), "it is not your turn")
 	a.EqualError(game.participantChecks(p(2)), "it is not your turn")
 	a.True(game.isGameOver())
 
+	logs := game.pendingLogs
+	a.NotContains(logs[len(logs)-1].Message, "is first to act")
 	a.Equal([]*participant{p(1)}, game.winners)
 	a.Equal(175, p(1).balance)
 	a.Equal(-150, p(2).balance)
