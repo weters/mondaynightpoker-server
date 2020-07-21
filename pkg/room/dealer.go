@@ -598,6 +598,17 @@ func (d *Dealer) createSevenCard(additionalData playable.AdditionalData) error {
 		opts.Ante = ante
 	}
 
+	if variant, _ := additionalData.GetString("variant"); variant != "" {
+		switch variant {
+		case "stud":
+			opts.Variant = &sevencard.Stud{}
+		case "low-card-wild":
+			opts.Variant = &sevencard.LowCardWild{}
+		default:
+			return fmt.Errorf("unknown seven-card variant: %s", variant)
+		}
+	}
+
 	game, err := sevencard.NewGame(d.table.UUID, playerIDs, opts)
 	if err != nil {
 		return err

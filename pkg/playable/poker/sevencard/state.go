@@ -40,8 +40,14 @@ func (g *Game) getGameState() GameState {
 		if !p.didFold {
 			hand = make(deck.Hand, len(p.hand))
 			for i, card := range p.hand {
-				if isGameOver || card.State&faceUp > 0 {
-					hand[i] = card
+				if isGameOver || card.IsBitSet(faceUp) {
+					hand[i] = card.Clone()
+
+					// if it's a private wild (i.e., based on a low-card in the hole),
+					// then we don't want to show it to all players
+					if !isGameOver && card.IsBitSet(privateWild) {
+						hand[i].IsWild = false
+					}
 				} else {
 					hand[i] = nil
 				}

@@ -46,9 +46,9 @@ func TestGame_Start(t *testing.T) {
 	a.Equal("3c,5c,7c", game.idToParticipant[2].hand.String())
 	a.Equal(1, game.decisionStartIndex)
 
-	a.False(game.idToParticipant[1].hand[0].State&faceUp > 0)
-	a.False(game.idToParticipant[1].hand[1].State&faceUp > 0)
-	a.True(game.idToParticipant[1].hand[2].State&faceUp > 0)
+	a.False(game.idToParticipant[1].hand[0].IsBitSet(faceUp))
+	a.False(game.idToParticipant[1].hand[1].IsBitSet(faceUp))
+	a.True(game.idToParticipant[1].hand[2].IsBitSet(faceUp))
 
 	a.EqualError(game.Start(), "the game has already started")
 }
@@ -73,7 +73,7 @@ func TestGame_setFirstToAct(t *testing.T) {
 	game.idToParticipant[3].hand = deck.CardsFromString("14c,14c,14c")
 
 	for _, p := range game.idToParticipant {
-		p.hand[2].State |= faceUp
+		p.hand[2].SetBit(faceUp)
 	}
 
 	game.determineFirstToAct()
@@ -93,8 +93,8 @@ func TestGame_setFirstToAct_withMoreCards(t *testing.T) {
 	game.idToParticipant[3].hand = deck.CardsFromString("14c,14c,8c,8d")
 
 	for _, p := range game.idToParticipant {
-		p.hand[2].State |= faceUp
-		p.hand[3].State |= faceUp
+		p.hand[2].SetBit(faceUp)
+		p.hand[3].SetBit(faceUp)
 	}
 
 	game.determineFirstToAct()
@@ -196,13 +196,13 @@ func TestGame_happyPath(t *testing.T) {
 	a.Equal(-150, p(2).balance)
 	a.Equal(-25, p(3).balance)
 
-	a.False(p(1).hand[0].State&faceUp > 0)
-	a.False(p(1).hand[1].State&faceUp > 0)
-	a.True(p(1).hand[2].State&faceUp > 0)
-	a.True(p(1).hand[3].State&faceUp > 0)
-	a.True(p(1).hand[4].State&faceUp > 0)
-	a.True(p(1).hand[5].State&faceUp > 0)
-	a.False(p(1).hand[6].State&faceUp > 0)
+	a.False(p(1).hand[0].IsBitSet(faceUp))
+	a.False(p(1).hand[1].IsBitSet(faceUp))
+	a.True(p(1).hand[2].IsBitSet(faceUp))
+	a.True(p(1).hand[3].IsBitSet(faceUp))
+	a.True(p(1).hand[4].IsBitSet(faceUp))
+	a.True(p(1).hand[5].IsBitSet(faceUp))
+	a.False(p(1).hand[6].IsBitSet(faceUp))
 }
 
 func createParticipantGetter(game *Game) func(id int64) *participant {
@@ -282,4 +282,27 @@ func TestGame_nextRound_panics(t *testing.T) {
 	a.PanicsWithValue("could not deal cards: end of deck reached", func() {
 		game.nextRound()
 	})
+}
+
+func TestGame_determineFirstToAct(t *testing.T) {
+	a := assert.New(t)
+	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	p := createParticipantGetter(game)
+
+	p(1).hand = deck.CardsFromString("2c,3c,5c,5d")
+	p(2).hand = deck.CardsFromString("2d,3d,6c,!7d")
+
+	for _, p := range game.idToParticipant {
+		for i := 2; i < 4; i++ {
+			p.hand[i].SetBit(faceUp)
+		}
+	}
+
+	game.determineFirstToAct()
+	a.Equal(1, game.decisionStartIndex)
+
+	p(2).hand[3].SetBit(privateWild)
+
+	game.determineFirstToAct()
+	a.Equal(0, game.decisionStartIndex, "does not use wild to calculate best hand")
 }

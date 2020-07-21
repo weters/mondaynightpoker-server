@@ -202,7 +202,12 @@ func (g *Game) determineFirstToAct() {
 
 		hand := make(deck.Hand, 0, len(p.hand))
 		for _, card := range p.hand {
-			if card.State&faceUp > 0 {
+			if card.IsBitSet(faceUp) {
+				if card.IsBitSet(privateWild) && card.IsWild {
+					card = card.Clone()
+					card.IsWild = false
+				}
+
 				hand = append(hand, card)
 			}
 		}
@@ -225,18 +230,19 @@ func (g *Game) determineFirstToAct() {
 
 func (g *Game) dealCards(faceDown bool) error {
 	for _, pid := range g.playerIDs {
-		player := g.idToParticipant[pid]
-		if !player.didFold {
+		participant := g.idToParticipant[pid]
+		if !participant.didFold {
 			card, err := g.deck.Draw()
 			if err != nil {
 				return err
 			}
 
 			if !faceDown {
-				card.State |= faceUp
+				card.SetBit(faceUp)
 			}
 
-			player.hand.AddCard(card)
+			participant.hand.AddCard(card)
+			g.options.Variant.ParticipantReceivedCard(participant, card)
 		}
 	}
 

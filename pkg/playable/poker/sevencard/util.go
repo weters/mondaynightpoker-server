@@ -1,6 +1,7 @@
 package sevencard
 
-// bitmask for deck.Card.State
+// bitmask for deck.Card
 const (
 	faceUp = 1 << iota
+	privateWild
 )

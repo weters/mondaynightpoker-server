@@ -57,9 +57,9 @@ func createTestGame() (*Game, func(id int64) *participant) {
 	p(2).hand = deck.CardsFromString("13c,13d,13h")
 	p(3).hand = deck.CardsFromString("12c,12d,12h")
 
-	p(1).hand[2].State |= faceUp
-	p(2).hand[2].State |= faceUp
-	p(3).hand[2].State |= faceUp
+	p(1).hand[2].SetBit(faceUp)
+	p(2).hand[2].SetBit(faceUp)
+	p(3).hand[2].SetBit(faceUp)
 
 	game.deck.Cards = deck.CardsFromString("14d,13s,2c,3c,4c,5c,6c")
 	game.determineFirstToAct()

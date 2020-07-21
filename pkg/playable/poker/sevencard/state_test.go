@@ -2,6 +2,7 @@ package sevencard
 
 import (
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/deck"
 	"testing"
 )
 
@@ -58,4 +59,26 @@ func TestGame_getPlayerStateByPlayerID(t *testing.T) {
 	a.Equal("14c,14d,14h", playerState.GameState.Participants[0].Hand.String())
 	a.Equal("", playerState.GameState.Participants[1].Hand.String())
 	a.Equal("", playerState.GameState.Participants[2].Hand.String())
+}
+
+func TestGame_getGameState_withPrivateWilds(t *testing.T) {
+	a := assert.New(t)
+
+	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	a.NoError(game.Start())
+
+	game.round = finalBettingRound
+	p := createParticipantGetter(game)
+	p(1).hand = deck.CardsFromString("!2c,3c,!2d,!5c,6d,8h,9s")
+	for i := 2; i < 6; i++ {
+		p(1).hand[i].SetBit(faceUp)
+	}
+	p(1).hand[2].SetBit(privateWild)
+
+	gs := game.getGameState()
+	a.Equal(",,2d,!5c,6d,8h,", gs.Participants[0].Hand.String())
+
+	game.nextRound()
+	gs = game.getGameState()
+	a.Equal("!2c,3c,!2d,!5c,6d,8h,9s", gs.Participants[0].Hand.String())
 }

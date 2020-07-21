@@ -144,3 +144,29 @@ func TestCard_Clone(t *testing.T) {
 	assert.NotEqual(t, cp.Suit, c.Suit)
 	assert.NotEqual(t, cp.Rank, c.Rank)
 }
+
+func TestCard_bitField(t *testing.T) {
+	const (
+		bitA int = 1 << iota
+		bitB
+		bitC
+	)
+
+	c := CardFromString("14s")
+
+	a := assert.New(t)
+	a.False(c.IsBitSet(bitA))
+	a.False(c.IsBitSet(bitB))
+	a.False(c.IsBitSet(bitC))
+
+	c.SetBit(bitB)
+	a.False(c.IsBitSet(bitA))
+	a.True(c.IsBitSet(bitB))
+	a.False(c.IsBitSet(bitC))
+
+	c.SetBit(bitC)
+	c.UnsetBit(bitB)
+	a.False(c.IsBitSet(bitA))
+	a.False(c.IsBitSet(bitB))
+	a.True(c.IsBitSet(bitC))
+}
