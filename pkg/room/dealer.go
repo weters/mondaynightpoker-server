@@ -604,6 +604,8 @@ func (d *Dealer) createSevenCard(additionalData playable.AdditionalData) error {
 			opts.Variant = &sevencard.Stud{}
 		case "low-card-wild":
 			opts.Variant = &sevencard.LowCardWild{}
+		case "baseball":
+			opts.Variant = &sevencard.Baseball{}
 		default:
 			return fmt.Errorf("unknown seven-card variant: %s", variant)
 		}

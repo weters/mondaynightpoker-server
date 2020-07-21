@@ -57,6 +57,8 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 	d := deck.New()
 	d.Shuffle(seed)
 
+	options.Variant.Start()
+
 	game := &Game{
 		deck:        d,
 		options:     options,
@@ -243,7 +245,7 @@ func (g *Game) dealCards(faceDown bool) error {
 			}
 
 			participant.hand.AddCard(card)
-			g.options.Variant.ParticipantReceivedCard(participant, card)
+			g.options.Variant.ParticipantReceivedCard(g, participant, card)
 		}
 	}
 

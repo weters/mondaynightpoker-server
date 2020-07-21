@@ -7,6 +7,9 @@ type Variant interface {
 	// Name should return the name of the game
 	Name() string
 
+	// Start resets all variant state
+	Start()
+
 	// ParticipantReceivedCard is called after the participant is dealt a new card
-	ParticipantReceivedCard(p *participant, c *deck.Card)
+	ParticipantReceivedCard(game *Game, p *participant, c *deck.Card)
 }

@@ -35,29 +35,29 @@ func TestLowCardWild_ParticipantReceivedCard(t *testing.T) {
 	}
 
 	p.hand.AddCard(c("8c", false))
-	lw.ParticipantReceivedCard(p, nil)
+	lw.ParticipantReceivedCard(nil, p, nil)
 	assertCard(0, "!8c", false)
 
 	p.hand.AddCard(c("3c", false))
-	lw.ParticipantReceivedCard(p, nil)
+	lw.ParticipantReceivedCard(nil, p, nil)
 	assertCard(0, "8c", false)
 	assertCard(1, "!3c", false)
 
 	p.hand.AddCard(c("2c", true))
-	lw.ParticipantReceivedCard(p, nil)
+	lw.ParticipantReceivedCard(nil, p, nil)
 	assertCard(0, "8c", false)
 	assertCard(1, "!3c", false)
 	assertCard(2, "2c", false)
 
 	p.hand.AddCard(c("3d", true))
-	lw.ParticipantReceivedCard(p, nil)
+	lw.ParticipantReceivedCard(nil, p, nil)
 	assertCard(0, "8c", false)
 	assertCard(1, "!3c", false)
 	assertCard(2, "2c", false)
 	assertCard(3, "!3d", true)
 
 	p.hand.AddCard(c("2d", false))
-	lw.ParticipantReceivedCard(p, nil)
+	lw.ParticipantReceivedCard(nil, p, nil)
 	assertCard(0, "8c", false)
 	assertCard(1, "3c", false)
 	assertCard(2, "!2c", true)

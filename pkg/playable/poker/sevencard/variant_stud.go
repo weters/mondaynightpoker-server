@@ -11,10 +11,15 @@ type Stud struct {
 }
 
 // ParticipantReceivedCard is a no-op for stud
-func (s *Stud) ParticipantReceivedCard(p *participant, c *deck.Card) {
+func (s *Stud) ParticipantReceivedCard(game *Game, p *participant, c *deck.Card) {
 }
 
 // Name returns "Seven-Card Stud"
 func (s *Stud) Name() string {
 	return "Seven-Card Stud"
+}
+
+// Start is a no-op
+func (s *Stud) Start() {
+
 }
