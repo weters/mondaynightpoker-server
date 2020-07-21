@@ -38,7 +38,8 @@ func (b *Baseball) ParticipantReceivedCard(game *Game, p *participant, c *deck.C
 			game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "receives an extra card")
 			p.hand.AddCard(newCard)
 			b.ParticipantReceivedCard(game, p, newCard)
+
+			b.extraCards++
 		}
-		b.extraCards++
 	}
 }
