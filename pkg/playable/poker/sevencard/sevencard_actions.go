@@ -56,6 +56,7 @@ func (g *Game) participantCalls(p *participant) error {
 	diff := g.currentBet - p.currentBet
 	g.pot += diff
 	p.balance -= diff
+	p.currentBet = g.currentBet
 	g.advanceDecision()
 	return nil
 }

@@ -89,6 +89,9 @@ func TestGame_participantCalls(t *testing.T) {
 	a.NoError(game.participantCalls(p(2)))
 	a.Equal(125, game.pot)
 	a.Equal(-50, p(2).balance)
+	a.Equal(25, p(1).currentBet)
+	a.Equal(25, p(2).currentBet)
+	a.Equal(0, p(3).currentBet)
 
 	a.NoError(game.participantCalls(p(3)))
 	a.Equal(150, game.pot)
