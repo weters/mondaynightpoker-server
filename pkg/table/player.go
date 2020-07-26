@@ -75,7 +75,7 @@ func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*
 	const query = `
 SELECT ` + playerColumns + `
 FROM players
-WHERE email = $1`
+WHERE lower(email) = Lower($1)`
 
 	row := db.Instance().QueryRowContext(ctx, query, email)
 	player, err := getPlayerByRow(row)

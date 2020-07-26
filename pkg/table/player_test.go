@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"mondaynightpoker-server/internal/util"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,15 @@ func TestCreatePlayer(t *testing.T) {
 	player2, err = GetPlayerByEmailAndPassword(cbg, email, "password")
 	assert.NoError(t, err)
 	assert.NotNil(t, player2)
+
+	// test case-insensitive email
+	player2, err = GetPlayerByEmailAndPassword(cbg, strings.ToUpper(email), "password")
+	assert.NoError(t, err)
+	assert.NotNil(t, player2)
+
+	// ensure you can't create a duplicate player with a case-insensitive email
+	_, err = CreatePlayer(cbg, strings.ToUpper(email), "Display", "password", "[::1]")
+	assert.Equal(t, ErrDuplicateKey, err)
 }
 
 func TestPlayerByID(t *testing.T) {
