@@ -39,6 +39,12 @@ type Player struct {
 	Updated      time.Time `json:"updated"`
 }
 
+// WithBalance extends the Table object to include the player's balance
+type WithBalance struct {
+	*Table
+	Balance int `json:"balance"`
+}
+
 func getPlayerByRow(row db.Scanner) (*Player, error) {
 	var player Player
 	if err := row.Scan(&player.ID, &player.Email, &player.DisplayName, &player.IsSiteAdmin, &player.passwordHash, &player.Created, &player.Updated); err != nil {
@@ -206,9 +212,9 @@ RETURNING updated`
 }
 
 // GetTables returns a list of tables the player belongs to
-func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*Table, error) {
+func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*WithBalance, error) {
 	const query = `
-SELECT ` + tableColumns + `
+SELECT ` + tableColumns + `, players_tables.balance
 FROM tables
 INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
 WHERE players_tables.player_id = $1
@@ -222,14 +228,18 @@ LIMIT $3`
 	}
 	defer rows.Close()
 
-	records := make([]*Table, 0)
+	records := make([]*WithBalance, 0)
 	for rows.Next() {
-		tbl, err := getTableByRow(rows)
+		var balance int
+		tbl, err := getTableByRow(rows, &balance)
 		if err != nil {
 			return nil, err
 		}
 
-		records = append(records, tbl)
+		records = append(records, &WithBalance{
+			Table:   tbl,
+			Balance: balance,
+		})
 	}
 
 	return records, nil

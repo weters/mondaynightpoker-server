@@ -65,9 +65,19 @@ VALUES ($1, $2, true)`
 	}, nil
 }
 
-func getTableByRow(row db.Scanner) (*Table, error) {
+func getTableByRow(row db.Scanner, additionalColumns ...interface{}) (*Table, error) {
 	var t Table
-	if err := row.Scan(&t.UUID, &t.Name, &t.Created); err != nil {
+	columns := []interface{}{
+		&t.UUID,
+		&t.Name,
+		&t.Created,
+	}
+
+	if len(additionalColumns) > 0 {
+		columns = append(columns, additionalColumns...)
+	}
+
+	if err := row.Scan(columns...); err != nil {
 		return nil, err
 	}
 
