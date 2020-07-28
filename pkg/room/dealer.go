@@ -6,10 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"mondaynightpoker-server/pkg/playable"
-	"mondaynightpoker-server/pkg/playable/bourre"
-	"mondaynightpoker-server/pkg/playable/passthepoop"
-	"mondaynightpoker-server/pkg/playable/poker/littlel"
-	"mondaynightpoker-server/pkg/playable/poker/sevencard"
+	"mondaynightpoker-server/pkg/room/gamefactory"
 	"mondaynightpoker-server/pkg/table"
 	"sync"
 	"time"
@@ -337,47 +334,12 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		}
 
 		d.execInRunLoop <- func() {
-			switch msg.Subject {
-			case "bourre":
-				logrus.WithField("game", "bourré").Info("starting game")
-				if err := d.createBourreGame(msg.AdditionalData); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				return
-			case "seven-card":
-				logrus.WithField("game", "seven-card").Info("starting game")
-				if err := d.createSevenCard(msg.AdditionalData); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				return
-			case "pass-the-poop":
-				logrus.WithField("game", "pass-the-poop").Info("starting game")
-				if err := d.createPassThePoopGame(msg.AdditionalData); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				return
-			case "little-l":
-				logrus.WithField("game", "little-l").Info("starting game")
-				if err := d.createLittleL(msg.AdditionalData); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				return
-			default:
-				c.Send(newErrorResponse(msg.Context, fmt.Errorf("unknown game: %s", msg.Subject)))
+			if err := d.createGame(msg); err != nil {
+				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
+
+			c.Send(playable.OK(msg.Context))
 		}
 	case "terminateGame":
 		if !canPerformActionOnTable(msg.Context, c, actionTerminate) {
@@ -565,139 +527,23 @@ func (d *Dealer) getNextPlayersIDsForGame() ([]int64, error) {
 	return playerIDs, nil
 }
 
-func (d *Dealer) createBourreGame(additionalData playable.AdditionalData) error {
+func (d *Dealer) createGame(msg *playable.PayloadIn) error {
+	factory, err := gamefactory.Get(msg.Subject)
+	if err != nil {
+		return fmt.Errorf("game not found: %s", msg.Subject)
+	}
+
 	playerIDs, err := d.getNextPlayersIDsForGame()
 	if err != nil {
 		return err
 	}
 
-	ante, _ := additionalData.GetInt("ante")
-	game, err := bourre.NewGame(d.table.UUID, playerIDs, bourre.Options{Ante: ante})
-	if err != nil {
-		return err
-	}
-
-	if err := game.Deal(); err != nil {
-		return err
-	}
-
-	d.game = game
-	d.stateChanged <- stateGameEvent
-
-	return nil
-}
-
-func (d *Dealer) createSevenCard(additionalData playable.AdditionalData) error {
-	playerIDs, err := d.getNextPlayersIDsForGame()
-	if err != nil {
-		return err
-	}
-
-	opts := sevencard.DefaultOptions()
-	if ante, _ := additionalData.GetInt("ante"); ante > 0 {
-		opts.Ante = ante
-	}
-
-	if variant, _ := additionalData.GetString("variant"); variant != "" {
-		switch variant {
-		case "stud":
-			opts.Variant = &sevencard.Stud{}
-		case "low-card-wild":
-			opts.Variant = &sevencard.LowCardWild{}
-		case "baseball":
-			opts.Variant = &sevencard.Baseball{}
-		default:
-			return fmt.Errorf("unknown seven-card variant: %s", variant)
-		}
-	}
-
-	game, err := sevencard.NewGame(d.table.UUID, playerIDs, opts)
-	if err != nil {
-		return err
-	}
-
-	if err := game.Start(); err != nil {
-		return err
-	}
-
-	d.game = game
-	d.stateChanged <- stateGameEvent
-
-	return nil
-}
-
-func (d *Dealer) createLittleL(additionalData playable.AdditionalData) error {
-	playerIDs, err := d.getNextPlayersIDsForGame()
-	if err != nil {
-		return err
-	}
-
-	opts := littlel.DefaultOptions()
-	if ante, _ := additionalData.GetInt("ante"); ante > 0 {
-		opts.Ante = ante
-	}
-
-	if initialDeal, _ := additionalData.GetInt("initialDeal"); initialDeal > 0 {
-		opts.InitialDeal = initialDeal
-	}
-
-	if tradeIns, ok := additionalData.GetIntSlice("tradeIns"); ok {
-		opts.TradeIns = tradeIns
-	}
-
-	game, err := littlel.NewGame(d.table.UUID, playerIDs, opts)
-	if err != nil {
-		return err
-	}
-
-	if err := game.DealCards(); err != nil {
-		return err
-	}
-
-	d.game = game
-	d.stateChanged <- stateGameEvent
-
-	return nil
-}
-
-func (d *Dealer) createPassThePoopGame(additionalData playable.AdditionalData) error {
-	playerIDs, err := d.getNextPlayersIDsForGame()
-	if err != nil {
-		return err
-	}
-
-	ante, _ := additionalData.GetInt("ante")
-	if ante <= 0 {
-		return errors.New("ante must be greater than 0")
-	}
-
-	edition, _ := additionalData.GetString("edition")
-	if edition == "" {
-		return errors.New("edition is required")
-	}
-
-	opts := passthepoop.DefaultOptions()
-	opts.Ante = ante
-	switch edition {
-	case "standard":
-		opts.Edition = &passthepoop.StandardEdition{}
-	case "diarrhea":
-		opts.Edition = &passthepoop.DiarrheaEdition{}
-	case "pairs":
-		opts.Edition = &passthepoop.PairsEdition{}
-	}
-
-	if lives, _ := additionalData.GetInt("lives"); lives > 0 {
-		opts.Lives = lives
-	}
-
-	game, err := passthepoop.NewGame(d.table.UUID, playerIDs, opts)
+	game, err := factory.CreateGame(d.table.UUID, playerIDs, msg.AdditionalData)
 	if err != nil {
 		return err
 	}
 
 	d.game = game
 	d.stateChanged <- stateGameEvent
-
 	return nil
 }
