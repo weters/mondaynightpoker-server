@@ -15,6 +15,7 @@ var factories = map[string]GameFactory{
 // GameFactory is a factory for creating games that implement the Playable interface
 type GameFactory interface {
 	CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error)
+	Name(additionalData playable.AdditionalData) (string, error)
 }
 
 // Get returns a factory by the given name

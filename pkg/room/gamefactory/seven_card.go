@@ -8,7 +8,34 @@ import (
 
 type sevenCardFactory struct{}
 
+func (s sevenCardFactory) Name(additionalData playable.AdditionalData) (string, error) {
+	opts, err := s.getOptions(additionalData)
+	if err != nil {
+		return "", err
+	}
+
+	return opts.Variant.Name(), nil
+}
+
 func (s sevenCardFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+	opts, err := s.getOptions(additionalData)
+	if err != nil {
+		return nil, err
+	}
+
+	game, err := sevencard.NewGame(tableUUID, playerIDs, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := game.Start(); err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
+func (s sevenCardFactory) getOptions(additionalData playable.AdditionalData) (sevencard.Options, error) {
 	opts := sevencard.DefaultOptions()
 	if ante, _ := additionalData.GetInt("ante"); ante > 0 {
 		opts.Ante = ante
@@ -23,18 +50,9 @@ func (s sevenCardFactory) CreateGame(tableUUID string, playerIDs []int64, additi
 		case "baseball":
 			opts.Variant = &sevencard.Baseball{}
 		default:
-			return nil, fmt.Errorf("unknown seven-card variant: %s", variant)
+			return sevencard.Options{}, fmt.Errorf("unknown seven-card variant: %s", variant)
 		}
 	}
 
-	game, err := sevencard.NewGame(tableUUID, playerIDs, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := game.Start(); err != nil {
-		return nil, err
-	}
-
-	return game, nil
+	return opts, nil
 }

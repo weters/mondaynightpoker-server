@@ -2,21 +2,45 @@ package gamefactory
 
 import (
 	"errors"
+	"fmt"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
 )
 
 type passThePoopFactory struct{}
 
+func (p passThePoopFactory) Name(additionalData playable.AdditionalData) (string, error) {
+	opts, err := p.getOptions(additionalData)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("Pass the Poop, %s Edition", opts.Edition.Name()), nil
+}
+
 func (p passThePoopFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+	opts, err := p.getOptions(additionalData)
+	if err != nil {
+		return nil, err
+	}
+
+	game, err := passthepoop.NewGame(tableUUID, playerIDs, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
+func (p passThePoopFactory) getOptions(additionalData playable.AdditionalData) (passthepoop.Options, error) {
 	ante, _ := additionalData.GetInt("ante")
 	if ante <= 0 {
-		return nil, errors.New("ante must be greater than 0")
+		return passthepoop.Options{}, errors.New("ante must be greater than 0")
 	}
 
 	edition, _ := additionalData.GetString("edition")
 	if edition == "" {
-		return nil, errors.New("edition is required")
+		return passthepoop.Options{}, errors.New("edition is required")
 	}
 
 	opts := passthepoop.DefaultOptions()
@@ -34,10 +58,5 @@ func (p passThePoopFactory) CreateGame(tableUUID string, playerIDs []int64, addi
 		opts.Lives = lives
 	}
 
-	game, err := passthepoop.NewGame(tableUUID, playerIDs, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return game, nil
+	return opts, nil
 }

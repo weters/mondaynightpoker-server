@@ -7,6 +7,10 @@ import (
 
 type bourreFactory struct{}
 
+func (b bourreFactory) Name(additionalData playable.AdditionalData) (string, error) {
+	return "Bourré", nil
+}
+
 func (b bourreFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
 	ante, _ := additionalData.GetInt("ante")
 	game, err := bourre.NewGame(tableUUID, playerIDs, bourre.Options{Ante: ante})

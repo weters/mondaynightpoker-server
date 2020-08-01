@@ -36,7 +36,7 @@ type Game struct {
 	idToParticipant    map[int64]*Participant
 	options            Options
 	logChan            chan []*playable.LogMessage
-	tradeInsBitField   int
+	tradeIns           *TradeIns
 	deck               *deck.Deck
 	decisionStartIndex int
 	decisionCount      int
@@ -78,6 +78,11 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		idToParticipant[id] = newParticipant(id, options.Ante)
 	}
 
+	tradeIns, err := NewTradeIns(options.TradeIns)
+	if err != nil {
+		return nil, err
+	}
+
 	g := &Game{
 		options:             options,
 		playerIDs:           append([]int64{}, playerIDs...), // make a copy
@@ -87,10 +92,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		discards:            []*deck.Card{},
 		lastAdjustmentRound: round(-1),
 		logChan:             make(chan []*playable.LogMessage, 256),
-	}
-
-	if err := g.buildTradeInsBitField(options.TradeIns); err != nil {
-		return nil, err
+		tradeIns:            tradeIns,
 	}
 
 	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
@@ -130,43 +132,14 @@ func (g *Game) DealCards() error {
 	return nil
 }
 
-// buildTradeInsBitField converts an int array into a bitwise int
-func (g *Game) buildTradeInsBitField(values []int) error {
-	// treat empty list as no trades
-	if len(values) == 0 {
-		g.tradeInsBitField = 1
-		return nil
-	}
-
-	tradeIns := 0
-	for _, val := range values {
-		if val < 0 || val > g.options.InitialDeal {
-			return fmt.Errorf("invalid trade-in option: %d", val)
-		}
-
-		tradeIns |= 1 << val
-	}
-
-	g.tradeInsBitField = tradeIns
-	return nil
-}
-
 // CanTrade returns true if the player can trade the supplied count of cards
 func (g *Game) CanTrade(count int) bool {
-	val := 1 << count
-	return g.tradeInsBitField&val > 0
+	return g.tradeIns.CanTrade(count)
 }
 
 // GetAllowedTradeIns returns the an integer slice of allowed trade-ins
-func (g *Game) GetAllowedTradeIns() TradeIns {
-	tradeIns := make([]int, 0, len(g.options.TradeIns))
-	for i := 0; i < g.options.InitialDeal; i++ {
-		if g.tradeInsBitField&(1<<i) > 0 {
-			tradeIns = append(tradeIns, i)
-		}
-	}
-
-	return tradeIns
+func (g *Game) GetAllowedTradeIns() *TradeIns {
+	return g.tradeIns
 }
 
 // GetCommunityCards will return the community cards
