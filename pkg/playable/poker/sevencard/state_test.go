@@ -1,6 +1,7 @@
 package sevencard
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
@@ -64,7 +65,7 @@ func TestGame_getPlayerStateByPlayerID(t *testing.T) {
 func TestGame_getGameState_withPrivateWilds(t *testing.T) {
 	a := assert.New(t)
 
-	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	a.NoError(game.Start())
 
 	game.round = finalBettingRound

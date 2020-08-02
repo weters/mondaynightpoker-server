@@ -1,6 +1,7 @@
 package passthepoop
 
 import (
+	"github.com/sirupsen/logrus"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ func TestStandardEdition_EndRound_SingleLoser(t *testing.T) {
 }
 
 func TestStandardEdition_EndRound_MultiLoser(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	execOk, _ := createExecFunctions(t, game)
 	dealCards(game, "3c", "4c", "3c")
 	execOk(1, ActionStay)

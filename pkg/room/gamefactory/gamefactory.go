@@ -2,6 +2,7 @@ package gamefactory
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -14,7 +15,7 @@ var factories = map[string]GameFactory{
 
 // GameFactory is a factory for creating games that implement the Playable interface
 type GameFactory interface {
-	CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error)
+	CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error)
 	Details(additionalData playable.AdditionalData) (name string, ante int, err error)
 }
 

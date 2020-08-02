@@ -1,6 +1,7 @@
 package passthepoop
 
 import (
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
 
@@ -180,7 +181,7 @@ func TestDiarrheaEdition_EndRound_DoubleDoubleBail(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_AcePassBack(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2, 3}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, Options{
 		Ante:    75,
 		Lives:   3,
 		Edition: &DiarrheaEdition{},
@@ -219,7 +220,7 @@ func TestDiarrheaEdition_EndRound_AcePassBack(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_AceFromDeck(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2, 3, 4, 5}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, Options{
 		Ante:    75,
 		Lives:   3,
 		Edition: &DiarrheaEdition{},
@@ -272,7 +273,7 @@ func TestDiarrheaEdition_EndRound_AceFromDeck(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_TripleAce(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, Options{
 		Ante:    75,
 		Lives:   3,
 		Edition: &DiarrheaEdition{},
@@ -305,7 +306,7 @@ func TestDiarrheaEdition_EndRound_TripleAce(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_TripleAce_OneLife(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, Options{
 		Ante:    75,
 		Lives:   1,
 		Edition: &DiarrheaEdition{},
@@ -331,7 +332,7 @@ func TestDiarrheaEdition_EndRound_TripleAce_OneLife(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_DoubleAce_DoubleD(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2, 3, 4}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4}, Options{
 		Ante:    75,
 		Lives:   1,
 		Edition: &DiarrheaEdition{},
@@ -369,7 +370,7 @@ func TestDiarrheaEdition_EndRound_DoubleAce_DoubleD(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_AceToKing(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2, 3, 4}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4}, Options{
 		Ante:    75,
 		Lives:   2,
 		Edition: &DiarrheaEdition{},
@@ -408,7 +409,7 @@ func TestDiarrheaEdition_EndRound_AceToKing(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_AcePassBack_2(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2, 3, 4, 5}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, Options{
 		Ante:    75,
 		Lives:   2,
 		Edition: &DiarrheaEdition{},
@@ -487,7 +488,7 @@ func TestDiarrheaEdition_EndRound_AcePassBack_2(t *testing.T) {
 }
 
 func TestDiarrheaEdition_EndRound_AceFromDeck_DoubleD_Safe(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2, 3, 4}, Options{
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4}, Options{
 		Ante:    75,
 		Lives:   3,
 		Edition: &DiarrheaEdition{},

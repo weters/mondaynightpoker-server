@@ -1,6 +1,7 @@
 package sevencard
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
@@ -10,7 +11,7 @@ func TestBaseball_ParticipantReceivedCard(t *testing.T) {
 	opts := DefaultOptions()
 	b := &Baseball{}
 	opts.Variant = b
-	game, _ := NewGame("", []int64{1, 2, 3, 4, 5, 6}, opts)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5, 6}, opts)
 
 	a := assert.New(t)
 	p := game.idToParticipant[1]
@@ -44,7 +45,7 @@ func TestBaseball_ParticipantReceivedCard(t *testing.T) {
 	a.Equal(4, b.extraCards)
 	a.Equal(2, len(p.hand))
 
-	game, _ = NewGame("", []int64{1, 2, 3, 4, 5, 6, 7}, opts)
+	game, _ = NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5, 6, 7}, opts)
 	p = game.idToParticipant[1]
 	b.extraCards = 3
 	b.ParticipantReceivedCard(game, p, c)

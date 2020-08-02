@@ -1,6 +1,7 @@
 package sevencard
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
@@ -9,7 +10,7 @@ import (
 func TestLowCardWild_Name(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Variant = &LowCardWild{}
-	game, _ := NewGame("", []int64{1, 2}, opts)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
 	assert.Equal(t, "Low Card Wild", game.Name())
 }
 

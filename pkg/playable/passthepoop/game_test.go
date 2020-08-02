@@ -1,39 +1,40 @@
 package passthepoop
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/playable"
 	"testing"
 )
 
 func TestGame_Name(t *testing.T) {
-	game, err := NewGame("", nil, Options{})
+	game, err := NewGame(logrus.StandardLogger(), nil, Options{})
 	assert.EqualError(t, err, "game requires at least two players")
 	assert.Nil(t, game)
 
 	players := []int64{0, 1}
 
-	game, err = NewGame("", players, Options{})
+	game, err = NewGame(logrus.StandardLogger(), players, Options{})
 	assert.EqualError(t, err, "ante must be greater than 0")
 	assert.Nil(t, game)
 
-	game, err = NewGame("", players, Options{Ante: 25})
+	game, err = NewGame(logrus.StandardLogger(), players, Options{Ante: 25})
 	assert.EqualError(t, err, "lives must be greater than 0")
 	assert.Nil(t, game)
 
-	game, err = NewGame("", players, DefaultOptions())
+	game, err = NewGame(logrus.StandardLogger(), players, DefaultOptions())
 	assert.NoError(t, err)
 	assert.Equal(t, "Pass the Poop, Standard Edition", game.Name())
 
 	opts := DefaultOptions()
 	opts.Edition = &PairsEdition{}
-	game, _ = NewGame("", players, opts)
+	game, _ = NewGame(logrus.StandardLogger(), players, opts)
 	assert.Equal(t, "Pass the Poop, Pairs Edition", game.Name())
 }
 
 func Test_nextRound(t *testing.T) {
 	ids := []int64{1, 2, 3, 4, 5}
-	game, err := NewGame("", ids, DefaultOptions())
+	game, err := NewGame(logrus.StandardLogger(), ids, DefaultOptions())
 	assert.NoError(t, err)
 	participants := game.participants
 
@@ -82,7 +83,7 @@ func Test_nextRound(t *testing.T) {
 
 func TestGame_ExecuteTurnForPlayer_AllTrades(t *testing.T) {
 	ids := []int64{1, 2, 3}
-	game, _ := NewGame("", ids, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), ids, DefaultOptions())
 	participants := game.participants
 	participants[0].card = card("2c")
 	participants[1].card = card("3c")
@@ -124,7 +125,7 @@ func TestGame_ExecuteTurnForPlayer_AllTrades(t *testing.T) {
 
 func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {
 	ids := []int64{1, 2, 3, 4}
-	game, _ := NewGame("", ids, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), ids, DefaultOptions())
 	participants := game.participants
 	participants[0].card = card("10c")
 	participants[1].card = card("2c")
@@ -163,7 +164,7 @@ func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {
 }
 
 func TestGame_ExecuteTurnForPlayer_DealerDeck(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	execOK, execError := createExecFunctions(t, game)
 
 	execError(1, ActionGoToDeck, "only the dealer may go to the deck")
@@ -192,7 +193,7 @@ func getPlayerIDsFromGame(g *Game) []int64 {
 
 func TestGame_flipAllCards(t *testing.T) {
 	ids := []int64{1, 2, 3, 4}
-	game, _ := NewGame("", ids, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), ids, DefaultOptions())
 	game.flipAllCards()
 
 	for i := 0; i < 4; i++ {
@@ -204,7 +205,7 @@ func TestGame_CompleteGame(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Lives = 1
 	seed = 1
-	game, err := NewGame("", []int64{1, 2, 3}, opts)
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	assert.NoError(t, err)
 	game.participants[0].card = card("2c")
 	game.participants[1].card = card("3c")
@@ -234,7 +235,7 @@ func TestGame_CompleteGame(t *testing.T) {
 }
 
 func TestGame_GetPlayerState(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	p1 := game.participants[0]
 	p1.card = card("9s")
 	game.participants[1].lives = 0
@@ -266,7 +267,7 @@ func TestGame_GetPlayerState(t *testing.T) {
 }
 
 func TestGame_NextRoundAndEndRound(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	assert.EqualError(t, game.nextRound(), "you must end the round first")
 
 	execOk, _ := createExecFunctions(t, game)
@@ -309,7 +310,7 @@ func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action 
 }
 
 func TestGame_getActionsForParticipant(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2}, Options{
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, Options{
 		Ante:    100,
 		Lives:   2,
 		Edition: &StandardEdition{},

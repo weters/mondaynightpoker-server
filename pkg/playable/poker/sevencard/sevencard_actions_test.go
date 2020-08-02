@@ -1,6 +1,7 @@
 package sevencard
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
@@ -40,7 +41,7 @@ func createTestGame() (*Game, func(id int64) *participant) {
 		Variant: &Stud{},
 	}
 
-	game, err := NewGame("", []int64{1, 2, 3}, opts)
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	if err != nil {
 		panic(err)
 	}

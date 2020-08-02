@@ -20,7 +20,6 @@ type playedCard struct {
 
 // Game is a game of bourré
 type Game struct {
-	table         string
 	pot           int
 	ante          int
 	deck          *deck.Deck
@@ -41,6 +40,7 @@ type Game struct {
 	winningCardPlayed     *playedCard
 	roundWinnerCalculated bool
 
+	logger  logrus.FieldLogger
 	logChan chan []*playable.LogMessage
 
 	// done will be set after the game is over and the user's have stated they want to proceed
@@ -64,11 +64,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, errors.New("player not found with that ID")
 	}
 
-	log := logrus.WithFields(logrus.Fields{
-		"game":     "bourre",
-		"playerID": playerID,
-		"table":    g.table,
-	})
+	log := g.logger.WithField("playerID", playerID)
 
 	switch message.Action {
 	case "discard":
@@ -204,7 +200,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 // NewGame returns a new bourré game
 // players should be in the correct order. i.e., any rotation must happen beforehand
-func NewGame(tableUUID string, playerIDs []int64, opts Options) (*Game, error) {
+func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game, error) {
 	idToPlayer := make(map[int64]*Player)
 	players := make([]*Player, len(playerIDs))
 	for i, pid := range playerIDs {
@@ -212,17 +208,16 @@ func NewGame(tableUUID string, playerIDs []int64, opts Options) (*Game, error) {
 		idToPlayer[pid] = players[i]
 	}
 
-	g, err := newGame(players, nil, opts)
+	g, err := newGame(logger, players, nil, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	g.idToPlayer = idToPlayer
-	g.table = tableUUID
 	return g, nil
 }
 
-func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, error) {
+func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Player, opts Options) (*Game, error) {
 	if len(players) < 2 || len(players) > playersLimit {
 		return nil, PlayerCountError(len(players))
 	}
@@ -231,7 +226,6 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 
 	messages := make([]*playable.LogMessage, 0)
 
-	ids := make([]int64, 0, len(players))
 	playerOrder := make(map[*Player]int)
 	for order, player := range players {
 		// if initial pot is > 0, that means we are working off of a previous game. In that case,
@@ -243,18 +237,10 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 		}
 
 		playerOrder[player] = order
-
-		ids = append(ids, player.PlayerID)
 	}
 
 	d := deck.New()
 	d.Shuffle(0)
-
-	logrus.WithFields(logrus.Fields{
-		"players": ids,
-		"seed":    d.Seed(),
-		"hash":    d.HashCode(),
-	}).Info("new game of bourré started")
 
 	foldedPlayersMap := make(map[*Player]bool)
 	for _, player := range foldedPlayers {
@@ -269,6 +255,7 @@ func newGame(players []*Player, foldedPlayers []*Player, opts Options) (*Game, e
 		foldedPlayers:  foldedPlayersMap,
 		playerDiscards: make(map[*Player][]*deck.Card),
 		logChan:        make(chan []*playable.LogMessage, 256),
+		logger:         logger,
 	}
 
 	messages = append(messages, newLogMessage(0, nil, "New game of Bourré started with a pot of %d¢", pot))
@@ -299,11 +286,7 @@ func (g *Game) Deal() error {
 		return err
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"game":      "bourre",
-		"table":     g.table,
-		"trumpCard": trumpCard,
-	}).Debug("trump card")
+	g.logger.WithField("trumpCard", trumpCard).Debug("trump card")
 
 	g.sendLogMessages(newLogMessage(0, trumpCard, "The trump card has been selected"))
 
@@ -531,7 +514,6 @@ func (g *Game) buildResults() error {
 		Ante:          g.ante,
 		OldPot:        g.pot,
 		NewPot:        newPot,
-		table:         g.table,
 		logChan:       g.logChan,
 		playerOrder:   g.playerOrder,
 		idToPlayer:    g.idToPlayer,

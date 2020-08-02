@@ -1,6 +1,7 @@
 package sevencard
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/playable"
 	"testing"
@@ -9,12 +10,12 @@ import (
 func TestGame_Name(t *testing.T) {
 	options := DefaultOptions()
 	options.Variant = &Stud{}
-	game, _ := NewGame("", []int64{1, 2}, options)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, options)
 	assert.Equal(t, "Seven-Card Stud", game.Name())
 }
 
 func TestGame_LogChan(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	lc := game.LogChan()
 	game.logChan <- playable.SimpleLogMessageSlice(0, "test msg")
 

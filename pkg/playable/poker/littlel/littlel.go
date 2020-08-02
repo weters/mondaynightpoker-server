@@ -3,6 +3,7 @@ package littlel
 import (
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
@@ -35,6 +36,7 @@ type Game struct {
 	playerIDs          []int64
 	idToParticipant    map[int64]*Participant
 	options            Options
+	logger             logrus.FieldLogger
 	logChan            chan []*playable.LogMessage
 	tradeIns           *TradeIns
 	deck               *deck.Deck
@@ -53,7 +55,7 @@ type Game struct {
 }
 
 // NewGame returns a new instance of the game
-func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error) {
+func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
 	if options.Ante <= 0 {
 		return nil, errors.New("ante must be greater than zero")
 	}
@@ -92,6 +94,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		discards:            []*deck.Card{},
 		lastAdjustmentRound: round(-1),
 		logChan:             make(chan []*playable.LogMessage, 256),
+		logger:              logger,
 		tradeIns:            tradeIns,
 	}
 

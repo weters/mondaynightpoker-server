@@ -24,6 +24,7 @@ type Game struct {
 	participants    []*Participant
 	idToParticipant map[int64]*Participant
 
+	logger  logrus.FieldLogger
 	logChan chan []*playable.LogMessage
 
 	decisionIndex int
@@ -62,7 +63,7 @@ type Game struct {
 var seed = int64(0)
 
 // NewGame returns a new game
-func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error) {
+func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
 	if len(playerIDs) < 2 {
 		return nil, errors.New("game requires at least two players")
 	}
@@ -109,6 +110,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		idToParticipant: idToParticipants,
 		decisionIndex:   0,
 		logChan:         make(chan []*playable.LogMessage, 256),
+		logger:          logger,
 		gameLog:         gameLog,
 	}
 
@@ -154,7 +156,7 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 	case ActionStay:
 		g.sendLogMessage(playerID, "{} will stay")
 	default:
-		logrus.WithField("action", gameAction.String()).Warn("cannot exec action")
+		g.logger.WithField("action", gameAction.String()).Warn("cannot exec action")
 	}
 
 	g.gameLog.AddGameAction(gameActionDetails)

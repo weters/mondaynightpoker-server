@@ -3,6 +3,7 @@ package gamefactory
 import (
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
 )
@@ -18,13 +19,13 @@ func (p passThePoopFactory) Details(additionalData playable.AdditionalData) (str
 	return fmt.Sprintf("Pass the Poop, %s Edition", opts.Edition.Name()), opts.Ante, nil
 }
 
-func (p passThePoopFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (p passThePoopFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
 	opts, err := p.getOptions(additionalData)
 	if err != nil {
 		return nil, err
 	}
 
-	game, err := passthepoop.NewGame(tableUUID, playerIDs, opts)
+	game, err := passthepoop.NewGame(logger, playerIDs, opts)
 	if err != nil {
 		return nil, err
 	}

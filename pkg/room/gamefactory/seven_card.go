@@ -2,6 +2,7 @@ package gamefactory
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/sevencard"
 )
@@ -17,13 +18,13 @@ func (s sevenCardFactory) Details(additionalData playable.AdditionalData) (name 
 	return opts.Variant.Name(), opts.Ante, nil
 }
 
-func (s sevenCardFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (s sevenCardFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
 	opts, err := s.getOptions(additionalData)
 	if err != nil {
 		return nil, err
 	}
 
-	game, err := sevencard.NewGame(tableUUID, playerIDs, opts)
+	game, err := sevencard.NewGame(logger, playerIDs, opts)
 	if err != nil {
 		return nil, err
 	}

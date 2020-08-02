@@ -2,6 +2,7 @@ package bourre
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"mondaynightpoker-server/pkg/deck"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestNewGame(t *testing.T) {
-	g, err := NewGame("", []int64{10, 20}, Options{})
+	g, err := NewGame(logrus.StandardLogger(), []int64{10, 20}, Options{})
 	assert.NoError(t, err)
 	assert.NotNil(t, g)
 
@@ -23,7 +24,7 @@ func TestNewGame(t *testing.T) {
 }
 
 func Test_newGame(t *testing.T) {
-	g, err := newGame([]*Player{NewPlayer(1)}, nil, Options{})
+	g, err := newGame(logrus.StandardLogger(), []*Player{NewPlayer(1)}, nil, Options{})
 	assert.Nil(t, g)
 	assert.EqualError(t, err, "expected 2–8 players, got 1")
 
@@ -32,7 +33,7 @@ func Test_newGame(t *testing.T) {
 		players = append(players, NewPlayer(1))
 	}
 
-	g, err = newGame(players, nil, Options{})
+	g, err = newGame(logrus.StandardLogger(), players, nil, Options{})
 	assert.Nil(t, g)
 	assert.EqualError(t, err, "expected 2–8 players, got 9")
 
@@ -42,7 +43,7 @@ func Test_newGame(t *testing.T) {
 		NewPlayer(1),
 		NewPlayer(1),
 	}
-	g, err = newGame(testPlayers, nil, Options{Ante: 50})
+	g, err = newGame(logrus.StandardLogger(), testPlayers, nil, Options{Ante: 50})
 	assert.NotNil(t, g)
 	assert.NoError(t, err)
 

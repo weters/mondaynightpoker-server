@@ -1,6 +1,7 @@
 package gamefactory
 
 import (
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/bourre"
 )
@@ -12,9 +13,9 @@ func (b bourreFactory) Details(additionalData playable.AdditionalData) (string, 
 	return "Bourré", ante, nil
 }
 
-func (b bourreFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (b bourreFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
 	ante, _ := additionalData.GetInt("ante")
-	game, err := bourre.NewGame(tableUUID, playerIDs, bourre.Options{Ante: ante})
+	game, err := bourre.NewGame(logger, playerIDs, bourre.Options{Ante: ante})
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package gamefactory
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/littlel"
 )
@@ -18,8 +19,8 @@ func (l littleLFactory) Details(additionalData playable.AdditionalData) (string,
 	return fmt.Sprintf("Little L (trade: %s)", tradeIns), opts.Ante, nil
 }
 
-func (l littleLFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	game, err := littlel.NewGame(tableUUID, playerIDs, getOptions(additionalData))
+func (l littleLFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+	game, err := littlel.NewGame(logger, playerIDs, getOptions(additionalData))
 	if err != nil {
 		return nil, err
 	}

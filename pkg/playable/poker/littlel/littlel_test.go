@@ -1,6 +1,7 @@
 package littlel
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"mondaynightpoker-server/pkg/deck"
@@ -14,7 +15,7 @@ func TestGame_Name(t *testing.T) {
 
 func TestGame_CanTrade(t *testing.T) {
 	opts := DefaultOptions()
-	game, err := NewGame("", []int64{1, 2, 3}, opts)
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	assert.NoError(t, err)
 	assert.True(t, game.CanTrade(0))
 	assert.False(t, game.CanTrade(1))
@@ -23,7 +24,7 @@ func TestGame_CanTrade(t *testing.T) {
 	assert.False(t, game.CanTrade(4))
 
 	opts.TradeIns = []int{3, 2, 3, 1}
-	game, err = NewGame("", []int64{1, 2, 3}, opts)
+	game, err = NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, "1, 2, 3", game.GetAllowedTradeIns().String())
 
@@ -38,48 +39,48 @@ func TestGame_CanTrade(t *testing.T) {
 	}
 
 	opts.TradeIns = []int{}
-	testNoTrades(NewGame("", []int64{1, 2, 3}, opts))
+	testNoTrades(NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts))
 
 	opts.TradeIns = []int{0}
-	testNoTrades(NewGame("", []int64{1, 2, 3}, opts))
+	testNoTrades(NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts))
 }
 
 func TestNew(t *testing.T) {
 	playerIDs := []int64{1, 2, 3}
 
 	opts := Options{}
-	game, err := NewGame("", playerIDs, opts)
+	game, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
 	assert.EqualError(t, err, "ante must be greater than zero")
 	assert.Nil(t, game)
 
 	opts.Ante = 1
-	game, err = NewGame("", playerIDs, opts)
+	game, err = NewGame(logrus.StandardLogger(), playerIDs, opts)
 	assert.EqualError(t, err, "the initial deal must be between 3 and 5 cards")
 	assert.Nil(t, game)
 
 	opts.InitialDeal = 4
 	opts.TradeIns = []int{8}
-	game, err = NewGame("", playerIDs, opts)
+	game, err = NewGame(logrus.StandardLogger(), playerIDs, opts)
 	assert.EqualError(t, err, "invalid trade-in option: 8")
 	assert.Nil(t, game)
 
 	opts.TradeIns = []int{0, 1, 2, 3, 4}
 
-	game, err = NewGame("", []int64{1}, opts)
+	game, err = NewGame(logrus.StandardLogger(), []int64{1}, opts)
 	assert.EqualError(t, err, "you must have at least two participants")
 	assert.Nil(t, game)
 
-	game, err = NewGame("", make([]int64, maxParticipants+1), opts)
+	game, err = NewGame(logrus.StandardLogger(), make([]int64, maxParticipants+1), opts)
 	assert.EqualError(t, err, "you cannot have more than 10 participants")
 	assert.Nil(t, game)
 
-	game, err = NewGame("", playerIDs, opts)
+	game, err = NewGame(logrus.StandardLogger(), playerIDs, opts)
 	assert.NoError(t, err)
 	assert.NotNil(t, game)
 }
 
 func TestGame_DealCards(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	game.deck = deck.New() // set deck to default, unshuffled deck
 
 	assert.NoError(t, err)
@@ -90,7 +91,7 @@ func TestGame_DealCards(t *testing.T) {
 }
 
 func TestGame_TradeCardsForParticipant(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	game.deck = deck.New()
 	trade := createTradeHelperFunc(game)
 	assert.NoError(t, game.DealCards())
@@ -113,7 +114,7 @@ func TestGame_TradeCardsForParticipant(t *testing.T) {
 }
 
 func TestGame_TradeCardsForParticipant_UsingDiscards(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	game.deck = deck.New()
 	trade := createTradeHelperFunc(game)
 	assert.NoError(t, game.DealCards())
@@ -147,7 +148,7 @@ func createTradeHelperFunc(game *Game) func(playerID int64, cards string) error 
 }
 
 func TestGame_NextRound(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	assert.EqualError(t, game.NextRound(), "round is not over")
 
 	game.currentBet = 25
@@ -161,7 +162,7 @@ func TestGame_NextRound(t *testing.T) {
 }
 
 func TestGame_ParticipantAction(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	assert.NoError(t, game.DealCards())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
@@ -257,7 +258,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 }
 
 func TestGame_ParticipantActionTie(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	assert.NoError(t, game.DealCards())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
@@ -292,7 +293,7 @@ func TestGame_ParticipantActionTie(t *testing.T) {
 }
 
 func TestGame_ParticipantActionAllFold(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	assert.NoError(t, game.DealCards())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
@@ -313,7 +314,7 @@ func TestGame_ParticipantActionAllFold(t *testing.T) {
 func TestGame_FoldMidGame(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Ante = 100
-	game, _ := NewGame("", []int64{1, 2, 3, 4, 5}, opts)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, opts)
 	assert.NoError(t, game.DealCards())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
@@ -354,7 +355,7 @@ func TestGame_FoldMidGame(t *testing.T) {
 }
 
 func TestGame_endOfRoundAdjustments(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
 	}
@@ -370,7 +371,7 @@ func TestGame_ParticipantBets(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Ante = 25
 
-	game, _ := NewGame("", []int64{1, 2}, opts)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
 	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
 	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
 	_ = game.NextRound()
@@ -382,7 +383,7 @@ func TestGame_ParticipantBets(t *testing.T) {
 }
 
 func TestGame_sendEndOfGameLogMessages(t *testing.T) {
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	_ = game.DealCards()
 	game.community = deck.CardsFromString("8h,8d,8s")
 	game.idToParticipant[2].hand = deck.CardsFromString("14s,13s,12s,11c")

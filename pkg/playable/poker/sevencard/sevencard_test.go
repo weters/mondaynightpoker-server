@@ -1,6 +1,7 @@
 package sevencard
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
@@ -8,24 +9,24 @@ import (
 
 func TestNewGame(t *testing.T) {
 	a := assert.New(t)
-	game, err := NewGame("", nil, Options{})
+	game, err := NewGame(logrus.StandardLogger(), nil, Options{})
 	a.EqualError(err, "ante must be greater than zero")
 	a.Nil(game)
 
-	game, err = NewGame("", nil, DefaultOptions())
+	game, err = NewGame(logrus.StandardLogger(), nil, DefaultOptions())
 	a.EqualError(err, "you must have at least two participants")
 	a.Nil(game)
 
 	p := make([]int64, 8)
-	game, err = NewGame("", p, DefaultOptions())
+	game, err = NewGame(logrus.StandardLogger(), p, DefaultOptions())
 	a.EqualError(err, "seven-card allows at most 7 participants")
 	a.Nil(game)
 
-	game, err = NewGame("", []int64{1, 2}, DefaultOptions())
+	game, err = NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	a.NoError(err)
 	a.NotNil(game)
 
-	game, err = NewGame("", []int64{1, 2, 3, 4, 5, 6, 7}, DefaultOptions())
+	game, err = NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5, 6, 7}, DefaultOptions())
 	a.NoError(err)
 	a.NotNil(game)
 	a.Equal(7*25, game.pot)
@@ -35,7 +36,7 @@ func TestNewGame(t *testing.T) {
 func TestGame_Start(t *testing.T) {
 	a := assert.New(t)
 
-	game, err := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	a.NoError(err)
 	a.NotNil(game)
 
@@ -56,7 +57,7 @@ func TestGame_Start(t *testing.T) {
 func TestGame_New_notEnoughCards(t *testing.T) {
 	a := assert.New(t)
 
-	game, err := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	a.NoError(err)
 	a.NotNil(game)
 
@@ -67,7 +68,7 @@ func TestGame_New_notEnoughCards(t *testing.T) {
 
 func TestGame_setFirstToAct(t *testing.T) {
 	a := assert.New(t)
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	game.idToParticipant[1].hand = deck.CardsFromString("14c,14c,4c")
 	game.idToParticipant[2].hand = deck.CardsFromString("2c,3c,14c")
 	game.idToParticipant[3].hand = deck.CardsFromString("14c,14c,14c")
@@ -87,7 +88,7 @@ func TestGame_setFirstToAct(t *testing.T) {
 
 func TestGame_setFirstToAct_withMoreCards(t *testing.T) {
 	a := assert.New(t)
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	game.idToParticipant[1].hand = deck.CardsFromString("14c,14c,4c,5d")
 	game.idToParticipant[2].hand = deck.CardsFromString("2c,3c,14c,3c")
 	game.idToParticipant[3].hand = deck.CardsFromString("14c,14c,8c,8d")
@@ -104,7 +105,7 @@ func TestGame_setFirstToAct_withMoreCards(t *testing.T) {
 func TestGame_turns(t *testing.T) {
 	a := assert.New(t)
 
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	a.NoError(game.Start())
 	game.decisionStartIndex = 0
 
@@ -141,7 +142,7 @@ func TestGame_turns(t *testing.T) {
 func TestGame_happyPath(t *testing.T) {
 	a := assert.New(t)
 
-	game, err := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	a.NoError(err)
 	a.NotNil(game)
 
@@ -217,7 +218,7 @@ func createParticipantGetter(game *Game) func(id int64) *participant {
 
 func TestGame_endGame(t *testing.T) {
 	a := assert.New(t)
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	a.NoError(game.Start())
 	p := createParticipantGetter(game)
 
@@ -252,7 +253,7 @@ func TestGame_endGame(t *testing.T) {
 
 func TestGame_endGame_withTie(t *testing.T) {
 	a := assert.New(t)
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	a.NoError(game.Start())
 	p := createParticipantGetter(game)
 
@@ -272,14 +273,14 @@ func TestGame_endGame_withTie(t *testing.T) {
 
 func TestGame_nextRound_panics(t *testing.T) {
 	a := assert.New(t)
-	game, _ := NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 
 	// we didn't call Start(), so this will panic
 	a.PanicsWithValue("round 1 is not implemented", func() {
 		game.nextRound()
 	})
 
-	game, _ = NewGame("", []int64{1, 2, 3}, DefaultOptions())
+	game, _ = NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	a.NoError(game.Start())
 	game.deck.Cards = deck.Hand{}
 
@@ -290,7 +291,7 @@ func TestGame_nextRound_panics(t *testing.T) {
 
 func TestGame_determineFirstToAct(t *testing.T) {
 	a := assert.New(t)
-	game, _ := NewGame("", []int64{1, 2}, DefaultOptions())
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	p := createParticipantGetter(game)
 
 	p(1).hand = deck.CardsFromString("2c,3c,5c,5d")

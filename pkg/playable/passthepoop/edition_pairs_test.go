@@ -1,6 +1,7 @@
 package passthepoop
 
 import (
+	"github.com/sirupsen/logrus"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,7 +123,7 @@ func TestPairsEdition_EndRound_Trips(t *testing.T) {
 }
 
 func TestPairsEdition_EndRound_Tied(t *testing.T) {
-	game, err := NewGame("", []int64{1, 2}, Options{Lives: 1, Edition: &PairsEdition{}, Ante: 25})
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, Options{Lives: 1, Edition: &PairsEdition{}, Ante: 25})
 	assert.NoError(t, err)
 
 	game.idToParticipant[1].card = card("2c")

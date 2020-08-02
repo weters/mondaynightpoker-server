@@ -579,15 +579,24 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 		return err
 	}
 
-	game, err := factory.CreateGame(d.table.UUID, playerIDs, msg.AdditionalData)
+	details, _, err := factory.Details(msg.AdditionalData)
 	if err != nil {
 		return err
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"playerID": client.player.ID,
-		"game":     game.Name(),
-	}).Info("game started")
+	logger := logrus.WithFields(logrus.Fields{
+		"startedBy": client.player.ID,
+		"game":      details,
+		"table":     d.table.UUID,
+		"playerIDs": playerIDs,
+	})
+
+	game, err := factory.CreateGame(logger, playerIDs, msg.AdditionalData)
+	if err != nil {
+		return err
+	}
+	logger.Info("game started")
+
 	d.game = game
 	d.stateChanged <- stateGameEvent
 	return nil

@@ -3,6 +3,7 @@ package sevencard
 import (
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
@@ -35,13 +36,14 @@ type Game struct {
 
 	pendingLogs []*playable.LogMessage
 	logChan     chan []*playable.LogMessage
+	logger      logrus.FieldLogger
 
 	// done will be set to true if the game has ended, and the players advance
 	done bool
 }
 
 // NewGame returns a new seven-card poker Game
-func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error) {
+func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err
 	}
@@ -65,6 +67,7 @@ func NewGame(tableUUID string, playerIDs []int64, options Options) (*Game, error
 		playerIDs:   append([]int64{}, playerIDs...), // copy
 		pendingLogs: make([]*playable.LogMessage, 0),
 		logChan:     make(chan []*playable.LogMessage, 256),
+		logger:      logger,
 	}
 
 	game.setupParticipantsAndPot()

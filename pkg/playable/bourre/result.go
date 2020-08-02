@@ -1,6 +1,7 @@
 package bourre
 
 import (
+	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -18,7 +19,7 @@ type Result struct {
 	OldPot        int
 	NewPot        int
 
-	table       string
+	logger      logrus.FieldLogger
 	logChan     chan []*playable.LogMessage
 	playerOrder map[*Player]int
 	idToPlayer  map[int64]*Player
@@ -65,14 +66,14 @@ func (r *Result) NewGame() (*Game, error) {
 
 	folded := append(r.Folded, r.Booted...)
 
-	g, err := newGame(nextPlayers, folded, Options{InitialPot: r.NewPot, Ante: r.Ante})
+	g, err := newGame(r.logger, nextPlayers, folded, Options{InitialPot: r.NewPot, Ante: r.Ante})
 	if err != nil {
 		return nil, err
 	}
 
 	g.idToPlayer = r.idToPlayer
 	g.parentResult = r
-	g.table = r.table
+	g.logger = r.logger
 	g.logChan = r.logChan
 
 	return g, nil
