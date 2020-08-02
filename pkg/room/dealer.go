@@ -90,7 +90,7 @@ func (d *Dealer) runLoop() {
 
 		select {
 		case <-pendingGameTimer:
-			if err := d.createGame(d.pendingGame.message); err != nil {
+			if err := d.createGame(d.pendingGame.client, d.pendingGame.message); err != nil {
 				d.pendingGame.client.Send(playable.Response{
 					Key:   "error",
 					Value: err.Error(),
@@ -568,7 +568,7 @@ func (d *Dealer) scheduleGame(c *Client, msg *playable.PayloadIn) error {
 	return nil
 }
 
-func (d *Dealer) createGame(msg *playable.PayloadIn) error {
+func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 	factory, err := gamefactory.Get(msg.Subject)
 	if err != nil {
 		return fmt.Errorf("game not found: %s", msg.Subject)
@@ -584,6 +584,10 @@ func (d *Dealer) createGame(msg *playable.PayloadIn) error {
 		return err
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"playerID": client.player.ID,
+		"game":     game.Name(),
+	}).Info("game started")
 	d.game = game
 	d.stateChanged <- stateGameEvent
 	return nil
