@@ -8,7 +8,6 @@ import (
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room/gamefactory"
 	"mondaynightpoker-server/pkg/table"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +20,7 @@ const (
 	stateClientEvent state = iota
 	stateGameEvent
 	stateGameEnded
+	stateGameScheduled
 )
 
 type action string
@@ -37,46 +37,32 @@ type Dealer struct {
 	pitBoss *PitBoss
 	table   *table.Table
 	clients map[*Client]bool
-	lock    sync.RWMutex
 	game    playable.Playable
 
-	execInRunLoop            chan func()
-	execInRunLoopWithClients chan func([]*Client)
-	stateChanged             chan state
-	close                    chan bool
+	execInRunLoop chan func()
+	stateChanged  chan state
+	close         chan bool
 
 	// note: this must only be manipulated within the run loop
 	logMessages []*playable.LogMessage
+
+	pendingGame *pendingGame
 }
 
 // NewDealer creates a new dealer object
 // This is called from a blocking state, so it needs to return quickly
 func NewDealer(pitBoss *PitBoss, table *table.Table) *Dealer {
 	d := &Dealer{
-		pitBoss:                  pitBoss,
-		table:                    table,
-		clients:                  make(map[*Client]bool),
-		execInRunLoop:            make(chan func(), 256),
-		execInRunLoopWithClients: make(chan func([]*Client), 256),
-		stateChanged:             make(chan state, 256),
-		close:                    make(chan bool),
-		game:                     nil,
+		pitBoss:       pitBoss,
+		table:         table,
+		clients:       make(map[*Client]bool),
+		execInRunLoop: make(chan func(), 256),
+		stateChanged:  make(chan state, 256),
+		close:         make(chan bool),
+		game:          nil,
 	}
 
 	return d
-}
-
-// Clients will return a slice of connected (at the time) clients
-func (d *Dealer) Clients() []*Client {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
-
-	clients := make([]*Client, 0, len(d.clients))
-	for client := range d.clients {
-		clients = append(clients, client)
-	}
-
-	return clients
 }
 
 // StartShift starts the run loop
@@ -97,7 +83,21 @@ func (d *Dealer) runLoop() {
 			logChan = d.game.LogChan()
 		}
 
+		var pendingGameTimer <-chan time.Time
+		if d.pendingGame != nil {
+			pendingGameTimer = d.pendingGame.timer.C
+		}
+
 		select {
+		case <-pendingGameTimer:
+			if err := d.createGame(d.pendingGame.message); err != nil {
+				d.pendingGame.client.Send(playable.Response{
+					Key:   "error",
+					Value: err.Error(),
+				})
+			}
+
+			d.pendingGame = nil
 		case messages := <-logChan:
 			d.sendLogMessages(messages)
 		case s := <-d.stateChanged:
@@ -109,18 +109,11 @@ func (d *Dealer) runLoop() {
 			case stateGameEnded:
 				d.sendGameEnded()
 				d.sendPlayerData()
+			case stateGameScheduled:
+				d.sendGameScheduled()
 			}
 		case fn := <-d.execInRunLoop:
 			fn()
-		case fn := <-d.execInRunLoopWithClients:
-			d.lock.RLock()
-			clients := make([]*Client, 0, len(d.clients))
-			for client := range d.clients {
-				clients = append(clients, client)
-			}
-			d.lock.RUnlock()
-
-			fn(clients)
 		case <-d.close:
 			log.WithField("uuid", d.table.UUID).Debug("terminating dealer run loop")
 			return
@@ -131,10 +124,8 @@ func (d *Dealer) runLoop() {
 // AddClient adds a client
 // This method must return quickly
 func (d *Dealer) AddClient(client *Client) {
-	d.lock.Lock()
 	client.dealer = d
 	d.clients[client] = true
-	d.lock.Unlock()
 
 	d.stateChanged <- stateClientEvent
 	d.execInRunLoop <- func() {
@@ -143,6 +134,13 @@ func (d *Dealer) AddClient(client *Client) {
 			Value: "",
 			Data:  d.logMessages,
 		})
+
+		if d.pendingGame != nil {
+			client.Send(playable.Response{
+				Key:  "scheduledGame",
+				Data: d.pendingGame,
+			})
+		}
 
 		if d.game == nil {
 			return
@@ -161,10 +159,8 @@ func (d *Dealer) AddClient(client *Client) {
 // RemoveClient adds a client
 // This method must return quickly
 func (d *Dealer) RemoveClient(client *Client) (lastClient bool) {
-	d.lock.Lock()
 	delete(d.clients, client)
 	nClients := len(d.clients)
-	d.lock.Unlock()
 
 	if nClients > 0 {
 		d.stateChanged <- stateClientEvent
@@ -181,7 +177,7 @@ func (d *Dealer) EndShift() {
 
 // NOTE: must only be called from the run loop
 func (d *Dealer) sendGameEnded() {
-	for _, client := range d.Clients() {
+	for client := range d.clients {
 		client.Send(playable.Response{
 			Key: "gameEnded",
 		})
@@ -195,7 +191,7 @@ func (d *Dealer) sendGameData() {
 		logrus.Error("XXX game state changed, but there's no active game")
 	}
 
-	for _, client := range d.Clients() {
+	for client := range d.clients {
 		data, err := d.game.GetPlayerState(client.player.ID)
 		if err != nil {
 			logrus.WithError(err).Error("could not get player state")
@@ -203,6 +199,16 @@ func (d *Dealer) sendGameData() {
 		}
 
 		client.Send(data)
+	}
+}
+
+func (d *Dealer) sendGameScheduled() {
+	pendingGame := d.pendingGame
+	for client := range d.clients {
+		client.Send(playable.Response{
+			Key:  "scheduledGame",
+			Data: pendingGame,
+		})
 	}
 }
 
@@ -240,7 +246,7 @@ func (d *Dealer) sendPlayerData() {
 	}
 
 	connectedClients := make(map[int64]*table.Player)
-	for _, client := range d.Clients() {
+	for client := range d.clients {
 		connectedClients[client.player.ID] = client.player
 	}
 
@@ -267,7 +273,7 @@ func (d *Dealer) sendPlayerData() {
 		}
 	}
 
-	for _, client := range d.Clients() {
+	for client := range d.clients {
 		client.Send(playable.Response{
 			Key:  "clientState",
 			Data: csPlayers,
@@ -316,12 +322,32 @@ func canPerformActionOnTable(ctx string, c *Client, action action) bool {
 }
 
 // ReceivedMessage is called when a client sends a message to the server
+// IMPORTANT! this method MUST not access or modify any dealer state information
+// Instead, it must run any operates within the run loop, using the execInRunLoop chan.
 func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 	if msgBytes, _ := json.Marshal(msg); msgBytes != nil {
 		logrus.WithField("message", string(msgBytes)).Debug("client message")
 	}
 
 	switch msg.Action {
+	case "cancelGame":
+		if !canPerformActionOnTable(msg.Context, c, actionStart) {
+			return
+		}
+
+		d.execInRunLoop <- func() {
+			if d.pendingGame == nil {
+				return
+			}
+
+			if !d.pendingGame.timer.Stop() {
+				<-d.pendingGame.timer.C
+			}
+
+			d.pendingGame = nil
+			d.stateChanged <- stateGameScheduled
+			c.Send(playable.OK(msg.Context))
+		}
 	case "createGame":
 		if d.game != nil {
 			if !canPerformActionOnTable(msg.Context, c, actionRestart) {
@@ -334,7 +360,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		}
 
 		d.execInRunLoop <- func() {
-			if err := d.createGame(msg); err != nil {
+			if err := d.scheduleGame(c, msg); err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
@@ -525,6 +551,21 @@ func (d *Dealer) getNextPlayersIDsForGame() ([]int64, error) {
 	}
 
 	return playerIDs, nil
+}
+
+func (d *Dealer) scheduleGame(c *Client, msg *playable.PayloadIn) error {
+	if d.pendingGame != nil {
+		return errors.New("a game is already scheduled to start")
+	}
+
+	pendingGame, err := newPendingGame(c, msg)
+	if err != nil {
+		return err
+	}
+
+	d.pendingGame = pendingGame
+	d.stateChanged <- stateGameScheduled
+	return nil
 }
 
 func (d *Dealer) createGame(msg *playable.PayloadIn) error {

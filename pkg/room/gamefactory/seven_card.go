@@ -8,13 +8,13 @@ import (
 
 type sevenCardFactory struct{}
 
-func (s sevenCardFactory) Name(additionalData playable.AdditionalData) (string, error) {
+func (s sevenCardFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {
 	opts, err := s.getOptions(additionalData)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return opts.Variant.Name(), nil
+	return opts.Variant.Name(), opts.Ante, nil
 }
 
 func (s sevenCardFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {

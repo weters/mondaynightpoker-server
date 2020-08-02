@@ -8,14 +8,14 @@ import (
 
 type littleLFactory struct{}
 
-func (l littleLFactory) Name(additionalData playable.AdditionalData) (string, error) {
+func (l littleLFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts := getOptions(additionalData)
 	tradeIns, err := littlel.NewTradeIns(opts.TradeIns)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return fmt.Sprintf("Little L (trade: %s)", tradeIns), nil
+	return fmt.Sprintf("Little L (trade: %s)", tradeIns), opts.Ante, nil
 }
 
 func (l littleLFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {

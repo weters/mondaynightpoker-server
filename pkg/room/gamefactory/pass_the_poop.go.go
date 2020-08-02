@@ -9,13 +9,13 @@ import (
 
 type passThePoopFactory struct{}
 
-func (p passThePoopFactory) Name(additionalData playable.AdditionalData) (string, error) {
+func (p passThePoopFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts, err := p.getOptions(additionalData)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return fmt.Sprintf("Pass the Poop, %s Edition", opts.Edition.Name()), nil
+	return fmt.Sprintf("Pass the Poop, %s Edition", opts.Edition.Name()), opts.Ante, nil
 }
 
 func (p passThePoopFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {

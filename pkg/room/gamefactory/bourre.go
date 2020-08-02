@@ -7,8 +7,9 @@ import (
 
 type bourreFactory struct{}
 
-func (b bourreFactory) Name(additionalData playable.AdditionalData) (string, error) {
-	return "Bourré", nil
+func (b bourreFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
+	ante, _ := additionalData.GetInt("ante")
+	return "Bourré", ante, nil
 }
 
 func (b bourreFactory) CreateGame(tableUUID string, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {

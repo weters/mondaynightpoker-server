@@ -7,10 +7,12 @@ import (
 )
 
 func Test_littleLFactory_Name(t *testing.T) {
-	name, err := factories["little-l"].Name(playable.AdditionalData{
+	name, ante, err := factories["little-l"].Details(playable.AdditionalData{
 		"tradeIns": []int{0, 2},
+		"ante":     float64(25),
 	})
 
 	assert.NoError(t, err)
 	assert.Equal(t, "Little L (trade: 0, 2)", name)
+	assert.Equal(t, 25, ante)
 }
