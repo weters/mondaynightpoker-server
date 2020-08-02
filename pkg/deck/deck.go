@@ -15,6 +15,7 @@ var ErrEndOfDeck = errors.New("end of deck reached")
 type Deck struct {
 	Cards []*Card `json:"cards"`
 	seed  int64
+	rng   *rand.Rand
 }
 
 // New returns a new deck of cards.
@@ -26,6 +27,13 @@ func New() *Deck {
 
 	d.buildDeck()
 	return d
+}
+
+// SetSeed will set the seed
+// This should only be used by tests. Setting the seed is normally handled when you call Shuffle()
+func (d *Deck) SetSeed(seed int64) {
+	d.seed = seed
+	d.rng = rand.New(rand.NewSource(seed))
 }
 
 func (d *Deck) buildDeck() {
@@ -59,15 +67,13 @@ func (d *Deck) Shuffle(seed int64) {
 		seed = time.Now().UnixNano()
 	}
 
-	rand.Seed(seed)
+	d.SetSeed(seed)
 
 	for j := len(d.Cards) - 1; j > 0; j-- {
-		i := rand.Intn(j + 1)
+		i := d.rng.Intn(j + 1)
 
 		d.Cards[i], d.Cards[j] = d.Cards[j], d.Cards[i]
 	}
-
-	d.seed = seed
 }
 
 // ShuffleDiscards will replace the existing deck with the cards specified
@@ -76,7 +82,7 @@ func (d *Deck) ShuffleDiscards(discards []*Card) {
 	copy(cards, discards)
 
 	for j := len(cards) - 1; j > 0; j-- {
-		i := rand.Intn(j + 1)
+		i := d.rng.Intn(j + 1)
 
 		cards[i], cards[j] = cards[j], cards[i]
 	}
@@ -84,8 +90,8 @@ func (d *Deck) ShuffleDiscards(discards []*Card) {
 	d.Cards = cards
 }
 
-// Seed returns the seed used to shuffle the deck
-func (d *Deck) Seed() int64 {
+// GetSeed returns the seed used to shuffle the deck
+func (d *Deck) GetSeed() int64 {
 	return d.seed
 }
 

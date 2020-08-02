@@ -19,12 +19,12 @@ func TestNewDeck(t *testing.T) {
 
 	assert.Equal(t, "79441517e1184e0e3c37383d2f7bc54996872dd8", deck.HashCode())
 
-	if deck.Seed() != -1 {
+	if deck.GetSeed() != -1 {
 		t.Errorf("Shuffle() did not return the initial seed value (-1)")
 	}
 
 	deck.Shuffle(1)
-	if deck.Seed() != 1 {
+	if deck.GetSeed() != 1 {
 		t.Errorf("Shuffle() did not set a seed value")
 	}
 
@@ -38,7 +38,7 @@ func TestNewDeck(t *testing.T) {
 	now := time.Now().UnixNano()
 	deck.Shuffle(0)
 
-	assert.Greater(t, deck.Seed(), now)
+	assert.Greater(t, deck.GetSeed(), now)
 
 	assert.NotEqual(t, expected, deck.HashCode())
 }
@@ -86,13 +86,16 @@ func TestDeck_Draw(t *testing.T) {
 
 func TestDeck_ShuffleDiscards(t *testing.T) {
 	d := New()
+	d.SetSeed(0)
 	c1, _ := d.Draw()
 	c2, _ := d.Draw()
 	c3, _ := d.Draw()
 	c4, _ := d.Draw()
 	discards := []*Card{c1, c2, c3, c4}
 
-	rand.Seed(0)
+	// ensure our seed does not use the global seed
+	rand.Seed(5)
+
 	d.ShuffleDiscards(discards)
 	assert.True(t, discards[0].Equal(c1))
 	assert.True(t, discards[1].Equal(c2))

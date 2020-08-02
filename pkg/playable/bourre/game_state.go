@@ -85,7 +85,7 @@ func (g *Game) getGameState() *GameState {
 	}
 
 	return &GameState{
-		Seed:          g.deck.Seed(),
+		Seed:          g.deck.GetSeed(),
 		Players:       players,
 		FoldedPlayers: foldedPlayers,
 		TrumpCard:     g.trumpCard,

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"mondaynightpoker-server/pkg/deck"
 	"regexp"
 	"strconv"
@@ -189,7 +188,7 @@ func TestGame_ReplaceDiscard(t *testing.T) {
 
 	game.deck.Cards = cardsFromString("12c,13c,14c,12d,13d,14d,12h,13h,14h,12s,13s")
 
-	rand.Seed(0) // consistent test
+	game.deck.SetSeed(0)
 	assert.Equal(t, ErrRoundNotOver, game.replaceDiscards())
 	assert.NoError(t, game.playerDidDiscard(players[0], cardsFromString("2c,3c,4c"))) // gets 12,13,14 of clubs
 	assert.NoError(t, game.playerDidDiscard(players[1], cardsFromString("2d,3d,4d"))) // gets 12,13,14 of diamonds
@@ -482,7 +481,7 @@ func TestGame_replaceDiscards(t *testing.T) {
 	assert.NoError(t, game.playerDidDiscard(players[2], cardsFromString("2d,3d")))
 	assert.NoError(t, game.playerDidDiscard(players[3], cardsFromString("7d,8d")))
 
-	rand.Seed(0)
+	game.deck.SetSeed(0)
 	assert.NoError(t, game.replaceDiscards())
 
 	assert.Equal(t, "4c,5c,6c,3s,4s", cardsToString(players[0].hand))

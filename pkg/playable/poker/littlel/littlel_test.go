@@ -3,7 +3,6 @@ package littlel
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"mondaynightpoker-server/pkg/deck"
 	"testing"
 )
@@ -120,7 +119,7 @@ func TestGame_TradeCardsForParticipant_UsingDiscards(t *testing.T) {
 	assert.NoError(t, game.DealCards())
 
 	game.deck.Cards = deck.CardsFromString("10s,11s")
-	rand.Seed(1)
+	game.deck.SetSeed(1)
 
 	assert.NoError(t, trade(1, "2c,5c"))
 	assertHand(t, game, 1, "8c,11c,10s,11s")
