@@ -50,6 +50,8 @@ func (s sevenCardFactory) getOptions(additionalData playable.AdditionalData) (se
 			opts.Variant = &sevencard.LowCardWild{}
 		case "baseball":
 			opts.Variant = &sevencard.Baseball{}
+		case "follow-the-queen":
+			opts.Variant = &sevencard.FollowTheQueen{}
 		default:
 			return sevencard.Options{}, fmt.Errorf("unknown seven-card variant: %s", variant)
 		}
