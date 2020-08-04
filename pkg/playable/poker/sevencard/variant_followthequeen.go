@@ -18,6 +18,7 @@ func (f *FollowTheQueen) Name() string {
 // Start starts the game
 func (f *FollowTheQueen) Start() {
 	f.wildRank = 0
+	f.queenWasFlipped = false
 }
 
 // ParticipantReceivedCard will update the wilds

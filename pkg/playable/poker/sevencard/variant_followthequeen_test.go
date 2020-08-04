@@ -47,3 +47,19 @@ func TestFollowTheQueen_ParticipantReceivedCard(t *testing.T) {
 	a.Equal("2c,4c,6d,!12d,!10d", deck.CardsToString(p(2).hand))
 	a.Equal("5c,6c,7d,3c,14c", deck.CardsToString(p(3).hand))
 }
+
+func TestFollowTheQueen_Name(t *testing.T) {
+	ftq := FollowTheQueen{}
+	assert.Equal(t, "Follow the Queen", ftq.Name())
+}
+
+func TestFollowTheQueen_Start(t *testing.T) {
+	ftq := FollowTheQueen{
+		wildRank:        5,
+		queenWasFlipped: true,
+	}
+
+	ftq.Start()
+	assert.Equal(t, 0, ftq.wildRank)
+	assert.Equal(t, false, ftq.queenWasFlipped)
+}
