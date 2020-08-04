@@ -282,6 +282,7 @@ func TestGame_FullGame_TwoTwoOne(t *testing.T) {
 	assert.Equal(t, 1, newGame.playerOrder[players[0]])
 	assert.Equal(t, 0, newGame.playerOrder[players[1]])
 	assert.Equal(t, 1, len(newGame.foldedPlayers)) // booted
+	assert.NoError(t, newGame.Deal())
 }
 
 func TestGame_FullGame_WithWinner(t *testing.T) {
@@ -571,6 +572,7 @@ func setupGame(trump string, playerHands []string) (*Game, []*Player) {
 		trumpCard:      trumpCard,
 		playerDiscards: make(map[*Player][]*deck.Card),
 		foldedPlayers:  make(map[*Player]bool),
+		logger:         logrus.StandardLogger(),
 	}, players
 }
 

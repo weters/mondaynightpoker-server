@@ -514,6 +514,7 @@ func (g *Game) buildResults() error {
 		Ante:          g.ante,
 		OldPot:        g.pot,
 		NewPot:        newPot,
+		logger:        g.logger,
 		logChan:       g.logChan,
 		playerOrder:   g.playerOrder,
 		idToPlayer:    g.idToPlayer,
