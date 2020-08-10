@@ -25,10 +25,20 @@ func Test_passThePoopFactory_Name(t *testing.T) {
 	a.Equal("Pass the Poop, Diarrhea Edition", name)
 
 	name, ante, err = factories["pass-the-poop"].Details(playable.AdditionalData{
-		"edition": "pairs",
-		"ante":    float64(75),
+		"edition":     "pairs",
+		"ante":        float64(75),
+		"allowBlocks": false,
 	})
 	a.NoError(err)
 	a.Equal(75, ante)
 	a.Equal("Pass the Poop, Pairs Edition", name)
+
+	name, ante, err = factories["pass-the-poop"].Details(playable.AdditionalData{
+		"edition":     "pairs",
+		"ante":        float64(75),
+		"allowBlocks": true,
+	})
+	a.NoError(err)
+	a.Equal(75, ante)
+	a.Equal("Pass the Poop, Pairs Edition (with Blocks)", name)
 }

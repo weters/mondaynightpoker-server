@@ -3,6 +3,7 @@ package passthepoop
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"testing"
 )
@@ -121,6 +122,39 @@ func TestGame_ExecuteTurnForPlayer_AllTrades(t *testing.T) {
 	assert.Equal(t, card("5c"), participants[2].card)
 
 	execError(3, ActionStay, "no more decisions can be made this round")
+}
+
+func TestGame_ExecuteTurnForPlayer_WithBlocks(t *testing.T) {
+	// first, make sure that blocks are only allowed in games with blocks
+	opts := DefaultOptions()
+	opts.AllowBlocks = false
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+
+	game.idToParticipant[1].card = deck.CardFromString("2c")
+	game.idToParticipant[2].card = deck.CardFromString("3c")
+
+	execOK, execErr := createExecFunctions(t, game)
+	execOK(1, ActionTrade)
+	execErr(2, ActionBlockTrade, "blocks are not allowed")
+
+	// now test the actual blocks
+
+	opts.AllowBlocks = true
+	game, _ = NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4}, opts)
+
+	game.idToParticipant[1].card = deck.CardFromString("2c")
+	game.idToParticipant[2].card = deck.CardFromString("3c")
+	game.idToParticipant[2].card = deck.CardFromString("4c")
+	game.idToParticipant[2].card = deck.CardFromString("5c")
+
+	execOK, execErr = createExecFunctions(t, game)
+	execOK(1, ActionTrade)
+	execOK(2, ActionBlockTrade)
+	execErr(3, ActionBlockTrade, "there is not a pending trade to block")
+	execOK(3, ActionTrade)
+
+	game.idToParticipant[4].hasBlock = false
+	execErr(4, ActionBlockTrade, "you do not have a block")
 }
 
 func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {
@@ -412,4 +446,28 @@ func TestGame_getActionsForParticipant(t *testing.T) {
 	}, actions)
 
 	assert.True(t, game.isGameOver())
+}
+
+func TestGame_getActionsForParticipantWithBlocks(t *testing.T) {
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, Options{
+		Ante:        100,
+		Lives:       2,
+		Edition:     &StandardEdition{},
+		AllowBlocks: true,
+	})
+
+	a := assert.New(t)
+	a.True(game.idToParticipant[1].hasBlock)
+	a.True(game.idToParticipant[2].hasBlock)
+
+	execOK, _ := createExecFunctions(t, game)
+	execOK(1, ActionTrade)
+
+	game.idToParticipant[2].card = card("12c")
+	actions := game.getActionsForParticipant(game.idToParticipant[2])
+	a.Equal([]GameAction{ActionBlockTrade, ActionAccept}, actions)
+
+	game.idToParticipant[2].hasBlock = false
+	actions = game.getActionsForParticipant(game.idToParticipant[2])
+	a.Equal([]GameAction{ActionAccept}, actions)
 }

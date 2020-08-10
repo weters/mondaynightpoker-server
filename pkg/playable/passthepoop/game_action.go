@@ -28,6 +28,9 @@ const (
 	// ActionFlipKing is the action a player can take when they have a king and the previous
 	// player is attempting to swap
 	ActionFlipKing
+	// ActionBlockTrade happens when the preceding player has attempted to trade with the player,
+	// and the player plays the block chip
+	ActionBlockTrade
 	// ActionGoToDeck happens when the dealer announces their intention to go to the deck
 	ActionGoToDeck
 	ActionDrawFromDeck
@@ -57,6 +60,8 @@ func (g GameAction) String() string {
 		return "Accept Trade"
 	case ActionFlipKing:
 		return "Flip King"
+	case ActionBlockTrade:
+		return "Block Trade"
 	case ActionGoToDeck:
 		return "Go to Deck"
 	case ActionDrawFromDeck:

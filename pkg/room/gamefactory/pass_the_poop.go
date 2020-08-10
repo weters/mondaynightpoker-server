@@ -16,7 +16,13 @@ func (p passThePoopFactory) Details(additionalData playable.AdditionalData) (str
 		return "", 0, err
 	}
 
-	return fmt.Sprintf("Pass the Poop, %s Edition", opts.Edition.Name()), opts.Ante, nil
+	name := fmt.Sprintf("Pass the Poop, %s Edition", opts.Edition.Name())
+
+	if opts.AllowBlocks {
+		name += " (with Blocks)"
+	}
+
+	return name, opts.Ante, nil
 }
 
 func (p passThePoopFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
@@ -58,6 +64,9 @@ func (p passThePoopFactory) getOptions(additionalData playable.AdditionalData) (
 	if lives, _ := additionalData.GetInt("lives"); lives > 0 {
 		opts.Lives = lives
 	}
+
+	allowBlocks, _ := additionalData.GetBool("allowBlocks")
+	opts.AllowBlocks = allowBlocks
 
 	return opts, nil
 }

@@ -96,6 +96,16 @@ func (a AdditionalData) GetInt(key string) (int, bool) {
 	return int(floatVal), true
 }
 
+// GetBool returns a boolean value for the given key
+func (a AdditionalData) GetBool(key string) (bool, bool) {
+	boolVal, ok := a[key].(bool)
+	if !ok {
+		return false, false
+	}
+
+	return boolVal, true
+}
+
 // GetIntSlice returns a slice of integers
 func (a AdditionalData) GetIntSlice(key string) ([]int, bool) {
 	slice, ok := a[key].([]interface{})

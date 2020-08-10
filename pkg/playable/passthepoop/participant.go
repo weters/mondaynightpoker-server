@@ -24,6 +24,9 @@ type Participant struct {
 
 	// whether the card should be shown to the table
 	isFlipped bool
+
+	// hasBlock returns true if the player can block a trade
+	hasBlock bool
 }
 
 // newRound is called to reset the participant prior to a new round
@@ -64,6 +67,7 @@ type participantJSON struct {
 	Lives      int        `json:"lives"`
 	IsFlipped  bool       `json:"isFlipped"`
 	IsCardDead bool       `json:"isCardDead"`
+	HasBlock   bool       `json:"hasBlock"`
 	Card       *deck.Card `json:"card"`
 }
 
@@ -80,6 +84,7 @@ func (p *Participant) jsonObject() participantJSON {
 		Lives:      p.lives,
 		IsFlipped:  p.isFlipped,
 		IsCardDead: p.deadCard,
+		HasBlock:   p.hasBlock,
 		Card:       card,
 	}
 }

@@ -88,6 +88,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 			PlayerID: id,
 			lives:    options.Lives,
 			balance:  -1 * options.Ante,
+			hasBlock: options.AllowBlocks,
 		}
 		idToParticipants[id] = participants[i]
 	}
@@ -150,6 +151,8 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 	case ActionFlipKing:
 		p := g.idToParticipant[playerID]
 		g.sendLogMessage(playerID, "{} revealed a King", p.card)
+	case ActionBlockTrade:
+		g.sendLogMessage(playerID, "{} blocked the trade")
 	case ActionDrawFromDeck:
 		p := g.idToParticipant[playerID]
 		g.sendLogMessage(playerID, "{} pulled a card from the deck", p.card)
@@ -272,6 +275,23 @@ func (g *Game) executeTurnForPlayer(playerID int64, gameAction GameAction, gameA
 		participant.isFlipped = true
 		g.decisionIndex++
 		g.pendingTrade = false
+		return nil
+	case ActionBlockTrade:
+		if !g.pendingTrade {
+			return errors.New("there is not a pending trade to block")
+		}
+
+		if !g.options.AllowBlocks {
+			return errors.New("blocks are not allowed")
+		}
+
+		if !participant.hasBlock {
+			return errors.New("you do not have a block")
+		}
+
+		participant.hasBlock = false
+		g.pendingTrade = false
+		g.decisionIndex++
 		return nil
 	}
 
@@ -589,10 +609,14 @@ func (g *Game) getActionsForParticipant(participant *Participant) []GameAction {
 
 	if g.getCurrentTurn() == participant {
 		if g.pendingTrade {
+			if participant.hasBlock {
+				actions = append(actions, ActionBlockTrade)
+			}
+
 			if participant.card.Rank == deck.King {
-				actions = []GameAction{ActionFlipKing}
+				actions = append(actions, ActionFlipKing)
 			} else {
-				actions = []GameAction{ActionAccept}
+				actions = append(actions, ActionAccept)
 			}
 		} else {
 			if g.isDealersTurn() {

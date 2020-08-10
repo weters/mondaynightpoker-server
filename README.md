@@ -73,3 +73,4 @@ Variable | Default | Description
 `JWT_PRIVATE_KEY` | `.keys/private.key` | Path to the RSA 256 private key for JWT signing
 `RECAPTCHA_SECRET` | | Recaptcha v3 secret key
 `DISABLE_ACCESS_LOGS` | | Disables access logging. Only recommended for dev
+`START_GAME_DELAY` | `10` | How many seconds to wait after player starts a game

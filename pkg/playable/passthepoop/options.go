@@ -8,13 +8,16 @@ type Options struct {
 	Lives int
 	// Edition is the game variant
 	Edition Edition
+	// AllowBlocks will give the player one block to use
+	AllowBlocks bool
 }
 
 // DefaultOptions returns the default options
 func DefaultOptions() Options {
 	return Options{
-		Ante:    75,
-		Lives:   3,
-		Edition: &StandardEdition{},
+		Ante:        75,
+		Lives:       3,
+		Edition:     &StandardEdition{},
+		AllowBlocks: false,
 	}
 }
