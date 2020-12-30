@@ -37,11 +37,19 @@ func main() {
 
 		fmt.Printf("Created user %d\n", player.ID)
 
-		if err := player.SetIsSiteAdmin(context.Background(), true); err != nil {
-			logrus.WithError(err).Fatal("could not promote user to admin")
+		promote, err := getInput("Make admin (Y/n)")
+		if err != nil {
+			logrus.WithError(err).Fatal("could not get answer")
 		}
 
-		fmt.Printf("User promoted to admin\n")
+		if promote == "" || strings.ToLower(promote)[0] == 'y' {
+			if err := player.SetIsSiteAdmin(context.Background(), true); err != nil {
+				logrus.WithError(err).Fatal("could not promote user to admin")
+			}
+
+			fmt.Printf("User promoted to admin\n")
+		}
+
 	default:
 		logrus.Fatalf("unknown command: %s", *command)
 	}
@@ -93,4 +101,16 @@ func getEmail() string {
 
 		return str
 	}
+}
+
+func getInput(question string) (string, error) {
+	fmt.Printf("%s: ", question)
+	reader := bufio.NewReader(os.Stdin)
+	str, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	str = strings.TrimRight(str, "\r\n")
+
+	return str, nil
 }
