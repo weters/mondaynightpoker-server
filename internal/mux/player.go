@@ -97,6 +97,38 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 	}
 }
 
+// note: this requires admin auth
+func (m *Mux) getPlayerIDTable() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// ParseInt will always succeed
+		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+
+		player, err := table.GetPlayerByID(r.Context(), playerID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				writeJSONError(w, http.StatusNotFound, nil)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+
+		start, rows, err := parsePaginationOptions(r)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		tables, err := player.GetTables(r.Context(), start, rows)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, tables)
+	}
+}
+
 type postPlayerIDPayload struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`

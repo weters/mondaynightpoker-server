@@ -254,3 +254,46 @@ func Test_getPlayers(t *testing.T) {
 	assertGet(t, ts, "/player?start=-1", &err, 400, j1)
 	assert.Equal(t, "start cannot be less than zero", err.Message)
 }
+
+func TestMux_getPlayerIDTable(t *testing.T) {
+	a := assert.New(t)
+
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	p, _ := player()
+	p2, _ := player()
+
+	_ = p.SetIsSiteAdmin(context.Background(), true)
+
+	for i := 1; i <= 3; i++ {
+		tbl, _ := p.CreateTable(context.Background(), fmt.Sprintf("Test %d", i))
+		_, _ = p2.Join(context.Background(), tbl)
+
+		game, _ := tbl.CreateGame(context.Background(), fmt.Sprintf("test-%d", i))
+		_ = game.EndGame(context.Background(), nil, map[int64]int{
+			p.ID:  i,
+			p2.ID: -1 * i,
+		})
+	}
+
+	j, _ := jwt.Sign(p.ID)
+
+	path := fmt.Sprintf("/player/%d/table", p.ID)
+	var respObj []*table.WithBalance
+	assertGet(t, ts, path, &respObj, http.StatusOK, j)
+
+	a.Equal(3, len(respObj))
+	a.Equal("Test 3", respObj[0].Name)
+	a.Equal(3, respObj[0].Balance)
+
+	j2, _ := jwt.Sign(p2.ID)
+	assertGet(t, ts, path, nil, http.StatusForbidden, j2)
+
+	path = "/player/0/table"
+	assertGet(t, ts, path, nil, http.StatusNotFound, j)
+
+	path = fmt.Sprintf("/player/%d/table", p.ID)
+	assertGet(t, ts, path+"?rows=0", nil, http.StatusBadRequest, j)
+}

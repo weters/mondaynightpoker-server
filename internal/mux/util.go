@@ -21,9 +21,8 @@ import (
 const maxRows = 100
 const defaultRows = 100
 
-func parsePaginationOptions(r *http.Request) (int64, int, error) {
-	start := int64(0)
-	rows := defaultRows
+func parsePaginationOptions(r *http.Request) (start int64, rows int, err error) {
+	rows = defaultRows
 
 	if startStr := r.FormValue("start"); startStr != "" {
 		val, err := strconv.ParseInt(startStr, 10, 64)

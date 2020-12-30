@@ -90,6 +90,7 @@ func NewMux(version string) *Mux {
 		r := this.adminRouter
 		r.Methods(http.MethodPost).Path("/table").Handler(this.postTable())
 		r.Methods(http.MethodGet).Path("/player").Handler(this.getPlayer())
+		r.Methods(http.MethodGet).Path("/player/{id:[0-9]+}/table").Handler(this.getPlayerIDTable())
 	}
 
 	return this
