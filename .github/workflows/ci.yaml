@@ -52,7 +52,7 @@ jobs:
         run: git fetch --tags
 
       - name: Set Version
-        run: echo "::set-env name=VERSION::$(git describe --always)"
+        run: echo "VERSION=$(git describe --always) >> $GITHUB_ENV
 
       - name: Docker Log In
         run:  echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
