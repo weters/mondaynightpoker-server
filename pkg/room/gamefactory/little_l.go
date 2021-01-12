@@ -11,7 +11,7 @@ type littleLFactory struct{}
 
 func (l littleLFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts := getOptions(additionalData)
-	tradeIns, err := littlel.NewTradeIns(opts.TradeIns)
+	tradeIns, err := littlel.NewTradeIns(opts.TradeIns, opts.InitialDeal)
 	if err != nil {
 		return "", 0, err
 	}

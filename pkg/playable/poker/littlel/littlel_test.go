@@ -63,6 +63,13 @@ func TestNew(t *testing.T) {
 	assert.EqualError(t, err, "invalid trade-in option: 8")
 	assert.Nil(t, game)
 
+	opts.InitialDeal = 3
+	opts.TradeIns = []int{4}
+	game, err = NewGame(logrus.StandardLogger(), playerIDs, opts)
+	assert.EqualError(t, err, "invalid trade-in option: 4")
+	assert.Nil(t, game)
+
+	opts.InitialDeal = 4
 	opts.TradeIns = []int{0, 1, 2, 3, 4}
 
 	game, err = NewGame(logrus.StandardLogger(), []int64{1}, opts)

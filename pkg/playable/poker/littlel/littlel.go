@@ -80,7 +80,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		idToParticipant[id] = newParticipant(id, options.Ante)
 	}
 
-	tradeIns, err := NewTradeIns(options.TradeIns)
+	tradeIns, err := NewTradeIns(options.TradeIns, options.InitialDeal)
 	if err != nil {
 		return nil, err
 	}

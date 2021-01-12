@@ -15,7 +15,7 @@ type TradeIns struct {
 }
 
 // NewTradeIns returns a new TradeIns object
-func NewTradeIns(count []int) (*TradeIns, error) {
+func NewTradeIns(count []int, initialDeal int) (*TradeIns, error) {
 	if len(count) == 0 {
 		return &TradeIns{
 			tradeInMap: map[int]bool{0: true},
@@ -26,7 +26,7 @@ func NewTradeIns(count []int) (*TradeIns, error) {
 	// get unique list
 	countMap := make(map[int]bool)
 	for _, c := range count {
-		if c > 4 {
+		if c > initialDeal {
 			return nil, fmt.Errorf("invalid trade-in option: %d", c)
 		}
 
