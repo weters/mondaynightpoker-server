@@ -16,7 +16,7 @@ func (l littleLFactory) Details(additionalData playable.AdditionalData) (string,
 		return "", 0, err
 	}
 
-	return fmt.Sprintf("Little L (trade: %s)", tradeIns), opts.Ante, nil
+	return fmt.Sprintf("%d-Card Little L (trade: %s)", opts.InitialDeal, tradeIns), opts.Ante, nil
 }
 
 func (l littleLFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {

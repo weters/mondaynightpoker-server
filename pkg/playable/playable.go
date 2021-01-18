@@ -108,19 +108,14 @@ func (a AdditionalData) GetBool(key string) (bool, bool) {
 
 // GetIntSlice returns a slice of integers
 func (a AdditionalData) GetIntSlice(key string) ([]int, bool) {
-	slice, ok := a[key].([]interface{})
+	slice, ok := a[key].([]float64)
 	if !ok {
 		return nil, false
 	}
 
 	ints := make([]int, len(slice))
 	for i, val := range slice {
-		floatVal, ok := val.(float64)
-		if !ok {
-			return nil, false
-		}
-
-		ints[i] = int(floatVal)
+		ints[i] = int(val)
 	}
 
 	return ints, true
