@@ -108,17 +108,27 @@ func (a AdditionalData) GetBool(key string) (bool, bool) {
 
 // GetIntSlice returns a slice of integers
 func (a AdditionalData) GetIntSlice(key string) ([]int, bool) {
-	slice, ok := a[key].([]float64)
-	if !ok {
-		return nil, false
+	switch slice := a[key].(type) {
+	case []float64:
+		ints := make([]int, len(slice))
+		for i, val := range slice {
+			ints[i] = int(val)
+		}
+		return ints, true
+	case []interface{}:
+		ints := make([]int, len(slice))
+		for i, val := range slice {
+			floatVal, ok := val.(float64)
+			if !ok {
+				return nil, false
+			}
+
+			ints[i] = int(floatVal)
+		}
+		return ints, true
 	}
 
-	ints := make([]int, len(slice))
-	for i, val := range slice {
-		ints[i] = int(val)
-	}
-
-	return ints, true
+	return nil, false
 }
 
 // SimpleLogMessage returns a new LogMessage
