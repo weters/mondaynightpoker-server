@@ -131,7 +131,8 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			Community:    g.GetCommunityCards(),
 			Winners:      winners,
 		},
-		Actions: g.getActionsForPlayer(playerID),
+		Actions:       g.getActionsForPlayer(playerID),
+		FutureActions: g.getFutureActionsForPlayer(playerID),
 	}
 
 	for _, id := range g.playerIDs {

@@ -423,6 +423,57 @@ func (g *Game) CanRevealCards() bool {
 	return g.round >= roundRevealWinner
 }
 
+// playerIsPendingTurn will return true if the player still has to make a decision in the current round
+func (g *Game) playerIsPendingTurn(playerID int64) bool {
+	if g.GetCurrentTurn() == nil {
+		return false
+	}
+
+	player, ok := g.idToParticipant[playerID]
+	if !ok {
+		return false
+	}
+
+	if player.didFold {
+		return false
+	}
+
+	playerIndex := -1
+	for i, pid := range g.playerIDs {
+		if pid == playerID {
+			playerIndex = i
+			break
+		}
+	}
+
+	if playerIndex < 0 {
+		return false
+	}
+
+	playerIndex -= g.decisionStartIndex
+	if playerIndex < 0 {
+		playerIndex += len(g.playerIDs)
+	}
+
+	return playerIndex > g.decisionCount
+}
+
+func (g *Game) getFutureActionsForPlayer(playerID int64) []Action {
+	if !g.playerIsPendingTurn(playerID) {
+		return nil
+	}
+
+	if g.round == roundTradeIn {
+		return []Action{ActionTrade}
+	}
+
+	if g.currentBet == 0 {
+		return []Action{ActionCheck, ActionFold}
+	}
+
+	return []Action{ActionCall, ActionFold}
+}
+
 func (g *Game) getActionsForPlayer(playerID int64) []Action {
 	p, ok := g.idToParticipant[playerID]
 	if !ok {

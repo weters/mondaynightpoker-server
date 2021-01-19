@@ -32,7 +32,8 @@ type GameState struct {
 
 // State represents the state of the game and the state of the current player
 type State struct {
-	Participant *participantJSON `json:"participant"`
-	GameState   *GameState       `json:"gameState"`
-	Actions     []Action         `json:"actions"`
+	Participant   *participantJSON `json:"participant"`
+	GameState     *GameState       `json:"gameState"`
+	Actions       []Action         `json:"actions"`
+	FutureActions []Action         `json:"futureActions"`
 }

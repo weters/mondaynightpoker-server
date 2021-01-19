@@ -430,3 +430,59 @@ ForLoop:
 	assert.Equal(t, []int64{3}, msg[2].PlayerIDs)
 	assert.Equal(t, "{} had a Three of a kind and lost ${25}", msg[2].Message)
 }
+
+func TestGame_playerIsPendingTurn(t *testing.T) {
+	a := assert.New(t)
+
+	opts := DefaultOptions()
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5, 6}, opts)
+	a.NoError(err)
+	a.NotNil(game)
+
+	a.False(game.playerIsPendingTurn(1))
+	a.True(game.playerIsPendingTurn(2))
+	a.True(game.playerIsPendingTurn(3))
+	a.True(game.playerIsPendingTurn(4))
+	a.True(game.playerIsPendingTurn(5))
+	a.True(game.playerIsPendingTurn(6))
+
+	game.decisionStartIndex = 2
+	game.decisionCount = 2
+
+	a.True(game.playerIsPendingTurn(1))
+	a.True(game.playerIsPendingTurn(2))
+	a.False(game.playerIsPendingTurn(3))
+	a.False(game.playerIsPendingTurn(4))
+	a.False(game.playerIsPendingTurn(5))
+	a.True(game.playerIsPendingTurn(6))
+
+	game.idToParticipant[1].didFold = true
+	a.False(game.playerIsPendingTurn(1))
+
+	game.decisionCount = 999
+	for _, id := range game.playerIDs {
+		a.False(game.playerIsPendingTurn(id))
+	}
+}
+
+func TestGame_getFutureActionsForPlayer(t *testing.T) {
+	a := assert.New(t)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+	a.Nil(game.getFutureActionsForPlayer(1))
+	a.Equal(game.getFutureActionsForPlayer(2), []Action{ActionTrade})
+	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionTrade})
+
+	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
+	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
+	_ = game.tradeCardsForParticipant(game.idToParticipant[3], []*deck.Card{})
+	_ = game.NextRound()
+
+	a.Nil(game.getFutureActionsForPlayer(1))
+	a.Equal(game.getFutureActionsForPlayer(2), []Action{ActionCheck, ActionFold})
+	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionCheck, ActionFold})
+
+	_ = game.ParticipantBets(game.idToParticipant[1], game.options.Ante)
+	a.Nil(game.getFutureActionsForPlayer(1))
+	a.Nil(game.getFutureActionsForPlayer(2))
+	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionCall, ActionFold})
+}
