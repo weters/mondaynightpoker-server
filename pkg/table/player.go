@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"mondaynightpoker-server/pkg/db"
+	"strconv"
 	"time"
 
 	"github.com/lib/pq"
@@ -143,6 +144,22 @@ RETURNING ` + playerColumns
 	return player, nil
 }
 
+// SetPassword will set a new password
+func (p *Player) SetPassword(password string) error {
+	newHash, err := argon2id.DefaultHashPassword(password)
+	if err != nil {
+		return err
+	}
+
+	const query = `
+UPDATE players
+SET password_hash = $1, updated = (NOW() AT TIME ZONE 'UTC')
+WHERE id = $2`
+
+	_, err = db.Instance().Exec(query, newHash, p.ID)
+	return err
+}
+
 // GetPlayerTable gets the PlayerTable record from for the associated table
 func (p *Player) GetPlayerTable(ctx context.Context, table *Table) (*PlayerTable, error) {
 	const query = `
@@ -245,16 +262,7 @@ LIMIT $3`
 	return records, nil
 }
 
-// GetPlayers returns a list of players
-func GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
-	const query = `
-SELECT ` + playerColumns + `
-FROM players
-ORDER BY id ASC
-OFFSET $1
-LIMIT $2`
-
-	rows, err := db.Instance().QueryContext(ctx, query, offset, limit)
+func getPlayers(rows *sql.Rows, err error) ([]*Player, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -270,4 +278,42 @@ LIMIT $2`
 	}
 
 	return players, nil
+}
+
+// GetPlayersWithSearch will return a list of players match the specified search string
+func GetPlayersWithSearch(ctx context.Context, search string, offset int64, limit int) ([]*Player, error) {
+	if search == "" {
+		return GetPlayers(ctx, offset, limit)
+	}
+
+	if searchInt, _ := strconv.ParseInt(search, 10, 64); searchInt > 0 {
+		const query = `
+SELECT ` + playerColumns + `
+FROM players
+WHERE id = $1`
+
+		return getPlayers(db.Instance().QueryContext(ctx, query, searchInt))
+	}
+
+	const query = `
+SELECT ` + playerColumns + `
+FROM players
+WHERE display_name LIKE $1 || '%' OR email LIKE $1 || '%'
+ORDER BY id ASC
+OFFSET $2
+LIMIT $3`
+
+	return getPlayers(db.Instance().QueryContext(ctx, query, search, offset, limit))
+}
+
+// GetPlayers returns a list of players
+func GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
+	const query = `
+SELECT ` + playerColumns + `
+FROM players
+ORDER BY id ASC
+OFFSET $1
+LIMIT $2`
+
+	return getPlayers(db.Instance().QueryContext(ctx, query, offset, limit))
 }

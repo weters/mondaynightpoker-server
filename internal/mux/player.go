@@ -2,6 +2,7 @@ package mux
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
@@ -261,7 +262,7 @@ func (m *Mux) getPlayer() http.HandlerFunc {
 			return
 		}
 
-		players, err := table.GetPlayers(r.Context(), offset, limit)
+		players, err := table.GetPlayersWithSearch(r.Context(), r.FormValue("search"), offset, limit)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -276,5 +277,56 @@ func (m *Mux) getPlayer() http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, adminPlayers)
+	}
+}
+
+type adminPostPlayerIDRequest struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
+}
+
+func (m *Mux) postAdminPlayerID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+		player, err := table.GetPlayerByID(r.Context(), playerID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				writeJSONError(w, http.StatusNotFound, nil)
+				return
+			}
+
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		if r.Header.Get("content-type") != "application/json" {
+			writeJSONError(w, http.StatusUnsupportedMediaType, nil)
+			return
+		}
+
+		var payload adminPostPlayerIDRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		switch payload.Key {
+		case "password":
+			value, ok := payload.Value.(string)
+			if !ok {
+				writeJSONError(w, http.StatusBadRequest, errors.New("password must be a string"))
+				return
+			}
+
+			if err := player.SetPassword(value); err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err)
+				return
+			}
+		default:
+			writeJSONError(w, http.StatusBadRequest, errors.New("bad payload"))
+			return
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
 	}
 }

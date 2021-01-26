@@ -250,6 +250,13 @@ func Test_getPlayers(t *testing.T) {
 	assert.Equal(t, 4, len(players))
 	assert.NotEmpty(t, players[0].Email)
 
+	players = make([]*playerWithEmail, 0)
+	partialEmail := p1.Email
+	partialEmail = partialEmail[0 : len(partialEmail)-3]
+	assertGet(t, ts, "/player?start=0&rows=4&search="+partialEmail, &players, 200, j1)
+	assert.Equal(t, 1, len(players))
+	assert.Equal(t, p1.Email, players[0].Email)
+
 	var err errorResponse
 	assertGet(t, ts, "/player?start=-1", &err, 400, j1)
 	assert.Equal(t, "start cannot be less than zero", err.Message)
@@ -296,4 +303,43 @@ func TestMux_getPlayerIDTable(t *testing.T) {
 
 	path = fmt.Sprintf("/player/%d/table", p.ID)
 	assertGet(t, ts, path+"?rows=0", nil, http.StatusBadRequest, j)
+}
+
+func TestMux_postAdminPlayerID(t *testing.T) {
+	a := assert.New(t)
+
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	p1, j1 := player()
+	p2, j2 := player()
+
+	_ = p1.SetIsSiteAdmin(context.Background(), true)
+
+	var respObj map[string]string
+	assertPost(t, ts, fmt.Sprintf("/admin/player/%d", p1.ID), adminPostPlayerIDRequest{
+		Key:   "password",
+		Value: "new-pw",
+	}, &respObj, http.StatusOK, j1)
+	a.Equal("OK", respObj["status"])
+
+	respObj = map[string]string{}
+	assertPost(t, ts, fmt.Sprintf("/admin/player/%d", p2.ID), adminPostPlayerIDRequest{
+		Key:   "password",
+		Value: "new-pw",
+	}, &respObj, http.StatusOK, j1)
+	a.Equal("OK", respObj["status"])
+
+	var errResp errorResponse
+	assertPost(t, ts, fmt.Sprintf("/admin/player/%d", p1.ID), map[string]string{}, &errResp, http.StatusBadRequest, j1)
+	a.Equal(errorResponse{
+		Message:    "bad payload",
+		StatusCode: http.StatusBadRequest,
+	}, errResp)
+
+	assertPost(t, ts, fmt.Sprintf("/admin/player/%d", p1.ID), adminPostPlayerIDRequest{
+		Key:   "password",
+		Value: "new-pw",
+	}, nil, http.StatusForbidden, j2)
 }

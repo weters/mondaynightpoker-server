@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"mondaynightpoker-server/internal/util"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -185,7 +186,7 @@ func TestPlayer_Save(t *testing.T) {
 
 func TestGetPlayers(t *testing.T) {
 	_ = player()
-	_ = player()
+	p := player()
 	_ = player()
 	_ = player()
 
@@ -193,7 +194,38 @@ func TestGetPlayers(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(players), 4)
 
+	players, err = GetPlayersWithSearch(cbg, "", 0, 4)
+	assert.NoError(t, err)
+	assert.Equal(t, len(players), 4)
+
 	players, err = GetPlayers(cbg, 1, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, len(players), 1)
+
+	players, err = GetPlayersWithSearch(cbg, strconv.FormatInt(p.ID, 10), 0, 10)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(players))
+
+	players, err = GetPlayersWithSearch(cbg, "test-", 0, 4)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, len(players))
+
+	players, err = GetPlayersWithSearch(cbg, p.Email, 0, 4)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(players))
+}
+
+func TestPlayer_SetPassword(t *testing.T) {
+	const newPassword = "my-new-password"
+	a := assert.New(t)
+	p := player()
+	player, err := GetPlayerByEmailAndPassword(context.Background(), p.Email, newPassword)
+	a.Nil(player)
+	a.EqualError(err, "invalid email address and/or password")
+
+	a.NoError(p.SetPassword(newPassword))
+
+	player, err = GetPlayerByEmailAndPassword(context.Background(), p.Email, newPassword)
+	a.NotNil(player)
+	a.NoError(err)
 }
