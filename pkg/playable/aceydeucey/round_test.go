@@ -184,6 +184,35 @@ func TestRound_setAce_failConditions(t *testing.T) {
 	a.EqualError(r.setAce(false), "round is over")
 }
 
+func TestRound_roundState(t *testing.T) {
+	a := assert.New(t)
+	r := newRound()
+
+	a.Equal(roundStateStart, r.getState())
+
+	r.Games[0].FirstCard = deck.CardFromString("8s")
+	a.Equal(roundStateFirstCard, r.getState())
+
+	r.Games[0].FirstCard = deck.CardFromString("14s")
+	a.Equal(roundStatePendingAceDecision, r.getState())
+	r.Games[0].FirstCard.SetBit(aceStateHigh)
+	a.Equal(roundStateFirstCard, r.getState())
+
+	_, _ = r.addCard(deck.CardFromString("13s"))
+	a.Equal(roundStateRoundOver, r.getState())
+
+	r = newRound()
+	r.Games[0].FirstCard = deck.CardFromString("5s")
+	r.Games[0].LastCard = deck.CardFromString("8s")
+	a.Equal(roundStatePendingBet, r.getState())
+
+	r = newRound()
+	assertAddCard(t, r, deck.CardFromString("5s"), addCardResponseOK)
+	assertAddCard(t, r, deck.CardFromString("5d"), addCardResponseDoubleGame)
+	assertAddCard(t, r, deck.CardFromString("6s"), addCardResponseFreeGame)
+	a.Equal(roundStateGameOver, r.getState())
+}
+
 func assertAddCard(t *testing.T, r *round, card *deck.Card, expResp addCardResponse, expErr ...string) {
 	t.Helper()
 

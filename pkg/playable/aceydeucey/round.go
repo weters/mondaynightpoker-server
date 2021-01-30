@@ -27,6 +27,28 @@ type round struct {
 	ActiveGameIndex int
 }
 
+type roundState int
+
+const (
+	// roundStateStart is before any cards have been dealt
+	roundStateStart roundState = iota
+
+	// roundStateFirstCard means only the first card has been dealt
+	roundStateFirstCard
+
+	// roundStatePendingAceDecision means the first card has been dealt, it's an ace, and the player needs to pick high/low
+	roundStatePendingAceDecision
+
+	// roundStatePendingBet means the last card has been dealt and we are waiting for participant to place bet
+	roundStatePendingBet
+
+	// roundStateGameOver means the game ended and there's still at least one more game to be played
+	roundStateGameOver
+
+	// roundStateRoundOver means all games have finished
+	roundStateRoundOver
+)
+
 // newRound returns a new round object
 func newRound() *round {
 	return &round{
@@ -219,4 +241,33 @@ func (r *round) setAce(highAce bool) error {
 
 	card.SetBit(bit)
 	return nil
+}
+
+func (r *round) getState() roundState {
+	if r.isRoundOver() {
+		return roundStateRoundOver
+	}
+
+	activeGame := r.Games[r.ActiveGameIndex]
+	if activeGame.isGameOver() {
+		return roundStateGameOver
+	}
+
+	if activeGame.FirstCard == nil {
+		return roundStateStart
+	}
+
+	if firstCard := activeGame.FirstCard; firstCard.Rank == deck.Ace && !firstCard.IsBitSet(aceStateLow) && !firstCard.IsBitSet(aceStateHigh) {
+		return roundStatePendingAceDecision
+	}
+
+	if activeGame.LastCard == nil {
+		return roundStateFirstCard
+	}
+
+	if activeGame.MiddleCard == nil {
+		return roundStatePendingBet
+	}
+
+	panic("did not account for this state")
 }
