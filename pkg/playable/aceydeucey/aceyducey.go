@@ -16,11 +16,10 @@ type AceyDeucey struct {
 	participants map[int64]*Participant
 	deck         *deck.Deck
 	logChan      chan []playable.LogMessage
-}
+	turnIndex    int
 
-// Options contains options for creating a new game of Acey Ducey
-type Options struct {
-	Ante int
+	pot        int
+	currentBet int
 }
 
 // NewGame returns a new game
@@ -39,7 +38,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 	}
 
 	if len(playerIDs) != len(idToParticipant) {
-		return nil, errors.New("duplicate players provided")
+		return nil, errors.New("duplicate players detected")
 	}
 
 	localPlayerIds := make([]int64, len(playerIDs))
@@ -49,38 +48,61 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 	d.Shuffle(seed)
 
 	return &AceyDeucey{
-		deck:         d,
 		options:      options,
 		playerIDs:    localPlayerIds,
 		participants: idToParticipant,
+		deck:         d,
 		logChan:      make(chan []playable.LogMessage, 256),
+		turnIndex:    0,
+		pot:          len(playerIDs) * options.Ante,
+		currentBet:   0,
 	}, nil
 }
 
 // Name returns the name of the game
-func (a AceyDeucey) Name() string {
+func (a *AceyDeucey) Name() string {
 	return "Acey Ducey"
 }
 
 // Action performs with a message
 // If playerResponse is not null, that's the response sent directly to the client
 // If updateState is true, it will trigger a state update for all connected clients
-func (a AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
+func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
 	panic("implement me")
 }
 
 // GetPlayerState returns the current state of the game for the player
-func (a AceyDeucey) GetPlayerState(playerID int64) (*playable.Response, error) {
+func (a *AceyDeucey) GetPlayerState(playerID int64) (*playable.Response, error) {
 	panic("implement me")
 }
 
 // GetEndOfGameDetails returns the details after a game is over
 // If the game is still in progress, nil will be returned and the second param will be false
-func (a AceyDeucey) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
+func (a *AceyDeucey) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
 	panic("implement me")
 }
 
 // LogChan should return a channel that a game will send log messages to
-func (a AceyDeucey) LogChan() <-chan []*playable.LogMessage {
+func (a *AceyDeucey) LogChan() <-chan []*playable.LogMessage {
 	panic("implement me")
+}
+
+func (a *AceyDeucey) getCurrentTurn() *Participant {
+	id := a.playerIDs[a.turnIndex]
+	participant, ok := a.participants[id]
+	if !ok {
+		return nil
+	}
+
+	return participant
+}
+
+func (a *AceyDeucey) nextTurn() {
+	a.turnIndex++
+	a.turnIndex = a.turnIndex % len(a.playerIDs)
+}
+
+// IsGameOver returns true if the pot is empty
+func (a *AceyDeucey) IsGameOver() bool {
+	return a.pot == 0
 }

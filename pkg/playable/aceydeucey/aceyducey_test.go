@@ -17,6 +17,10 @@ func TestNewGame(t *testing.T) {
 	a.Nil(game)
 	a.EqualError(err, "ante must be > 0")
 
+	game, err = NewGame(logrus.StandardLogger(), []int64{1, 2, 1}, Options{Ante: 25})
+	a.Nil(game)
+	a.EqualError(err, "duplicate players detected")
+
 	game, err = NewGame(logrus.StandardLogger(), []int64{1, 2}, Options{Ante: 25})
 	a.NotNil(game)
 	a.NoError(err)
@@ -26,4 +30,17 @@ func TestNewGame(t *testing.T) {
 	a.Equal(-25, game.participants[1].balance)
 	a.Equal(int64(2), game.participants[2].playerID)
 	a.Equal(-25, game.participants[2].balance)
+}
+
+func TestAceyDeucey_getCurrentTurn(t *testing.T) {
+	a := assert.New(t)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+	a.Equal(game.participants[1], game.getCurrentTurn())
+	a.Equal(game.participants[1], game.getCurrentTurn())
+	game.nextTurn()
+	a.Equal(game.participants[2], game.getCurrentTurn())
+	game.nextTurn()
+	a.Equal(game.participants[3], game.getCurrentTurn())
+	game.nextTurn()
+	a.Equal(game.participants[1], game.getCurrentTurn())
 }
