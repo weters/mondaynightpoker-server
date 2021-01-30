@@ -2,6 +2,7 @@ package aceydeucey
 
 import (
 	"errors"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
@@ -18,8 +19,8 @@ type AceyDeucey struct {
 	logChan      chan []playable.LogMessage
 	turnIndex    int
 
-	pot        int
-	currentBet int
+	pot          int
+	currentRound *round
 }
 
 // NewGame returns a new game
@@ -47,7 +48,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 	d := deck.New()
 	d.Shuffle(seed)
 
-	return &AceyDeucey{
+	a := &AceyDeucey{
 		options:      options,
 		playerIDs:    localPlayerIds,
 		participants: idToParticipant,
@@ -55,8 +56,13 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 		logChan:      make(chan []playable.LogMessage, 256),
 		turnIndex:    0,
 		pot:          len(playerIDs) * options.Ante,
-		currentBet:   0,
-	}, nil
+	}
+
+	if err := a.newRound(); err != nil {
+		return nil, err
+	}
+
+	return a, nil
 }
 
 // Name returns the name of the game
@@ -68,6 +74,32 @@ func (a *AceyDeucey) Name() string {
 // If playerResponse is not null, that's the response sent directly to the client
 // If updateState is true, it will trigger a state update for all connected clients
 func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
+	actions := a.getActionsForParticipant(playerID)
+	action, err := ActionFromString(message.Subject)
+	if err != nil {
+		return nil, false, err
+	}
+
+	isValidAction := false
+	for _, validAction := range actions {
+		if action == validAction {
+			isValidAction = true
+			break
+		}
+	}
+
+	if !isValidAction {
+		return nil, false, fmt.Errorf("you cannot perform the action: %s", action.String())
+	}
+
+	switch action {
+	case ActionPickAceLow:
+	case ActionPickAceHigh:
+	case ActionPass:
+	case ActionBet:
+	case ActionContinue:
+	}
+
 	panic("implement me")
 }
 
@@ -102,7 +134,20 @@ func (a *AceyDeucey) nextTurn() {
 	a.turnIndex = a.turnIndex % len(a.playerIDs)
 }
 
-// IsGameOver returns true if the pot is empty
-func (a *AceyDeucey) IsGameOver() bool {
+// isGameOver returns true if the pot is empty
+func (a *AceyDeucey) isGameOver() bool {
 	return a.pot == 0
+}
+
+func (a *AceyDeucey) newRound() error {
+	a.currentRound = newRound()
+	return a.advance()
+}
+
+// advance will
+func (a *AceyDeucey) advance() error {
+	if a.isGameOver() {
+		return fmt.Errorf("%s is over", a.Name())
+	}
+	return nil
 }

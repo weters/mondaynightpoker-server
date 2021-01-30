@@ -44,3 +44,15 @@ func TestAceyDeucey_getCurrentTurn(t *testing.T) {
 	game.nextTurn()
 	a.Equal(game.participants[1], game.getCurrentTurn())
 }
+
+func TestAceyDeucey_isGameOver(t *testing.T) {
+	a := assert.New(t)
+
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
+	a.NoError(err)
+	a.NotNil(game)
+
+	a.False(game.isGameOver())
+	game.pot = 0
+	a.True(game.isGameOver())
+}

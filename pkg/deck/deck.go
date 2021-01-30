@@ -127,3 +127,19 @@ func (d *Deck) CanDraw(want int) bool {
 func (d *Deck) CardsLeft() int {
 	return len(d.Cards)
 }
+
+// RemoveCard will remove the specified card from the deck
+// Returns true if the card was removed, returns false if the card could not be found
+func (d *Deck) RemoveCard(targetCard *Card) bool {
+	newDeck := make([]*Card, 0, len(d.Cards))
+	for _, card := range d.Cards {
+		if !card.Equal(targetCard) {
+			newDeck = append(newDeck, card)
+		}
+	}
+
+	cardWasRemoved := len(newDeck) != len(d.Cards)
+
+	d.Cards = newDeck
+	return cardWasRemoved
+}

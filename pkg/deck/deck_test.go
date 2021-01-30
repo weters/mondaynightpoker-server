@@ -108,3 +108,15 @@ func TestDeck_ShuffleDiscards(t *testing.T) {
 	assert.True(t, d.Cards[2].Equal(c1))
 	assert.True(t, d.Cards[3].Equal(c3))
 }
+
+func TestDeck_RemoveCard(t *testing.T) {
+	a := assert.New(t)
+	d := New()
+	a.True(d.RemoveCard(CardFromString("5s")))
+	a.False(d.RemoveCard(CardFromString("5s")))
+	a.Equal(51, len(d.Cards))
+
+	a.True(d.RemoveCard(CardFromString("5c")))
+	a.False(d.RemoveCard(CardFromString("5c")))
+	a.Equal(50, len(d.Cards))
+}
