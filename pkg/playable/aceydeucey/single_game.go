@@ -14,15 +14,27 @@ type Bet struct {
 
 // SingleGame is an individual game of Acey Deucey
 type SingleGame struct {
-	FirstCard  *deck.Card `json:"firstCard"`
-	MiddleCard *deck.Card `json:"middleCard"`
-	LastCard   *deck.Card `json:"lastCard"`
-	Bet        Bet        `json:"bet"`
-	Adjustment int        `json:"adjustment"`
+	FirstCard  *deck.Card       `json:"firstCard"`
+	MiddleCard *deck.Card       `json:"middleCard"`
+	LastCard   *deck.Card       `json:"lastCard"`
+	Bet        Bet              `json:"bet"`
+	Adjustment int              `json:"adjustment"`
+	Result     SingleGameResult `json:"result"`
 
 	// isGameOver allows you to short-circuit the game over (i.e., free game)
 	gameOver bool
 }
+
+// SingleGameResult is the result of a single game
+type SingleGameResult string
+
+// SingleGameResult constants
+const (
+	SingleGameResultFreeGame SingleGameResult = "free-game"
+	SingleGameResultLost     SingleGameResult = "lost"
+	SingleGameResultPost     SingleGameResult = "post"
+	SingleGameResultWon      SingleGameResult = "won"
+)
 
 func newSingleGame() *SingleGame {
 	return &SingleGame{

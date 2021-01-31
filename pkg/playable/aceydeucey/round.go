@@ -140,7 +140,7 @@ func (r *Round) dealLastCard(card *deck.Card) error {
 
 	if math.Abs(float64(card.Rank-firstCardRank)) == 1 {
 		game.gameOver = true
-		r.finalizeGame(game, 0)
+		r.finalizeGame(game, SingleGameResultFreeGame, 0)
 		return nil
 	}
 
@@ -149,8 +149,9 @@ func (r *Round) dealLastCard(card *deck.Card) error {
 }
 
 // finalizeGame updates balances and sets the state
-func (r *Round) finalizeGame(g *SingleGame, adjustment int) {
+func (r *Round) finalizeGame(g *SingleGame, result SingleGameResult, adjustment int) {
 	g.Adjustment = adjustment
+	g.Result = result
 	r.Pot -= adjustment
 
 	// if this is the last game or the Pot is empty, end it
@@ -168,7 +169,7 @@ func (r *Round) dealMiddleCard(card *deck.Card) error {
 	firstCardRank := game.firstCardRank()
 
 	if card.Rank == firstCardRank || card.Rank == game.LastCard.Rank {
-		r.finalizeGame(game, -2*game.Bet.Amount)
+		r.finalizeGame(game, SingleGameResultPost, -2*game.Bet.Amount)
 		return nil
 	}
 
@@ -183,15 +184,15 @@ func (r *Round) dealMiddleCard(card *deck.Card) error {
 			halfPot := r.Pot / 2
 			halfPot -= halfPot % 25
 
-			r.finalizeGame(game, halfPot)
+			r.finalizeGame(game, SingleGameResultWon, halfPot)
 		} else {
-			r.finalizeGame(game, game.Bet.Amount)
+			r.finalizeGame(game, SingleGameResultWon, game.Bet.Amount)
 		}
 
 		return nil
 	}
 
-	r.finalizeGame(game, -1*game.Bet.Amount)
+	r.finalizeGame(game, SingleGameResultLost, -1*game.Bet.Amount)
 	return nil
 }
 
