@@ -9,6 +9,7 @@ import (
 // Action is an action a participant can take when it's their turn
 type Action int
 
+// MarshalJSON encodes the JSON
 func (a Action) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		ID   int    `json:"id"`

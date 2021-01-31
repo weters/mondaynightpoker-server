@@ -24,6 +24,7 @@ type AceyDeucey struct {
 	currentRound *Round
 }
 
+// Delay is how long we should wait before updating the game state
 func (a *AceyDeucey) Delay() time.Duration {
 	return time.Second
 }
@@ -65,10 +66,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 		pot:                 len(playerIDs) * options.Ante,
 	}
 
-	if err := a.newRound(); err != nil {
-		return nil, err
-	}
-
+	a.newRound()
 	return a, nil
 }
 
@@ -198,11 +196,11 @@ func (a *AceyDeucey) isGameOver() bool {
 	return a.pot == 0
 }
 
-func (a *AceyDeucey) newRound() error {
+func (a *AceyDeucey) newRound() {
 	a.currentRound = NewRound(a.deck, a.pot)
-	return nil
 }
 
+// Tick is called when the game state should advance
 func (a *AceyDeucey) Tick() (bool, error) {
 	switch a.currentRound.State {
 	case RoundStateStart:
@@ -234,9 +232,7 @@ func (a *AceyDeucey) Tick() (bool, error) {
 		participant.Balance += a.currentRound.ParticipantAdjustments()
 		if a.pot > 0 {
 			a.nextTurn()
-			if err := a.newRound(); err != nil {
-				return false, err
-			}
+			a.newRound()
 
 			return true, nil
 		}

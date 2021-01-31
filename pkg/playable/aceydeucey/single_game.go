@@ -4,8 +4,11 @@ import (
 	"mondaynightpoker-server/pkg/deck"
 )
 
+// Bet represents a bet
 type Bet struct {
-	Amount  int  `json:"amount"`
+	// Amount is the bet amount
+	Amount int `json:"amount"`
+	// HalfPot means that if they win, they win half the pot, not the amount
 	HalfPot bool `json:"halfPot"`
 }
 

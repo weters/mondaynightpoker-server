@@ -23,8 +23,10 @@ type Round struct {
 	deck            *deck.Deck
 }
 
+// RoundState is the state of the current round
 type RoundState string
 
+// RoundState constants
 const (
 	// roundStateStart is before any cards have been dealt
 	RoundStateStart RoundState = "start"
@@ -60,6 +62,7 @@ func NewRound(d *deck.Deck, startingPot int) *Round {
 	}
 }
 
+// DealCard deals a card in Acey Deucey
 func (r *Round) DealCard() error {
 	game, err := r.activeGame()
 	if err != nil {
