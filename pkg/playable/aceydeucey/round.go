@@ -1,7 +1,9 @@
 package aceydeucey
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"time"
@@ -17,13 +19,32 @@ const (
 
 // Round is a collection of one or more SingleGame
 type Round struct {
-	Games []*SingleGame `json:"games"`
-	State RoundState    `json:"state"`
-	Pot   int           `json:"pot"`
-
+	Games           []*SingleGame
+	State           RoundState
+	Pot             int
 	activeGameIndex int
-	deck            *deck.Deck
-	nextAction      *nextAction
+
+	deck       *deck.Deck
+	nextAction *nextAction
+}
+
+// MarshalJSON provides custom JSON marshalling for round
+func (r *Round) MarshalJSON() ([]byte, error) {
+	return json.Marshal(roundJSON{
+		Games:           r.Games,
+		State:           r.State,
+		Pot:             r.Pot,
+		ActiveGameIndex: r.activeGameIndex,
+		CardsRemaining:  r.deck.CardsLeft(),
+	})
+}
+
+type roundJSON struct {
+	Games           []*SingleGame `json:"games"`
+	State           RoundState    `json:"state"`
+	Pot             int           `json:"pot"`
+	ActiveGameIndex int           `json:"activeGameIndex"`
+	CardsRemaining  int           `json:"cardsRemaining"`
 }
 
 type nextAction struct {
@@ -78,8 +99,7 @@ func NewRound(d *deck.Deck, startingPot int) *Round {
 
 // DealCard deals a card in Acey Deucey
 func (r *Round) DealCard() error {
-	game, err := r.activeGame()
-	if err != nil {
+	if _, err := r.activeGame(); err != nil {
 		return err
 	}
 
@@ -88,30 +108,72 @@ func (r *Round) DealCard() error {
 		return err
 	}
 
-	if game.FirstCard == nil {
-		return r.dealFirstCard(card)
+	switch r.State {
+	case RoundStateStart:
+		r.dealFirstCard(card)
+	case RoundStateFirstCardDealt:
+		err = r.dealLastCard(card)
+	case RoundStateBetPlaced:
+		r.dealMiddleCard(card)
+	default:
+		err = fmt.Errorf("cannot deal card from state: %s", r.State)
+	}
+
+	if err != nil {
+		r.deck.UndoDraw(card)
+		return err
+	}
+
+	return nil
+}
+
+// SetBet will set an active bet
+func (r *Round) SetBet(bet int, isHalfPotBet bool) error {
+	game, err := r.activeGame()
+	if err != nil {
+		return err
 	}
 
 	if game.LastCard == nil {
-		return r.dealLastCard(card)
+		return errors.New("cannot bet yet")
 	}
 
-	return r.dealMiddleCard(card)
+	if game.Bet.Amount > 0 {
+		return errors.New("bet has already been made")
+	}
+
+	if bet > r.Pot {
+		return errors.New("bet must not exceed the Pot")
+	}
+
+	if isHalfPotBet {
+		if !r.canBetTheGap() {
+			return errors.New("bet the gap for half-pot requires a one-card gap")
+		}
+	}
+
+	game.Bet = Bet{
+		Amount:  bet,
+		HalfPot: isHalfPotBet,
+	}
+
+	r.State = RoundStateBetPlaced
+	return nil
 }
 
-func (r *Round) dealFirstCard(card *deck.Card) error {
+// dealFirstCard must only be called from DealCard()
+func (r *Round) dealFirstCard(card *deck.Card) {
 	game := r.Games[r.activeGameIndex]
 	game.FirstCard = card
 	if card.Rank == deck.Ace {
 		card.SetBit(aceStateUndecided)
 		r.State = RoundStatePendingAceDecision
-		return nil
 	}
 
 	r.State = RoundStateFirstCardDealt
-	return nil
 }
 
+// dealLastCard must only be called from DealCard()
 func (r *Round) dealLastCard(card *deck.Card) error {
 	game, err := r.activeGame()
 	if err != nil {
@@ -162,7 +224,8 @@ func (r *Round) finalizeGame(g *SingleGame, result SingleGameResult, adjustment 
 	}
 }
 
-func (r *Round) dealMiddleCard(card *deck.Card) error {
+// dealMiddleCard must only be called from DealCard()
+func (r *Round) dealMiddleCard(card *deck.Card) {
 	game := r.Games[r.activeGameIndex]
 	game.MiddleCard = card
 
@@ -170,7 +233,7 @@ func (r *Round) dealMiddleCard(card *deck.Card) error {
 
 	if card.Rank == firstCardRank || card.Rank == game.LastCard.Rank {
 		r.finalizeGame(game, SingleGameResultPost, -2*game.Bet.Amount)
-		return nil
+		return
 	}
 
 	lowCard, highCard := firstCardRank, game.LastCard.Rank
@@ -189,11 +252,10 @@ func (r *Round) dealMiddleCard(card *deck.Card) error {
 			r.finalizeGame(game, SingleGameResultWon, game.Bet.Amount)
 		}
 
-		return nil
+		return
 	}
 
 	r.finalizeGame(game, SingleGameResultLost, -1*game.Bet.Amount)
-	return nil
 }
 
 // drawCard will draw a card and it should always succeed
@@ -240,47 +302,9 @@ func (r *Round) canBetTheGap() bool {
 	return math.Abs(float64(game.firstCardRank()-game.LastCard.Rank)) == 2
 }
 
-func (r *Round) setBet(bet int, isHalfPotBet bool) error {
-	game, err := r.activeGame()
-	if err != nil {
-		return err
-	}
-
-	if game.LastCard == nil {
-		return errors.New("cannot bet yet")
-	}
-
-	if game.Bet.Amount > 0 {
-		return errors.New("bet has already been made")
-	}
-
-	if bet > r.Pot {
-		return errors.New("bet must not exceed the Pot")
-	}
-
-	if isHalfPotBet {
-		if !r.canBetTheGap() {
-			return errors.New("bet the gap for half-pot requires a one-card gap")
-		}
-	}
-
-	game.Bet = Bet{
-		Amount:  bet,
-		HalfPot: isHalfPotBet,
-	}
-
-	r.State = RoundStateBetPlaced
-	return nil
-}
-
 func (r *Round) nextGame() error {
-	if r.isRoundOver() {
-		return errorRoundIsOver
-	}
-
-	game := r.Games[r.activeGameIndex]
-	if !game.isGameOver() {
-		return errors.New("game is not over")
+	if r.State != RoundStateGameOver {
+		return fmt.Errorf("invalid state to move to next game: %s", r.State)
 	}
 
 	r.activeGameIndex++
@@ -293,7 +317,8 @@ func (r *Round) nextGame() error {
 	return nil
 }
 
-func (r *Round) setAce(highAce bool) error {
+// SetAce will set whether the first ace is low or high
+func (r *Round) SetAce(highAce bool) error {
 	game, err := r.activeGame()
 	if err != nil {
 		return err

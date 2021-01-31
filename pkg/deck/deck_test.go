@@ -120,3 +120,11 @@ func TestDeck_RemoveCard(t *testing.T) {
 	a.False(d.RemoveCard(CardFromString("5c")))
 	a.Equal(50, len(d.Cards))
 }
+
+func TestDeck_UndoDraw(t *testing.T) {
+	d := New()
+	d.Cards = CardsFromString("2c,3c,4c")
+	d.UndoDraw(CardFromString("14s"))
+
+	assert.Equal(t, "14s,2c,3c,4c", CardsToString(d.Cards))
+}

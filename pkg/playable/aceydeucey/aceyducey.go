@@ -104,13 +104,13 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 
 	switch action {
 	case ActionPickAceLow:
-		if err := round.setAce(false); err != nil {
+		if err := round.SetAce(false); err != nil {
 			return nil, false, err
 		}
 
 		return playable.OK(), true, nil
 	case ActionPickAceHigh:
-		if err := round.setAce(true); err != nil {
+		if err := round.SetAce(true); err != nil {
 			return nil, false, err
 		}
 
@@ -119,7 +119,7 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 		panic("implement me")
 	case ActionBetTheGap:
 		amount := a.options.Ante * 2
-		if err := round.setBet(amount, true); err != nil {
+		if err := round.SetBet(amount, true); err != nil {
 			return nil, false, err
 		}
 
@@ -131,7 +131,7 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 			return nil, false, errors.New("bet must be in multiples of 25 cents")
 		}
 
-		if err := round.setBet(amount, false); err != nil {
+		if err := round.SetBet(amount, false); err != nil {
 			return nil, false, err
 		}
 

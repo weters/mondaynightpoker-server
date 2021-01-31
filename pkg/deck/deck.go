@@ -118,6 +118,14 @@ func (d *Deck) Draw() (*Card, error) {
 	return card, nil
 }
 
+// UndoDraw will put the card back in the beginning of the deck
+func (d *Deck) UndoDraw(card *Card) {
+	cards := make([]*Card, len(d.Cards)+1)
+	cards[0] = card
+	copy(cards[1:], d.Cards)
+	d.Cards = cards
+}
+
 // CanDraw returns true if there are {want} cards left in the deck
 func (d *Deck) CanDraw(want int) bool {
 	return len(d.Cards) >= want

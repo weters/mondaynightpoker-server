@@ -1,6 +1,7 @@
 package aceydeucey
 
 import (
+	"github.com/google/uuid"
 	"mondaynightpoker-server/pkg/deck"
 )
 
@@ -14,6 +15,7 @@ type Bet struct {
 
 // SingleGame is an individual game of Acey Deucey
 type SingleGame struct {
+	UUID       string           `json:"uuid"`
 	FirstCard  *deck.Card       `json:"firstCard"`
 	MiddleCard *deck.Card       `json:"middleCard"`
 	LastCard   *deck.Card       `json:"lastCard"`
@@ -38,6 +40,7 @@ const (
 
 func newSingleGame() *SingleGame {
 	return &SingleGame{
+		UUID:       uuid.New().String(),
 		FirstCard:  nil,
 		MiddleCard: nil,
 		LastCard:   nil,
