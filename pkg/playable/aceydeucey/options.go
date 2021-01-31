@@ -1,6 +1,6 @@
 package aceydeucey
 
-// Options contains options for creating a new game of Acey Ducey
+// Options contains options for creating a new game of Acey Deucey
 type Options struct {
 	Ante           int
 	AllowPass      bool

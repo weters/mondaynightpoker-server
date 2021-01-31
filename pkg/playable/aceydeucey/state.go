@@ -2,8 +2,9 @@ package aceydeucey
 
 var config = map[string]interface{}{
 	"cardBitFields": map[int]string{
-		aceStateLow:  "low",
-		aceStateHigh: "high",
+		aceStateUndecided: "undecided",
+		aceStateLow:       "low",
+		aceStateHigh:      "high",
 	},
 }
 

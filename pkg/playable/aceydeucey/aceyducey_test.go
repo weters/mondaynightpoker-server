@@ -25,7 +25,7 @@ func TestNewGame(t *testing.T) {
 	a.NotNil(game)
 	a.NoError(err)
 
-	a.Equal("Acey Ducey", game.Name())
+	a.Equal("Acey Deucey", game.Name())
 	a.Equal(int64(1), game.participants[1].PlayerID)
 	a.Equal(-25, game.participants[1].Balance)
 	a.Equal(int64(2), game.participants[2].PlayerID)

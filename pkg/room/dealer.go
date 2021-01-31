@@ -96,11 +96,19 @@ func (d *Dealer) runLoop() {
 
 		select {
 		case <-ticker:
-			if game, ok := d.game.(playable.Tickable); ok {
-				if update, err := game.Tick(); err != nil {
-					logrus.WithError(err).Error("Tick() failed")
-				} else if update {
-					d.sendGameData()
+			if d.game != nil {
+				if game, ok := d.game.(playable.Tickable); ok {
+					if update, err := game.Tick(); err != nil {
+						logrus.WithError(err).Error("Tick() failed")
+					} else if update {
+						d.sendGameData()
+					}
+				}
+
+				if details, gameIsOver := d.game.GetEndOfGameDetails(); gameIsOver {
+					if err := d.endGame(d.game, details); err != nil {
+						logrus.WithError(err).Error("could end game")
+					}
 				}
 			}
 		case <-pendingGameTimer:
@@ -527,21 +535,10 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			}
 
 			if details, isOver := game.GetEndOfGameDetails(); isOver {
-				record, err := d.table.CreateGame(context.Background(), game.Name())
-				if err != nil {
-					logrus.WithError(err).Error("could not create game")
+				if err := d.endGame(game, details); err != nil {
 					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
-
-				if err := record.EndGame(context.Background(), details.Log, details.BalanceAdjustments); err != nil {
-					logrus.WithError(err).Error("could not save game")
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				d.unsetGame()
-				d.stateChanged <- stateGameEnded
 			}
 
 			return
@@ -549,6 +546,21 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 		logrus.WithField("msg", msg).Warn("unknown message")
 	}
+}
+
+func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetails) error {
+	record, err := d.table.CreateGame(context.Background(), game.Name())
+	if err != nil {
+		return fmt.Errorf("could not create game: %w", err)
+	}
+
+	if err := record.EndGame(context.Background(), details.Log, details.BalanceAdjustments); err != nil {
+		return fmt.Errorf("could not save game: %w", err)
+	}
+
+	d.unsetGame()
+	d.stateChanged <- stateGameEnded
+	return nil
 }
 
 func (d *Dealer) getNextPlayersIDsForGame() ([]int64, error) {

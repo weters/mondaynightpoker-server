@@ -11,7 +11,7 @@ import (
 
 var seed = int64(0)
 
-// AceyDeucey is a game of Acey Ducey
+// AceyDeucey is a game of Acey Deucey
 type AceyDeucey struct {
 	options             Options
 	orderedParticipants []*Participant
@@ -53,8 +53,6 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 
 	d := deck.New()
 	d.Shuffle(seed)
-	d.Cards[0] = deck.CardFromString("13c")
-	d.Cards[1] = deck.CardFromString("12c")
 
 	a := &AceyDeucey{
 		options:             options,
@@ -72,7 +70,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 
 // Name returns the name of the game
 func (a *AceyDeucey) Name() string {
-	return "Acey Ducey"
+	return "Acey Deucey"
 }
 
 // Key returns a unique key
@@ -156,7 +154,7 @@ func (a *AceyDeucey) GetPlayerState(playerID int64) (*playable.Response, error) 
 // GetEndOfGameDetails returns the details after a game is over
 // If the game is still in progress, nil will be returned and the second param will be false
 func (a *AceyDeucey) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	if !a.isGameOver() {
+	if a.currentRound.State != RoundStateComplete {
 		return nil, false
 	}
 
@@ -200,6 +198,25 @@ func (a *AceyDeucey) newRound() {
 	a.currentRound = NewRound(a.deck, a.pot)
 }
 
+func (a *AceyDeucey) endRound() error {
+	participant := a.getCurrentTurn()
+	if participant == nil {
+		return errors.New("no activate participant")
+	}
+
+	a.pot = a.currentRound.Pot
+	participant.Balance += a.currentRound.ParticipantAdjustments()
+	if a.pot > 0 {
+		a.nextTurn()
+		a.newRound()
+
+		return nil
+	}
+
+	a.currentRound.setNextState(RoundStateComplete, time.Second*2)
+	return nil
+}
+
 // Tick is called when the game state should advance
 func (a *AceyDeucey) Tick() (bool, error) {
 	switch a.currentRound.State {
@@ -223,21 +240,13 @@ func (a *AceyDeucey) Tick() (bool, error) {
 		return true, nil
 	case RoundStateRoundOver:
 		logrus.Info(a.currentRound.State)
-		participant := a.getCurrentTurn()
-		if participant == nil {
-			return false, errors.New("no activate participant")
-		}
-
-		a.pot = a.currentRound.Pot
-		participant.Balance += a.currentRound.ParticipantAdjustments()
-		if a.pot > 0 {
-			a.nextTurn()
-			a.newRound()
-
-			return true, nil
+		if err := a.endRound(); err != nil {
+			return false, err
 		}
 
 		return true, nil
+	case RoundStateWaiting:
+		a.currentRound.checkWaiting()
 	}
 
 	return false, nil

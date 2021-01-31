@@ -4,12 +4,14 @@ import (
 	"errors"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
+	"time"
 )
 
 var errorRoundIsOver = errors.New("round is over")
 
 const (
-	aceStateLow = 1 << iota
+	aceStateUndecided = 1 << iota
+	aceStateLow
 	aceStateHigh
 )
 
@@ -21,6 +23,12 @@ type Round struct {
 
 	activeGameIndex int
 	deck            *deck.Deck
+	nextAction      *nextAction
+}
+
+type nextAction struct {
+	Time      time.Time
+	NextState RoundState
 }
 
 // RoundState is the state of the current round
@@ -28,26 +36,32 @@ type RoundState string
 
 // RoundState constants
 const (
-	// roundStateStart is before any cards have been dealt
+	// RoundStateStart is before any cards have been dealt
 	RoundStateStart RoundState = "start"
 
-	// roundStateFirstCard means only the first card has been dealt
+	// RoundStateFirstCard means only the first card has been dealt
 	RoundStateFirstCardDealt RoundState = "first-card-dealt"
 
-	// roundStatePendingAceDecision means the first card has been dealt, it's an ace, and the player needs to pick high/low
+	// RoundStatePendingAceDecision means the first card has been dealt, it's an ace, and the player needs to pick high/low
 	RoundStatePendingAceDecision RoundState = "pending-ace-decision"
 
-	// roundStatePendingBet means the last card has been dealt and we are waiting for participant to place bet
+	// RoundStatePendingBet means the last card has been dealt and we are waiting for participant to place bet
 	RoundStatePendingBet RoundState = "pending-bet"
 
-	// RoundStateBet means a bet has been successfully placed
+	// RoundStateBetPlaced means a bet has been successfully placed
 	RoundStateBetPlaced RoundState = "bet-placed"
 
-	// roundStateGameOver means the game ended and there's still at least one more game to be played
+	// RoundStateGameOver means the game ended and there's still at least one more game to be played
 	RoundStateGameOver RoundState = "game-over"
 
-	// roundStateRoundOver means all games have finished
+	// RoundStateRoundOver means all games have finished
 	RoundStateRoundOver RoundState = "round-over"
+
+	// RoundStateComplete means there are no more rounds to be played
+	RoundStateComplete RoundState = "complete"
+
+	// RoundStateWaiting means we are waiting until a time passes before proceeding
+	RoundStateWaiting RoundState = "waiting"
 )
 
 // NewRound returns a new Round object
@@ -89,6 +103,7 @@ func (r *Round) dealFirstCard(card *deck.Card) error {
 	game := r.Games[r.activeGameIndex]
 	game.FirstCard = card
 	if card.Rank == deck.Ace {
+		card.SetBit(aceStateUndecided)
 		r.State = RoundStatePendingAceDecision
 		return nil
 	}
@@ -140,9 +155,9 @@ func (r *Round) finalizeGame(g *SingleGame, adjustment int) {
 
 	// if this is the last game or the Pot is empty, end it
 	if r.activeGameIndex+1 == len(r.Games) || r.Pot == 0 {
-		r.State = RoundStateRoundOver
+		r.setNextState(RoundStateRoundOver, time.Second*1)
 	} else {
-		r.State = RoundStateGameOver
+		r.setNextState(RoundStateGameOver, time.Second*1)
 	}
 }
 
@@ -288,10 +303,11 @@ func (r *Round) setAce(highAce bool) error {
 		return errors.New("first card is not an ace")
 	}
 
-	if card.IsBitSet(aceStateLow) || card.IsBitSet(aceStateHigh) {
+	if !card.IsBitSet(aceStateUndecided) {
 		return errors.New("ace has already been decided")
 	}
 
+	card.UnsetBit(aceStateUndecided)
 	bit := aceStateLow
 	if highAce {
 		bit = aceStateHigh
@@ -341,4 +357,22 @@ func (r *Round) ParticipantAdjustments() int {
 	}
 
 	return adjustment
+}
+
+func (r *Round) setNextState(state RoundState, after time.Duration) {
+	r.nextAction = &nextAction{
+		Time:      time.Now().Add(after),
+		NextState: state,
+	}
+
+	r.State = RoundStateWaiting
+}
+
+func (r *Round) checkWaiting() {
+	if r.nextAction != nil {
+		if time.Now().After(r.nextAction.Time) {
+			r.State = r.nextAction.NextState
+			r.nextAction = nil
+		}
+	}
 }
