@@ -2,14 +2,14 @@ package aceydeucey
 
 // Participant represents an active particpant in the game
 type Participant struct {
-	playerID int64
-	balance  int
+	PlayerID int64 `json:"playerId"`
+	Balance  int   `json:"balance"`
 }
 
 // NewParticipant returns a new participant
 func NewParticipant(playerID int64, ante int) *Participant {
 	return &Participant{
-		playerID: playerID,
-		balance:  -1 * ante,
+		PlayerID: playerID,
+		Balance:  -1 * ante,
 	}
 }

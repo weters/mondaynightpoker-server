@@ -9,7 +9,7 @@ import (
 func TestRound_addCard_standard(t *testing.T) {
 	a := assert.New(t)
 
-	r := newRound()
+	r := NewRound()
 	response, err := r.addCard(deck.CardFromString("3s"))
 	a.Equal(addCardResponseOK, response)
 	a.NoError(err)
@@ -55,7 +55,7 @@ func TestRound_addCard_standard(t *testing.T) {
 
 func TestRound_addCard_firstCardAce(t *testing.T) {
 	a := assert.New(t)
-	r := newRound()
+	r := NewRound()
 
 	resp, err := r.addCard(deck.CardFromString("14s"))
 	a.NoError(err)
@@ -84,7 +84,7 @@ func TestRound_addCard_firstCardAce(t *testing.T) {
 	a.NoError(err)
 	a.Equal(addCardResponseWon, resp)
 
-	r = newRound()
+	r = NewRound()
 	resp, err = r.addCard(deck.CardFromString("14s"))
 	a.Equal(addCardResponseWaitingOnAce, resp)
 	a.NoError(err)
@@ -99,35 +99,35 @@ func TestRound_addCard_firstCardAce(t *testing.T) {
 }
 
 func TestRound_addCard_freeGame(t *testing.T) {
-	r := newRound()
+	r := NewRound()
 	assertAddCard(t, r, deck.CardFromString("4s"), addCardResponseOK)
 	assertAddCard(t, r, deck.CardFromString("5s"), addCardResponseFreeGame)
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("5s"), addCardResponseOK)
 	assertAddCard(t, r, deck.CardFromString("4s"), addCardResponseFreeGame)
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("14s"), addCardResponseWaitingOnAce)
 	assert.NoError(t, r.setAce(false))
 	assertAddCard(t, r, deck.CardFromString("2s"), addCardResponseFreeGame)
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("14s"), addCardResponseWaitingOnAce)
 	assert.NoError(t, r.setAce(true))
 	assertAddCard(t, r, deck.CardFromString("2s"), addCardResponseWaitingOnBet)
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("14s"), addCardResponseWaitingOnAce)
 	assert.NoError(t, r.setAce(false))
 	assertAddCard(t, r, deck.CardFromString("13s"), addCardResponseWaitingOnBet)
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("14s"), addCardResponseWaitingOnAce)
 	assert.NoError(t, r.setAce(true))
 	assertAddCard(t, r, deck.CardFromString("13s"), addCardResponseFreeGame)
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("13s"), addCardResponseOK)
 	assertAddCard(t, r, deck.CardFromString("14s"), addCardResponseFreeGame)
 }
@@ -135,12 +135,12 @@ func TestRound_addCard_freeGame(t *testing.T) {
 func TestRound_addCard_doubleGame(t *testing.T) {
 	a := assert.New(t)
 
-	r := newRound()
+	r := NewRound()
 	assertAddCard(t, r, deck.CardFromString("8s"), addCardResponseOK)
 	assertAddCard(t, r, deck.CardFromString("8d"), addCardResponseDoubleGame)
 
 	a.Equal(2, len(r.Games))
-	a.Equal(0, r.ActiveGameIndex)
+	a.Equal(0, r.activeGameIndex)
 	a.Equal(deck.CardFromString("8s").String(), r.Games[0].FirstCard.String())
 	a.Nil(r.Games[0].LastCard)
 	a.Equal(deck.CardFromString("8d").String(), r.Games[1].FirstCard.String())
@@ -148,7 +148,7 @@ func TestRound_addCard_doubleGame(t *testing.T) {
 
 	assertAddCard(t, r, deck.CardFromString("8c"), addCardResponseDoubleGame)
 	a.Equal(3, len(r.Games))
-	a.Equal(0, r.ActiveGameIndex)
+	a.Equal(0, r.activeGameIndex)
 	a.Equal(deck.CardFromString("8s").String(), r.Games[0].FirstCard.String())
 	a.Nil(r.Games[0].LastCard)
 	a.Equal(deck.CardFromString("8d").String(), r.Games[1].FirstCard.String())
@@ -175,18 +175,18 @@ func TestRound_addCard_doubleGame(t *testing.T) {
 
 func TestRound_setAce_failConditions(t *testing.T) {
 	a := assert.New(t)
-	r := newRound()
+	r := NewRound()
 
 	assertAddCard(t, r, deck.CardFromString("13s"), addCardResponseOK)
 	a.EqualError(r.setAce(false), "first card is not an ace")
 
 	r.Games[0].isFreeGame = true
-	a.EqualError(r.setAce(false), "round is over")
+	a.EqualError(r.setAce(false), "Round is over")
 }
 
 func TestRound_roundState(t *testing.T) {
 	a := assert.New(t)
-	r := newRound()
+	r := NewRound()
 
 	a.Equal(roundStateStart, r.getState())
 
@@ -201,19 +201,42 @@ func TestRound_roundState(t *testing.T) {
 	_, _ = r.addCard(deck.CardFromString("13s"))
 	a.Equal(roundStateRoundOver, r.getState())
 
-	r = newRound()
+	r = NewRound()
 	r.Games[0].FirstCard = deck.CardFromString("5s")
 	r.Games[0].LastCard = deck.CardFromString("8s")
 	a.Equal(roundStatePendingBet, r.getState())
 
-	r = newRound()
+	r = NewRound()
 	assertAddCard(t, r, deck.CardFromString("5s"), addCardResponseOK)
 	assertAddCard(t, r, deck.CardFromString("5d"), addCardResponseDoubleGame)
 	assertAddCard(t, r, deck.CardFromString("6s"), addCardResponseFreeGame)
 	a.Equal(roundStateGameOver, r.getState())
 }
 
-func assertAddCard(t *testing.T, r *round, card *deck.Card, expResp addCardResponse, expErr ...string) {
+func TestRound_getCardsInActiveGame(t *testing.T) {
+	a := assert.New(t)
+	r := NewRound()
+
+	a.Nil(r.getCardsInActiveGame())
+
+	assertAddCard(t, r, deck.CardFromString("2s"), addCardResponseOK)
+	a.Equal("2s", deck.CardsToString(r.getCardsInActiveGame()))
+
+	assertAddCard(t, r, deck.CardFromString("4s"), addCardResponseWaitingOnBet)
+	a.Equal("2s,4s", deck.CardsToString(r.getCardsInActiveGame()))
+
+	assertAddCard(t, r, deck.CardFromString("3s"), addCardResponseWon)
+	a.Nil(r.getCardsInActiveGame())
+
+	r = NewRound()
+	assertAddCard(t, r, deck.CardFromString("2s"), addCardResponseOK)
+	assertAddCard(t, r, deck.CardFromString("2c"), addCardResponseDoubleGame)
+	assertAddCard(t, r, deck.CardFromString("4d"), addCardResponseWaitingOnBet)
+	assertAddCard(t, r, deck.CardFromString("3c"), addCardResponseWon)
+	a.Equal("2c", deck.CardsToString(r.getCardsInActiveGame()))
+}
+
+func assertAddCard(t *testing.T, r *Round, card *deck.Card, expResp addCardResponse, expErr ...string) {
 	t.Helper()
 
 	resp, err := r.addCard(card)

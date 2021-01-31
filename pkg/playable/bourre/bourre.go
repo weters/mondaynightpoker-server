@@ -57,6 +57,11 @@ func (g *Game) LogChan() <-chan []*playable.LogMessage {
 	return g.logChan
 }
 
+// StateChangedChan returns a channel that the game will broadcast non-player initiated changes
+func (g *Game) StateChangedChan() <-chan *playable.Response {
+	return nil
+}
+
 // Action performs an action
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
 	player, ok := g.idToPlayer[playerID]

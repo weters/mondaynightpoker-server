@@ -12,15 +12,16 @@ var seed = int64(0)
 
 // AceyDeucey is a game of Acey Ducey
 type AceyDeucey struct {
-	options      Options
-	playerIDs    []int64
-	participants map[int64]*Participant
-	deck         *deck.Deck
-	logChan      chan []playable.LogMessage
-	turnIndex    int
+	options             Options
+	orderedParticipants []*Participant
+	participants        map[int64]*Participant
+	deck                *deck.Deck
+	stateChangedChan    chan *playable.Response
+	logChan             chan []playable.LogMessage
+	turnIndex           int
 
 	pot          int
-	currentRound *round
+	currentRound *Round
 }
 
 // NewGame returns a new game
@@ -33,29 +34,30 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 		return nil, errors.New("ante must be > 0")
 	}
 
+	orderedParticipants := make([]*Participant, len(playerIDs))
 	idToParticipant := make(map[int64]*Participant, len(playerIDs))
-	for _, pid := range playerIDs {
-		idToParticipant[pid] = NewParticipant(pid, options.Ante)
+	for i, pid := range playerIDs {
+		p := NewParticipant(pid, options.Ante)
+		idToParticipant[pid] = p
+		orderedParticipants[i] = p
 	}
 
 	if len(playerIDs) != len(idToParticipant) {
 		return nil, errors.New("duplicate players detected")
 	}
 
-	localPlayerIds := make([]int64, len(playerIDs))
-	copy(localPlayerIds, playerIDs)
-
 	d := deck.New()
 	d.Shuffle(seed)
 
 	a := &AceyDeucey{
-		options:      options,
-		playerIDs:    localPlayerIds,
-		participants: idToParticipant,
-		deck:         d,
-		logChan:      make(chan []playable.LogMessage, 256),
-		turnIndex:    0,
-		pot:          len(playerIDs) * options.Ante,
+		options:             options,
+		orderedParticipants: orderedParticipants,
+		participants:        idToParticipant,
+		deck:                d,
+		stateChangedChan:    make(chan *playable.Response, 256),
+		logChan:             make(chan []playable.LogMessage, 256),
+		turnIndex:           0,
+		pot:                 len(playerIDs) * options.Ante,
 	}
 
 	if err := a.newRound(); err != nil {
@@ -68,6 +70,11 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 // Name returns the name of the game
 func (a *AceyDeucey) Name() string {
 	return "Acey Ducey"
+}
+
+// Key returns a unique key
+func (a *AceyDeucey) Key() string {
+	return "acey-deucey"
 }
 
 // Action performs with a message
@@ -92,12 +99,42 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 		return nil, false, fmt.Errorf("you cannot perform the action: %s", action.String())
 	}
 
+	round := a.currentRound
+
 	switch action {
 	case ActionPickAceLow:
+		if err := round.setAce(false); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, a.advance()
 	case ActionPickAceHigh:
+		if err := round.setAce(true); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, a.advance()
 	case ActionPass:
+		panic("implement me")
+	case ActionBetTheGap:
+		amount := a.options.Ante * 2
+		if err := round.setBet(amount, true); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, a.advance()
 	case ActionBet:
-	case ActionContinue:
+		amount, _ := message.AdditionalData.GetInt("amount")
+
+		if amount%25 > 0 || amount == 0 {
+			return nil, false, errors.New("bet must be in multiples of 25 cents")
+		}
+
+		if err := round.setBet(amount, false); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, a.advance()
 	}
 
 	panic("implement me")
@@ -105,22 +142,44 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 
 // GetPlayerState returns the current state of the game for the player
 func (a *AceyDeucey) GetPlayerState(playerID int64) (*playable.Response, error) {
-	panic("implement me")
+	gameState := a.getParticipantState(playerID)
+	return &playable.Response{
+		Key:   "game",
+		Value: a.Key(),
+		Data:  gameState,
+	}, nil
 }
 
 // GetEndOfGameDetails returns the details after a game is over
 // If the game is still in progress, nil will be returned and the second param will be false
 func (a *AceyDeucey) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	panic("implement me")
+	if !a.isGameOver() {
+		return nil, false
+	}
+
+	adjustments := make(map[int64]int)
+	for _, p := range a.participants {
+		adjustments[p.PlayerID] = p.Balance
+	}
+
+	return &playable.GameOverDetails{
+		BalanceAdjustments: adjustments,
+		Log:                nil,
+	}, true
 }
 
 // LogChan should return a channel that a game will send log messages to
 func (a *AceyDeucey) LogChan() <-chan []*playable.LogMessage {
-	panic("implement me")
+	return nil
+}
+
+// StateChangedChan returns a channel that the game will broadcast non-player initiated changes
+func (a *AceyDeucey) StateChangedChan() <-chan *playable.Response {
+	return nil
 }
 
 func (a *AceyDeucey) getCurrentTurn() *Participant {
-	id := a.playerIDs[a.turnIndex]
+	id := a.orderedParticipants[a.turnIndex].PlayerID
 	participant, ok := a.participants[id]
 	if !ok {
 		return nil
@@ -131,7 +190,7 @@ func (a *AceyDeucey) getCurrentTurn() *Participant {
 
 func (a *AceyDeucey) nextTurn() {
 	a.turnIndex++
-	a.turnIndex = a.turnIndex % len(a.playerIDs)
+	a.turnIndex = a.turnIndex % len(a.orderedParticipants)
 }
 
 // isGameOver returns true if the pot is empty
@@ -140,7 +199,7 @@ func (a *AceyDeucey) isGameOver() bool {
 }
 
 func (a *AceyDeucey) newRound() error {
-	a.currentRound = newRound()
+	a.currentRound = NewRound(a.deck, a.pot)
 	return a.advance()
 }
 
@@ -149,5 +208,45 @@ func (a *AceyDeucey) advance() error {
 	if a.isGameOver() {
 		return fmt.Errorf("%s is over", a.Name())
 	}
+
+	participant := a.getCurrentTurn()
+	if participant == nil {
+		return errors.New("no active participant")
+	}
+
+	switch a.currentRound.State {
+	case RoundStateStart:
+		if err := a.currentRound.DealCard(); err != nil {
+			return err
+		}
+
+		return a.advance()
+	case RoundStateFirstCardDealt:
+		return a.currentRound.DealCard()
+	case RoundStatePendingAceDecision:
+		// do nothing
+	case RoundStatePendingBet:
+	// do nothing
+	case RoundStateBetPlaced:
+		if err := a.currentRound.DealCard(); err != nil {
+			return err
+		}
+
+		return a.advance()
+	case RoundStateGameOver:
+		return a.currentRound.nextGame()
+	case RoundStateRoundOver:
+		a.pot = a.currentRound.Pot
+		participant.Balance += a.currentRound.ParticipantAdjustments()
+		if a.pot > 0 {
+			a.nextTurn()
+			if err := a.newRound(); err != nil {
+				return err
+			}
+		}
+
+		return a.currentRound.nextGame()
+	}
+
 	return nil
 }

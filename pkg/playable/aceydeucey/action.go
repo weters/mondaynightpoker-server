@@ -1,6 +1,7 @@
 package aceydeucey
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 )
@@ -8,12 +9,23 @@ import (
 // Action is an action a participant can take when it's their turn
 type Action int
 
+func (a Action) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}{
+		ID:   int(a),
+		Name: a.String(),
+	})
+}
+
 // Action constants
 const (
 	ActionPending Action = iota
 	ActionPickAceLow
 	ActionPickAceHigh
 	ActionBet
+	ActionBetTheGap
 	ActionPass
 
 	ActionContinue
@@ -29,6 +41,8 @@ func (a Action) String() string {
 		return "Pick High Ace"
 	case ActionBet:
 		return "Bet"
+	case ActionBetTheGap:
+		return "Bet the Gap"
 	case ActionPass:
 		return "Pass"
 	case ActionContinue:
@@ -53,5 +67,32 @@ func ActionFromString(action string) (Action, error) {
 }
 
 func (a *AceyDeucey) getActionsForParticipant(playerID int64) []Action {
-	return []Action{}
+	participant := a.getCurrentTurn()
+	if playerID != participant.PlayerID {
+		return nil
+	}
+
+	switch a.currentRound.State {
+	case RoundStateStart:
+		// no-op
+	case RoundStateFirstCardDealt:
+		// no-op
+
+	case RoundStatePendingAceDecision:
+		return []Action{ActionPickAceLow, ActionPickAceHigh}
+
+	case RoundStatePendingBet:
+		if a.currentRound.canBetTheGap() {
+			return []Action{ActionBet, ActionBetTheGap}
+		}
+
+		return []Action{ActionBet}
+	case RoundStateGameOver:
+		// no-op
+
+	case RoundStateRoundOver:
+		// no-op
+	}
+
+	return nil
 }

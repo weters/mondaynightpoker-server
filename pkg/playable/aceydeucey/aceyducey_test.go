@@ -26,10 +26,10 @@ func TestNewGame(t *testing.T) {
 	a.NoError(err)
 
 	a.Equal("Acey Ducey", game.Name())
-	a.Equal(int64(1), game.participants[1].playerID)
-	a.Equal(-25, game.participants[1].balance)
-	a.Equal(int64(2), game.participants[2].playerID)
-	a.Equal(-25, game.participants[2].balance)
+	a.Equal(int64(1), game.participants[1].PlayerID)
+	a.Equal(-25, game.participants[1].Balance)
+	a.Equal(int64(2), game.participants[2].PlayerID)
+	a.Equal(-25, game.participants[2].Balance)
 }
 
 func TestAceyDeucey_getCurrentTurn(t *testing.T) {
