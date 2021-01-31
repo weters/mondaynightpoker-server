@@ -121,8 +121,8 @@ func (r *Round) dealLastCard(card *deck.Card) error {
 	}
 
 	if math.Abs(float64(card.Rank-firstCardRank)) == 1 {
-		game.isFreeGame = true
-		r.State = RoundStateGameOver
+		game.gameOver = true
+		r.finalizeGame(game, 0)
 		return nil
 	}
 
@@ -265,6 +265,12 @@ func (r *Round) nextGame() error {
 	}
 
 	r.activeGameIndex++
+	if r.Games[r.activeGameIndex].FirstCard.Rank == deck.Ace {
+		r.State = RoundStatePendingAceDecision
+	} else {
+		r.State = RoundStateFirstCardDealt
+	}
+
 	return nil
 }
 

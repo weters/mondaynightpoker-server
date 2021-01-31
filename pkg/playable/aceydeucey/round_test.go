@@ -180,7 +180,7 @@ func TestRound_setAce_failConditions(t *testing.T) {
 	assertAddCard(t, r, deck.CardFromString("13s"), addCardResponseOK)
 	a.EqualError(r.setAce(false), "first card is not an ace")
 
-	r.Games[0].isFreeGame = true
+	r.Games[0].gameOver = true
 	a.EqualError(r.setAce(false), "Round is over")
 }
 

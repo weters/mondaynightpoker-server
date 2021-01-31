@@ -18,7 +18,7 @@ type SingleGame struct {
 	Adjustment int        `json:"adjustment"`
 
 	// isGameOver allows you to short-circuit the game over (i.e., free game)
-	isFreeGame bool
+	gameOver bool
 }
 
 func newSingleGame() *SingleGame {
@@ -30,7 +30,7 @@ func newSingleGame() *SingleGame {
 			Amount:  0,
 			HalfPot: false,
 		},
-		isFreeGame: false,
+		gameOver: false,
 	}
 }
 
@@ -49,5 +49,5 @@ func (g *SingleGame) firstCardRank() int {
 }
 
 func (g *SingleGame) isGameOver() bool {
-	return g.MiddleCard != nil || g.isFreeGame
+	return g.MiddleCard != nil || g.gameOver
 }

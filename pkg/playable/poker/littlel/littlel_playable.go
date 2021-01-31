@@ -207,8 +207,3 @@ func (g *Game) Name() string {
 func (g *Game) LogChan() <-chan []*playable.LogMessage {
 	return g.logChan
 }
-
-// StateChangedChan returns a channel that the game will broadcast non-player initiated changes
-func (g *Game) StateChangedChan() <-chan *playable.Response {
-	return nil
-}

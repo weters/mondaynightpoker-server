@@ -24,9 +24,6 @@ type Playable interface {
 	// Name returns the name of the game
 	Name() string
 
-	// StateChangedChan should return a channel that has non-user initiated changes to the state
-	StateChangedChan() <-chan *Response
-
 	// LogChan should return a channel that a game will send log messages to
 	LogChan() <-chan []*LogMessage
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"time"
 )
 
 var seed = int64(0)
@@ -16,12 +17,15 @@ type AceyDeucey struct {
 	orderedParticipants []*Participant
 	participants        map[int64]*Participant
 	deck                *deck.Deck
-	stateChangedChan    chan *playable.Response
 	logChan             chan []playable.LogMessage
 	turnIndex           int
 
 	pot          int
 	currentRound *Round
+}
+
+func (a *AceyDeucey) Delay() time.Duration {
+	return time.Second
 }
 
 // NewGame returns a new game
@@ -48,13 +52,14 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 
 	d := deck.New()
 	d.Shuffle(seed)
+	d.Cards[0] = deck.CardFromString("13c")
+	d.Cards[1] = deck.CardFromString("12c")
 
 	a := &AceyDeucey{
 		options:             options,
 		orderedParticipants: orderedParticipants,
 		participants:        idToParticipant,
 		deck:                d,
-		stateChangedChan:    make(chan *playable.Response, 256),
 		logChan:             make(chan []playable.LogMessage, 256),
 		turnIndex:           0,
 		pot:                 len(playerIDs) * options.Ante,
@@ -107,13 +112,13 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 			return nil, false, err
 		}
 
-		return playable.OK(), true, a.advance()
+		return playable.OK(), true, nil
 	case ActionPickAceHigh:
 		if err := round.setAce(true); err != nil {
 			return nil, false, err
 		}
 
-		return playable.OK(), true, a.advance()
+		return playable.OK(), true, nil
 	case ActionPass:
 		panic("implement me")
 	case ActionBetTheGap:
@@ -122,7 +127,7 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 			return nil, false, err
 		}
 
-		return playable.OK(), true, a.advance()
+		return playable.OK(), true, nil
 	case ActionBet:
 		amount, _ := message.AdditionalData.GetInt("amount")
 
@@ -134,7 +139,7 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 			return nil, false, err
 		}
 
-		return playable.OK(), true, a.advance()
+		return playable.OK(), true, nil
 	}
 
 	panic("implement me")
@@ -173,11 +178,6 @@ func (a *AceyDeucey) LogChan() <-chan []*playable.LogMessage {
 	return nil
 }
 
-// StateChangedChan returns a channel that the game will broadcast non-player initiated changes
-func (a *AceyDeucey) StateChangedChan() <-chan *playable.Response {
-	return nil
-}
-
 func (a *AceyDeucey) getCurrentTurn() *Participant {
 	id := a.orderedParticipants[a.turnIndex].PlayerID
 	participant, ok := a.participants[id]
@@ -200,53 +200,49 @@ func (a *AceyDeucey) isGameOver() bool {
 
 func (a *AceyDeucey) newRound() error {
 	a.currentRound = NewRound(a.deck, a.pot)
-	return a.advance()
+	return nil
 }
 
-// advance will
-func (a *AceyDeucey) advance() error {
-	if a.isGameOver() {
-		return fmt.Errorf("%s is over", a.Name())
-	}
-
-	participant := a.getCurrentTurn()
-	if participant == nil {
-		return errors.New("no active participant")
-	}
-
+func (a *AceyDeucey) Tick() (bool, error) {
 	switch a.currentRound.State {
 	case RoundStateStart:
-		if err := a.currentRound.DealCard(); err != nil {
-			return err
-		}
-
-		return a.advance()
-	case RoundStateFirstCardDealt:
-		return a.currentRound.DealCard()
-	case RoundStatePendingAceDecision:
-		// do nothing
-	case RoundStatePendingBet:
-	// do nothing
+		fallthrough
 	case RoundStateBetPlaced:
+		fallthrough
+	case RoundStateFirstCardDealt:
+		logrus.Info(a.currentRound.State)
 		if err := a.currentRound.DealCard(); err != nil {
-			return err
+			return false, err
 		}
 
-		return a.advance()
+		return true, nil
 	case RoundStateGameOver:
-		return a.currentRound.nextGame()
+		logrus.Info(a.currentRound.State)
+		if err := a.currentRound.nextGame(); err != nil {
+			return false, err
+		}
+
+		return true, nil
 	case RoundStateRoundOver:
+		logrus.Info(a.currentRound.State)
+		participant := a.getCurrentTurn()
+		if participant == nil {
+			return false, errors.New("no activate participant")
+		}
+
 		a.pot = a.currentRound.Pot
 		participant.Balance += a.currentRound.ParticipantAdjustments()
 		if a.pot > 0 {
 			a.nextTurn()
 			if err := a.newRound(); err != nil {
-				return err
+				return false, err
 			}
+
+			return true, nil
 		}
 
-		return a.currentRound.nextGame()
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }

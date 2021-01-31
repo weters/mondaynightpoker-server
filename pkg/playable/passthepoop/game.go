@@ -667,11 +667,6 @@ func (g *Game) LogChan() <-chan []*playable.LogMessage {
 	return g.logChan
 }
 
-// StateChangedChan returns a channel that the game will broadcast non-player initiated changes
-func (g *Game) StateChangedChan() <-chan *playable.Response {
-	return nil
-}
-
 func (g *Game) sendLogMessage(playerID int64, msg string, card ...*deck.Card) {
 	g.logChan <- []*playable.LogMessage{newLogMessage(playerID, msg, card...)}
 }

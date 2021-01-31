@@ -38,6 +38,7 @@ type Dealer struct {
 	table   *table.Table
 	clients map[*Client]bool
 	game    playable.Playable
+	ticker  *time.Ticker
 
 	execInRunLoop chan func()
 	stateChanged  chan state
@@ -88,7 +89,20 @@ func (d *Dealer) runLoop() {
 			pendingGameTimer = d.pendingGame.timer.C
 		}
 
+		var ticker <-chan time.Time
+		if d.ticker != nil {
+			ticker = d.ticker.C
+		}
+
 		select {
+		case <-ticker:
+			if game, ok := d.game.(playable.Tickable); ok {
+				if update, err := game.Tick(); err != nil {
+					logrus.WithError(err).Error("Tick() failed")
+				} else if update {
+					d.sendGameData()
+				}
+			}
 		case <-pendingGameTimer:
 			if err := d.createGame(d.pendingGame.client, d.pendingGame.message); err != nil {
 				d.pendingGame.client.Send(playable.Response{
@@ -373,7 +387,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		}
 
 		d.execInRunLoop <- func() {
-			d.game = nil
+			d.unsetGame()
 			d.stateChanged <- stateGameEnded
 			d.sendLogMessages([]*playable.LogMessage{
 				{
@@ -526,7 +540,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 					return
 				}
 
-				d.game = nil
+				d.unsetGame()
 				d.stateChanged <- stateGameEnded
 			}
 
@@ -598,6 +612,19 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 	logger.Info("game started")
 
 	d.game = game
+
+	if t, ok := game.(playable.Tickable); ok {
+		d.ticker = time.NewTicker(t.Delay())
+	}
+
 	d.stateChanged <- stateGameEvent
 	return nil
+}
+
+func (d *Dealer) unsetGame() {
+	d.game = nil
+	if d.ticker != nil {
+		d.ticker.Stop()
+		d.ticker = nil
+	}
 }
