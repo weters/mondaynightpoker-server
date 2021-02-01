@@ -9,14 +9,13 @@ mondaynightpoker-server is the backend application for the Monday Night Poker si
 * Bourré
 * Pass the Poop
 * Poker
-  * Seven-card games (work in progress)
-    * Follow the Queen (done)
-    * Baseball (working, but needs rain-outs)
-    * Blind Baseball
-    * Seven-card Stud (done)
-    * Low Card Wild (done)
-  * Little L (done)
-  * Five-card draw (coming soon)
+  * Seven-card games
+    * Follow the Queen
+    * Baseball
+    * Seven-card Stud
+    * Low Card Wild
+  * Little L
+* Acey Deucey
 
 ## Getting Started
 
