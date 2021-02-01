@@ -28,8 +28,8 @@ type Card struct {
 	Suit   Suit `json:"suit"`
 	IsWild bool `json:"isWild"`
 
-	// bitField allows each game to store arbitrary values on for a card
-	bitField int
+	// BitField allows each game to store arbitrary values on for a card
+	BitField int `json:"bitField"`
 
 	// what the wild card represents
 	wildRank int
@@ -94,17 +94,22 @@ func (c *Card) AceLowRank() int {
 
 // SetBit sets a bit
 func (c *Card) SetBit(val int) {
-	c.bitField |= val
+	c.BitField |= val
 }
 
 // UnsetBit unsets a bit
 func (c *Card) UnsetBit(val int) {
-	c.bitField &= ^val
+	c.BitField &= ^val
 }
 
 // IsBitSet checks if the bit is set
 func (c *Card) IsBitSet(val int) bool {
-	return c.bitField&val > 0
+	return c.BitField&val > 0
+}
+
+// UnsetAllBits unsets all bit values
+func (c *Card) UnsetAllBits() {
+	c.BitField = 0
 }
 
 var cardRx = regexp.MustCompile(`(?i)^(!)?([0-9]|1[0-4])([cdhs])\z`)
