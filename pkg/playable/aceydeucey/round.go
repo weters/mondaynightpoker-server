@@ -154,15 +154,15 @@ func (r *Round) SetBet(bet int, isHalfPotBet bool) error {
 	}
 
 	if bet == 0 {
-		return errors.New("bet must be at least {25}")
+		return errors.New("bet must be at least ${25}")
 	}
 
 	if bet%25 > 0 {
-		return errors.New("bet must be in increments of {25}")
+		return errors.New("bet must be in increments of ${25}")
 	}
 
 	if bet > r.Pot {
-		return fmt.Errorf("bet of {%d} exceed the size of the pot {%d}", bet, r.Pot)
+		return fmt.Errorf("bet of ${%d} exceeds the size of the pot ${%d}", bet, r.Pot)
 	}
 
 	if isHalfPotBet {
@@ -336,6 +336,10 @@ func (r *Round) canBetTheGap() bool {
 	}
 
 	if r.State != RoundStatePendingBet {
+		return false
+	}
+
+	if r.Pot < betTheGapAmount*2 {
 		return false
 	}
 

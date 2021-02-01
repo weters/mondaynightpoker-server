@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+// betTheAmount is the standard bet for a half-pot bet the gap
+// Should we make this configurable? Maybe double the ante?
+const betTheGapAmount = 50
+
 var seed = int64(0)
 
 // Game is a game of Acey Deucey
@@ -120,8 +124,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	case ActionPass:
 		panic("implement me")
 	case ActionBetTheGap:
-		amount := g.options.Ante * 2
-		if err := round.SetBet(amount, true); err != nil {
+		if err := round.SetBet(betTheGapAmount, true); err != nil {
 			return nil, false, err
 		}
 

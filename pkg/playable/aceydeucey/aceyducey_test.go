@@ -87,7 +87,10 @@ func TestGame_getCurrentTurn(t *testing.T) {
 
 func TestGame_basicFlow(t *testing.T) {
 	a := assert.New(t)
-	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+
+	opts := DefaultOptions()
+	opts.Ante = 100
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	a.NoError(err)
 
 	game.deck.Cards = deck.CardsFromString("14c,3c,2c")
@@ -111,7 +114,7 @@ func TestGame_basicFlow(t *testing.T) {
 
 	// player two
 	assertTick(t, game)
-	assert.Equal(t, 50, game.pot)
+	assert.Equal(t, 275, game.pot)
 	assert.Equal(t, RoundStateStart, game.getCurrentRound().State)
 	game.deck.Cards = deck.CardsFromString("2c,4c,4d")
 	assertTick(t, game)
@@ -123,12 +126,12 @@ func TestGame_basicFlow(t *testing.T) {
 
 	// player three
 	assertTick(t, game)
-	assert.Equal(t, 150, game.pot)
+	assert.Equal(t, 375, game.pot)
 	assert.Equal(t, RoundStateStart, game.getCurrentRound().State)
 	game.deck.Cards = deck.CardsFromString("2c,14c,4d")
 	assertTick(t, game)
 	assertTick(t, game)
-	assertSuccessfulAction(t, game, 3, ActionBet, map[string]interface{}{"amount": float64(150)})
+	assertSuccessfulAction(t, game, 3, ActionBet, map[string]interface{}{"amount": float64(375)})
 	assertTick(t, game)
 	simulateGameWait(game)
 	assert.Equal(t, RoundStateRoundOver, game.getCurrentRound().State)
@@ -142,9 +145,9 @@ func TestGame_basicFlow(t *testing.T) {
 	details, over = game.GetEndOfGameDetails()
 	a.True(over)
 	a.Equal(map[int64]int{
-		1: 0,
-		2: -125,
-		3: 125,
+		1: -75,
+		2: -200,
+		3: 275,
 	}, details.BalanceAdjustments)
 
 	log := details.Log.([]*Round)

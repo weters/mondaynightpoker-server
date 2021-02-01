@@ -68,6 +68,8 @@ func TestAceyDeucey_getActionsForParticipant(t *testing.T) {
 	a.Nil(game.getActionsForParticipant(3))
 
 	game.getCurrentRound().Games[0].LastCard = deck.CardFromString("4c")
+	a.Equal([]Action{ActionBet}, game.getActionsForParticipant(1))
+	game.getCurrentRound().Pot = betTheGapAmount * 2
 	a.Equal([]Action{ActionBet, ActionBetTheGap}, game.getActionsForParticipant(1))
 
 	// test ace
