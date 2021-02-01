@@ -58,6 +58,6 @@ func TestAceyDeucey_isGameOver(t *testing.T) {
 }
 
 func TestAceyDeucey_Key(t *testing.T) {
-	g := &AceyDeucey{}
+	g := &Game{}
 	assert.Equal(t, "acey-deucey", g.Key())
 }

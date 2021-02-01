@@ -11,8 +11,8 @@ import (
 
 var seed = int64(0)
 
-// AceyDeucey is a game of Acey Deucey
-type AceyDeucey struct {
+// Game is a game of Acey Deucey
+type Game struct {
 	options             Options
 	orderedParticipants []*Participant
 	participants        map[int64]*Participant
@@ -25,12 +25,12 @@ type AceyDeucey struct {
 }
 
 // Delay is how long we should wait before updating the game state
-func (a *AceyDeucey) Delay() time.Duration {
+func (g *Game) Delay() time.Duration {
 	return time.Second
 }
 
 // NewGame returns a new game
-func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*AceyDeucey, error) {
+func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
 	if len(playerIDs) < 2 {
 		return nil, errors.New("game requires at least two players")
 	}
@@ -54,7 +54,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 	d := deck.New()
 	d.Shuffle(seed)
 
-	a := &AceyDeucey{
+	a := &Game{
 		options:             options,
 		orderedParticipants: orderedParticipants,
 		participants:        idToParticipant,
@@ -69,20 +69,20 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ac
 }
 
 // Name returns the name of the game
-func (a *AceyDeucey) Name() string {
+func (g *Game) Name() string {
 	return "Acey Deucey"
 }
 
 // Key returns a unique key
-func (a *AceyDeucey) Key() string {
+func (g *Game) Key() string {
 	return "acey-deucey"
 }
 
 // Action performs with a message
 // If playerResponse is not null, that's the response sent directly to the client
 // If updateState is true, it will trigger a state update for all connected clients
-func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
-	actions := a.getActionsForParticipant(playerID)
+func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
+	actions := g.getActionsForParticipant(playerID)
 	action, err := ActionFromString(message.Subject)
 	if err != nil {
 		return nil, false, err
@@ -100,7 +100,7 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 		return nil, false, fmt.Errorf("you cannot perform the action: %s", action.String())
 	}
 
-	round := a.currentRound
+	round := g.currentRound
 
 	switch action {
 	case ActionPickAceLow:
@@ -118,7 +118,7 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 	case ActionPass:
 		panic("implement me")
 	case ActionBetTheGap:
-		amount := a.options.Ante * 2
+		amount := g.options.Ante * 2
 		if err := round.SetBet(amount, true); err != nil {
 			return nil, false, err
 		}
@@ -142,24 +142,24 @@ func (a *AceyDeucey) Action(playerID int64, message *playable.PayloadIn) (player
 }
 
 // GetPlayerState returns the current state of the game for the player
-func (a *AceyDeucey) GetPlayerState(playerID int64) (*playable.Response, error) {
-	gameState := a.getParticipantState(playerID)
+func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
+	gameState := g.getParticipantState(playerID)
 	return &playable.Response{
 		Key:   "game",
-		Value: a.Key(),
+		Value: g.Key(),
 		Data:  gameState,
 	}, nil
 }
 
 // GetEndOfGameDetails returns the details after a game is over
 // If the game is still in progress, nil will be returned and the second param will be false
-func (a *AceyDeucey) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	if a.currentRound.State != RoundStateComplete {
+func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
+	if g.currentRound.State != RoundStateComplete {
 		return nil, false
 	}
 
 	adjustments := make(map[int64]int)
-	for _, p := range a.participants {
+	for _, p := range g.participants {
 		adjustments[p.PlayerID] = p.Balance
 	}
 
@@ -170,13 +170,13 @@ func (a *AceyDeucey) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDe
 }
 
 // LogChan should return a channel that a game will send log messages to
-func (a *AceyDeucey) LogChan() <-chan []*playable.LogMessage {
+func (g *Game) LogChan() <-chan []*playable.LogMessage {
 	return nil
 }
 
-func (a *AceyDeucey) getCurrentTurn() *Participant {
-	id := a.orderedParticipants[a.turnIndex].PlayerID
-	participant, ok := a.participants[id]
+func (g *Game) getCurrentTurn() *Participant {
+	id := g.orderedParticipants[g.turnIndex].PlayerID
+	participant, ok := g.participants[id]
 	if !ok {
 		return nil
 	}
@@ -184,69 +184,69 @@ func (a *AceyDeucey) getCurrentTurn() *Participant {
 	return participant
 }
 
-func (a *AceyDeucey) nextTurn() {
-	a.turnIndex++
-	a.turnIndex = a.turnIndex % len(a.orderedParticipants)
+func (g *Game) nextTurn() {
+	g.turnIndex++
+	g.turnIndex = g.turnIndex % len(g.orderedParticipants)
 }
 
 // isGameOver returns true if the pot is empty
-func (a *AceyDeucey) isGameOver() bool {
-	return a.pot == 0
+func (g *Game) isGameOver() bool {
+	return g.pot == 0
 }
 
-func (a *AceyDeucey) newRound() {
-	a.currentRound = NewRound(a.deck, a.pot)
+func (g *Game) newRound() {
+	g.currentRound = NewRound(g.deck, g.pot)
 }
 
-func (a *AceyDeucey) endRound() error {
-	participant := a.getCurrentTurn()
+func (g *Game) endRound() error {
+	participant := g.getCurrentTurn()
 	if participant == nil {
 		return errors.New("no activate participant")
 	}
 
-	a.pot = a.currentRound.Pot
-	participant.Balance += a.currentRound.ParticipantAdjustments()
-	if a.pot > 0 {
-		a.nextTurn()
-		a.newRound()
+	g.pot = g.currentRound.Pot
+	participant.Balance += g.currentRound.ParticipantAdjustments()
+	if g.pot > 0 {
+		g.nextTurn()
+		g.newRound()
 
 		return nil
 	}
 
-	a.currentRound.setNextState(RoundStateComplete, time.Second*2)
+	g.currentRound.setNextState(RoundStateComplete, time.Second*2)
 	return nil
 }
 
 // Tick is called when the game state should advance
-func (a *AceyDeucey) Tick() (bool, error) {
-	switch a.currentRound.State {
+func (g *Game) Tick() (bool, error) {
+	switch g.currentRound.State {
 	case RoundStateStart:
 		fallthrough
 	case RoundStateBetPlaced:
 		fallthrough
 	case RoundStateFirstCardDealt:
-		logrus.Info(a.currentRound.State)
-		if err := a.currentRound.DealCard(); err != nil {
+		logrus.Info(g.currentRound.State)
+		if err := g.currentRound.DealCard(); err != nil {
 			return false, err
 		}
 
 		return true, nil
 	case RoundStateGameOver:
-		logrus.Info(a.currentRound.State)
-		if err := a.currentRound.nextGame(); err != nil {
+		logrus.Info(g.currentRound.State)
+		if err := g.currentRound.nextGame(); err != nil {
 			return false, err
 		}
 
 		return true, nil
 	case RoundStateRoundOver:
-		logrus.Info(a.currentRound.State)
-		if err := a.endRound(); err != nil {
+		logrus.Info(g.currentRound.State)
+		if err := g.endRound(); err != nil {
 			return false, err
 		}
 
 		return true, nil
 	case RoundStateWaiting:
-		a.currentRound.checkWaiting()
+		g.currentRound.checkWaiting()
 	}
 
 	return false, nil

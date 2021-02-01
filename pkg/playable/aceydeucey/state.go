@@ -22,23 +22,23 @@ type GameState struct {
 	Config       map[string]interface{} `json:"config"`
 }
 
-func (a *AceyDeucey) getParticipantState(playerID int64) *ParticipantState {
+func (g *Game) getParticipantState(playerID int64) *ParticipantState {
 	return &ParticipantState{
-		GameState: a.getGameState(),
-		Actions:   a.getActionsForParticipant(playerID),
+		GameState: g.getGameState(),
+		Actions:   g.getActionsForParticipant(playerID),
 	}
 }
 
-func (a *AceyDeucey) getGameState() *GameState {
+func (g *Game) getGameState() *GameState {
 	var currentTurn int64
-	if p := a.getCurrentTurn(); p != nil {
+	if p := g.getCurrentTurn(); p != nil {
 		currentTurn = p.PlayerID
 	}
 
 	return &GameState{
 		CurrentTurn:  currentTurn,
-		Round:        a.currentRound,
-		Participants: a.orderedParticipants,
+		Round:        g.currentRound,
+		Participants: g.orderedParticipants,
 		Config:       config,
 	}
 }

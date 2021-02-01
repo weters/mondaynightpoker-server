@@ -63,18 +63,18 @@ func ActionFromString(action string) (Action, error) {
 	return -1, fmt.Errorf("invalid action: %s", action)
 }
 
-func (a *AceyDeucey) getActionsForParticipant(playerID int64) []Action {
-	participant := a.getCurrentTurn()
+func (g *Game) getActionsForParticipant(playerID int64) []Action {
+	participant := g.getCurrentTurn()
 	if playerID != participant.PlayerID {
 		return nil
 	}
 
-	switch a.currentRound.State {
+	switch g.currentRound.State {
 	case RoundStatePendingAceDecision:
 		return []Action{ActionPickAceLow, ActionPickAceHigh}
 
 	case RoundStatePendingBet:
-		if a.currentRound.canBetTheGap() {
+		if g.currentRound.canBetTheGap() {
 			return []Action{ActionBet, ActionBetTheGap}
 		}
 
