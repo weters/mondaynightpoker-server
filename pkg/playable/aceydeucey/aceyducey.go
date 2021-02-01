@@ -127,10 +127,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	case ActionBet:
 		amount, _ := message.AdditionalData.GetInt("amount")
 
-		if amount%25 > 0 || amount == 0 {
-			return nil, false, errors.New("bet must be in multiples of 25 cents")
-		}
-
 		if err := round.SetBet(amount, false); err != nil {
 			return nil, false, err
 		}
@@ -178,7 +174,7 @@ func (g *Game) getCurrentTurn() *Participant {
 	id := g.orderedParticipants[g.turnIndex].PlayerID
 	participant, ok := g.participants[id]
 	if !ok {
-		return nil
+		panic(fmt.Sprintf("inconsistent state found, player ID %d not in participants", id))
 	}
 
 	return participant
@@ -217,8 +213,8 @@ func (g *Game) endRound() error {
 	return nil
 }
 
-// Tick is called when the game state should advance
-func (g *Game) Tick() (bool, error) {
+// Tick is periodically called and will try to advance the game state
+func (g *Game) Tick() (didUpdate bool, err error) {
 	switch g.currentRound.State {
 	case RoundStateStart:
 		fallthrough
