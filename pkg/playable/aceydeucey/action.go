@@ -69,12 +69,13 @@ func (g *Game) getActionsForParticipant(playerID int64) []Action {
 		return nil
 	}
 
-	switch g.currentRound.State {
+	currentRound := g.getCurrentRound()
+	switch currentRound.State {
 	case RoundStatePendingAceDecision:
 		return []Action{ActionPickAceLow, ActionPickAceHigh}
 
 	case RoundStatePendingBet:
-		if g.currentRound.canBetTheGap() {
+		if currentRound.canBetTheGap() {
 			return []Action{ActionBet, ActionBetTheGap}
 		}
 

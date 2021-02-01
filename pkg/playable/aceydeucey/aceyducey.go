@@ -19,9 +19,10 @@ type Game struct {
 	deck                *deck.Deck
 	logChan             chan []playable.LogMessage
 	turnIndex           int
+	logger              logrus.FieldLogger
 
-	pot          int
-	currentRound *Round
+	pot    int
+	rounds []*Round
 }
 
 // Delay is how long we should wait before updating the game state
@@ -62,6 +63,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		logChan:             make(chan []playable.LogMessage, 256),
 		turnIndex:           0,
 		pot:                 len(playerIDs) * options.Ante,
+		logger:              logger,
 	}
 
 	a.newRound()
@@ -100,7 +102,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, fmt.Errorf("you cannot perform the action: %s", action.String())
 	}
 
-	round := g.currentRound
+	round := g.getCurrentRound()
 
 	switch action {
 	case ActionPickAceLow:
@@ -150,7 +152,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 // GetEndOfGameDetails returns the details after a game is over
 // If the game is still in progress, nil will be returned and the second param will be false
 func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails, isGameOver bool) {
-	if g.currentRound.State != RoundStateComplete {
+	if g.getCurrentRound().State != RoundStateComplete {
 		return nil, false
 	}
 
@@ -161,7 +163,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: adjustments,
-		Log:                nil,
+		Log:                g.rounds,
 	}, true
 }
 
@@ -190,8 +192,11 @@ func (g *Game) isGameOver() bool {
 	return g.pot == 0
 }
 
+// newRound starts a new round
+// NOTE: do not call this method until the correct participant is lined up
 func (g *Game) newRound() {
-	g.currentRound = NewRound(g.deck, g.pot)
+	turn := g.getCurrentTurn()
+	g.rounds = append(g.rounds, NewRound(turn.PlayerID, g.deck, g.pot))
 }
 
 func (g *Game) endRound() error {
@@ -200,8 +205,9 @@ func (g *Game) endRound() error {
 		return errors.New("no activate participant")
 	}
 
-	g.pot = g.currentRound.Pot
-	participant.Balance += g.currentRound.ParticipantAdjustments()
+	currentRound := g.getCurrentRound()
+	g.pot = currentRound.Pot
+	participant.Balance += currentRound.ParticipantAdjustments()
 	if g.pot > 0 {
 		g.nextTurn()
 		g.newRound()
@@ -209,41 +215,43 @@ func (g *Game) endRound() error {
 		return nil
 	}
 
-	g.currentRound.setNextState(RoundStateComplete, time.Second*2)
+	currentRound.setNextState(RoundStateComplete, time.Second*2)
 	return nil
 }
 
 // Tick is periodically called and will try to advance the game state
 func (g *Game) Tick() (didUpdate bool, err error) {
-	switch g.currentRound.State {
+	currentRound := g.getCurrentRound()
+	switch currentRound.State {
 	case RoundStateStart:
 		fallthrough
 	case RoundStateBetPlaced:
 		fallthrough
 	case RoundStateFirstCardDealt:
-		logrus.Info(g.currentRound.State)
-		if err := g.currentRound.DealCard(); err != nil {
+		if err := currentRound.DealCard(); err != nil {
 			return false, err
 		}
 
 		return true, nil
 	case RoundStateGameOver:
-		logrus.Info(g.currentRound.State)
-		if err := g.currentRound.nextGame(); err != nil {
+		if err := currentRound.nextGame(); err != nil {
 			return false, err
 		}
 
 		return true, nil
 	case RoundStateRoundOver:
-		logrus.Info(g.currentRound.State)
 		if err := g.endRound(); err != nil {
 			return false, err
 		}
 
 		return true, nil
 	case RoundStateWaiting:
-		g.currentRound.checkWaiting()
+		currentRound.checkWaiting()
 	}
 
 	return false, nil
+}
+
+func (g *Game) getCurrentRound() *Round {
+	return g.rounds[len(g.rounds)-1]
 }

@@ -19,13 +19,14 @@ const (
 
 // Round is a collection of one or more SingleGame
 type Round struct {
-	Games           []*SingleGame
-	State           RoundState
-	Pot             int
-	activeGameIndex int
+	PlayerID int64
+	Games    []*SingleGame
+	State    RoundState
+	Pot      int
 
-	deck       *deck.Deck
-	nextAction *nextAction
+	activeGameIndex int
+	deck            *deck.Deck
+	nextAction      *nextAction
 }
 
 // MarshalJSON provides custom JSON marshalling for round
@@ -86,11 +87,12 @@ const (
 )
 
 // NewRound returns a new Round object
-func NewRound(d *deck.Deck, startingPot int) *Round {
+func NewRound(playerID int64, d *deck.Deck, startingPot int) *Round {
 	return &Round{
-		Games: []*SingleGame{newSingleGame()},
-		State: RoundStateStart,
-		Pot:   startingPot,
+		PlayerID: playerID,
+		Games:    []*SingleGame{newSingleGame()},
+		State:    RoundStateStart,
+		Pot:      startingPot,
 
 		activeGameIndex: 0,
 		deck:            d,

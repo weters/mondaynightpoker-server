@@ -10,7 +10,7 @@ import (
 func TestNewRound(t *testing.T) {
 	a := assert.New(t)
 	d := deck.New()
-	r := NewRound(d, 50)
+	r := NewRound(1, d, 50)
 
 	a.Equal(50, r.Pot)
 	a.Equal(RoundStateStart, r.State)
@@ -434,7 +434,7 @@ func createTestRound(pot int, cards string) *Round {
 		d.Cards[i] = card
 	}
 
-	return NewRound(d, pot)
+	return NewRound(1, d, pot)
 }
 
 func cardsFromArray(c []*deck.Card, indexes ...int) string {

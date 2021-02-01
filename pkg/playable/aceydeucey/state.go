@@ -37,7 +37,7 @@ func (g *Game) getGameState() *GameState {
 
 	return &GameState{
 		CurrentTurn:  currentTurn,
-		Round:        g.currentRound,
+		Round:        g.getCurrentRound(),
 		Participants: g.orderedParticipants,
 		Config:       config,
 	}

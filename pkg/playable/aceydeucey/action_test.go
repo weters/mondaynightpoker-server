@@ -59,15 +59,15 @@ func TestAceyDeucey_getActionsForParticipant(t *testing.T) {
 	game.deck.Cards = deck.CardsFromString("2c,5c,3c")
 	a.Nil(game.getActionsForParticipant(1))
 
-	a.NoError(game.currentRound.DealCard())
+	a.NoError(game.getCurrentRound().DealCard())
 	a.Nil(game.getActionsForParticipant(1))
 
-	a.NoError(game.currentRound.DealCard())
+	a.NoError(game.getCurrentRound().DealCard())
 	a.Equal([]Action{ActionBet}, game.getActionsForParticipant(1))
 	a.Nil(game.getActionsForParticipant(2))
 	a.Nil(game.getActionsForParticipant(3))
 
-	game.currentRound.Games[0].LastCard = deck.CardFromString("4c")
+	game.getCurrentRound().Games[0].LastCard = deck.CardFromString("4c")
 	a.Equal([]Action{ActionBet, ActionBetTheGap}, game.getActionsForParticipant(1))
 
 	// test ace
@@ -77,7 +77,7 @@ func TestAceyDeucey_getActionsForParticipant(t *testing.T) {
 	game.deck.Cards = deck.CardsFromString("14s,5c,3c")
 	a.Nil(game.getActionsForParticipant(1))
 
-	a.NoError(game.currentRound.DealCard())
+	a.NoError(game.getCurrentRound().DealCard())
 	a.Equal([]Action{ActionPickAceLow, ActionPickAceHigh}, game.getActionsForParticipant(1))
 	a.Nil(game.getActionsForParticipant(2))
 	a.Nil(game.getActionsForParticipant(3))

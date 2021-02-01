@@ -107,37 +107,37 @@ func TestGame_basicFlow(t *testing.T) {
 	assertSuccessfulAction(t, game, 1, ActionBet, map[string]interface{}{"amount": float64(25)})
 	assertTick(t, game) // now in waiting
 	simulateGameWait(game)
-	assert.Equal(t, RoundStateRoundOver, game.currentRound.State)
+	assert.Equal(t, RoundStateRoundOver, game.getCurrentRound().State)
 
 	// player two
 	assertTick(t, game)
 	assert.Equal(t, 50, game.pot)
-	assert.Equal(t, RoundStateStart, game.currentRound.State)
+	assert.Equal(t, RoundStateStart, game.getCurrentRound().State)
 	game.deck.Cards = deck.CardsFromString("2c,4c,4d")
 	assertTick(t, game)
 	assertTick(t, game)
 	assertSuccessfulAction(t, game, 2, ActionBetTheGap, nil)
 	assertTick(t, game)
 	simulateGameWait(game)
-	assert.Equal(t, RoundStateRoundOver, game.currentRound.State)
+	assert.Equal(t, RoundStateRoundOver, game.getCurrentRound().State)
 
 	// player three
 	assertTick(t, game)
 	assert.Equal(t, 150, game.pot)
-	assert.Equal(t, RoundStateStart, game.currentRound.State)
+	assert.Equal(t, RoundStateStart, game.getCurrentRound().State)
 	game.deck.Cards = deck.CardsFromString("2c,14c,4d")
 	assertTick(t, game)
 	assertTick(t, game)
 	assertSuccessfulAction(t, game, 3, ActionBet, map[string]interface{}{"amount": float64(150)})
 	assertTick(t, game)
 	simulateGameWait(game)
-	assert.Equal(t, RoundStateRoundOver, game.currentRound.State)
+	assert.Equal(t, RoundStateRoundOver, game.getCurrentRound().State)
 	assertTick(t, game)
 	details, over := game.GetEndOfGameDetails()
 	a.Nil(details)
 	a.False(over)
 	simulateGameWait(game)
-	assert.Equal(t, RoundStateComplete, game.currentRound.State)
+	assert.Equal(t, RoundStateComplete, game.getCurrentRound().State)
 
 	details, over = game.GetEndOfGameDetails()
 	a.True(over)
@@ -146,6 +146,9 @@ func TestGame_basicFlow(t *testing.T) {
 		2: -125,
 		3: 125,
 	}, details.BalanceAdjustments)
+
+	log := details.Log.([]*Round)
+	a.Equal(3, len(log))
 }
 
 func assertSuccessfulAction(t *testing.T, game *Game, id int64, action Action, payload map[string]interface{}) {
@@ -168,7 +171,7 @@ func assertTick(t *testing.T, game *Game) {
 }
 
 func simulateGameWait(game *Game) {
-	game.currentRound.nextAction.Time = time.Time{}
+	game.getCurrentRound().nextAction.Time = time.Time{}
 	_, err := game.Tick()
 	if err != nil {
 		panic(err)
