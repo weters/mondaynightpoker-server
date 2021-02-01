@@ -107,6 +107,11 @@ func (c *Card) IsBitSet(val int) bool {
 	return c.BitField&val > 0
 }
 
+// UnsetAllBits unsets all bit values
+func (c *Card) UnsetAllBits() {
+	c.BitField = 0
+}
+
 var cardRx = regexp.MustCompile(`(?i)^(!)?([0-9]|1[0-4])([cdhs])\z`)
 
 // CardFromString returns a Card from the string.

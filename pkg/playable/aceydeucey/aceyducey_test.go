@@ -56,3 +56,8 @@ func TestAceyDeucey_isGameOver(t *testing.T) {
 	game.pot = 0
 	a.True(game.isGameOver())
 }
+
+func TestAceyDeucey_Key(t *testing.T) {
+	g := &AceyDeucey{}
+	assert.Equal(t, "acey-deucey", g.Key())
+}

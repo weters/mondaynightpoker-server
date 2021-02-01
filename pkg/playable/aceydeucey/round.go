@@ -134,16 +134,20 @@ func (r *Round) SetBet(bet int, isHalfPotBet bool) error {
 		return err
 	}
 
-	if game.LastCard == nil {
-		return errors.New("cannot bet yet")
+	if r.State != RoundStatePendingBet {
+		return fmt.Errorf("cannot place a bet from state: %s", r.State)
 	}
 
-	if game.Bet.Amount > 0 {
-		return errors.New("bet has already been made")
+	if bet == 0 {
+		return errors.New("bet must be at least {25}")
+	}
+
+	if bet%25 > 0 {
+		return errors.New("bet must be in increments of {25}")
 	}
 
 	if bet > r.Pot {
-		return errors.New("bet must not exceed the Pot")
+		return fmt.Errorf("bet of {%d} exceed the size of the pot {%d}", bet, r.Pot)
 	}
 
 	if isHalfPotBet {
@@ -168,6 +172,7 @@ func (r *Round) dealFirstCard(card *deck.Card) {
 	if card.Rank == deck.Ace {
 		card.SetBit(aceStateUndecided)
 		r.State = RoundStatePendingAceDecision
+		return
 	}
 
 	r.State = RoundStateFirstCardDealt
@@ -182,7 +187,7 @@ func (r *Round) dealLastCard(card *deck.Card) error {
 
 	if card := game.FirstCard; card.Rank == deck.Ace {
 		if !card.IsBitSet(aceStateLow) && !card.IsBitSet(aceStateHigh) {
-			return errors.New("ace has not been decided")
+			panic("bit not properly set on first ace")
 		}
 	}
 
@@ -244,10 +249,7 @@ func (r *Round) dealMiddleCard(card *deck.Card) {
 
 	if card.Rank > lowCard && card.Rank < highCard {
 		if game.Bet.HalfPot {
-			halfPot := r.Pot / 2
-			halfPot -= halfPot % 25
-
-			r.finalizeGame(game, SingleGameResultWon, halfPot)
+			r.finalizeGame(game, SingleGameResultWon, r.halfPot())
 		} else {
 			r.finalizeGame(game, SingleGameResultWon, game.Bet.Amount)
 		}
@@ -256,6 +258,14 @@ func (r *Round) dealMiddleCard(card *deck.Card) {
 	}
 
 	r.finalizeGame(game, SingleGameResultLost, -1*game.Bet.Amount)
+}
+
+// halfPot returns half of the pot, rounded down to the nearest 25
+func (r *Round) halfPot() int {
+	halfPot := r.Pot / 2
+	halfPot -= halfPot % 25
+
+	return halfPot
 }
 
 // drawCard will draw a card and it should always succeed
@@ -324,16 +334,16 @@ func (r *Round) SetAce(highAce bool) error {
 		return err
 	}
 
+	if r.State != RoundStatePendingAceDecision {
+		return fmt.Errorf("cannot choose ace low/high from state: %s", r.State)
+	}
+
 	card := game.FirstCard
 	if card.Rank != deck.Ace {
-		return errors.New("first card is not an ace")
+		panic(fmt.Sprintf("first card is %s, but the state is %s", card.String(), r.State))
 	}
 
-	if !card.IsBitSet(aceStateUndecided) {
-		return errors.New("ace has already been decided")
-	}
-
-	card.UnsetBit(aceStateUndecided)
+	card.UnsetAllBits()
 	bit := aceStateLow
 	if highAce {
 		bit = aceStateHigh

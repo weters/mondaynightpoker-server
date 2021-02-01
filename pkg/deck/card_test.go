@@ -170,3 +170,11 @@ func TestCard_bitField(t *testing.T) {
 	a.False(c.IsBitSet(bitB))
 	a.True(c.IsBitSet(bitC))
 }
+
+func TestCard_UnsetAllBits(t *testing.T) {
+	c := CardFromString("14s")
+	c.BitField = 15
+	c.UnsetAllBits()
+
+	assert.Equal(t, 0, c.BitField)
+}

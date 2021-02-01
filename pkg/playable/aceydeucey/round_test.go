@@ -29,11 +29,11 @@ func TestRound_standardGames(t *testing.T) {
 		a.NoError(r.DealCard())
 
 		if len(aceHigh) > 0 {
-			a.EqualError(r.DealCard(), "ace has not been decided")
+			a.EqualError(r.DealCard(), "cannot deal card from state: pending-ace-decision")
 			a.Equal(51, r.deck.CardsLeft())
 
 			a.NoError(r.SetAce(aceHigh[0]))
-			a.EqualError(r.SetAce(aceHigh[0]), "ace has already been decided")
+			a.EqualError(r.SetAce(aceHigh[0]), "cannot choose ace low/high from state: first-card-dealt")
 		}
 
 		a.Equal(RoundStateFirstCardDealt, r.State)
@@ -81,6 +81,28 @@ func TestRound_standardGames(t *testing.T) {
 	test(t, "14c,8c,14d", 100, 25, SingleGameResultLost, -25, false) // A A 8 (ace-low)
 	test(t, "14c,8c,14d", 100, 25, SingleGameResultPost, -50, true)  // A A 8 (ace-high; post)
 	test(t, "4c,6c,4c", 100, 25, SingleGameResultPost, -50)          // 4 4 6 (post)
+}
+
+func TestRound_betTheGap(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(1025, "2c,4c,3c")
+	a.NoError(r.DealCard())
+	a.NoError(r.DealCard())
+	a.NoError(r.SetBet(50, true))
+	a.NoError(r.DealCard())
+	simulateWait(r)
+	a.Equal(500, r.ParticipantAdjustments())
+	a.Equal(525, r.Pot)
+
+	// no win
+	r = createTestRound(1025, "2c,4c,5c")
+	a.NoError(r.DealCard())
+	a.NoError(r.DealCard())
+	a.NoError(r.SetBet(50, true))
+	a.NoError(r.DealCard())
+	simulateWait(r)
+	a.Equal(-50, r.ParticipantAdjustments())
+	a.Equal(1075, r.Pot)
 }
 
 func TestRound_freeGames(t *testing.T) {
@@ -211,6 +233,201 @@ func TestRound_bonusGameWithAce(t *testing.T) {
 	a.Equal(1, len(r.Games))
 }
 
+func TestRound_SetBet(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(125, "3c,14c")
+	a.NoError(r.DealCard())
+
+	a.EqualError(r.SetBet(25, false), "cannot place a bet from state: first-card-dealt")
+
+	a.NoError(r.DealCard())
+
+	// don't allow a bet if the game
+	r.Games[0].gameOver = true
+	a.EqualError(r.SetBet(25, false), "game is over")
+
+	r.Games[0].gameOver = false
+	a.EqualError(r.SetBet(26, false), "bet must be in increments of {25}")
+	a.EqualError(r.SetBet(150, false), "bet of {150} exceed the size of the pot {125}")
+	a.EqualError(r.SetBet(0, false), "bet must be at least {25}")
+	a.EqualError(r.SetBet(50, true), "bet the gap for half-pot requires a one-card gap")
+	a.Equal(RoundStatePendingBet, r.State)
+	a.NoError(r.SetBet(25, false))
+	a.Equal(RoundStateBetPlaced, r.State)
+
+	r.State = RoundStatePendingBet
+	a.NoError(r.SetBet(125, false))
+
+	assertTestTheGapSuccessful := func(t *testing.T, cards string, highAce ...bool) {
+		t.Helper()
+		a := assert.New(t)
+
+		r := createTestRound(100, cards)
+		a.NoError(r.DealCard())
+
+		if len(highAce) > 0 {
+			a.NoError(r.SetAce(highAce[0]))
+		}
+
+		a.NoError(r.DealCard())
+		a.NoError(r.SetBet(25, true))
+	}
+
+	assertTestTheGapSuccessful(t, "2c,4c")
+	assertTestTheGapSuccessful(t, "4c,2c")
+	assertTestTheGapSuccessful(t, "12c,14c")
+	assertTestTheGapSuccessful(t, "14c,3c", false)
+}
+
+func TestRound_canBetTheGap(t *testing.T) {
+	r := createTestRound(125, "")
+	assert.False(t, r.canBetTheGap())
+
+	r.Games[0].gameOver = true
+	assert.False(t, r.canBetTheGap())
+}
+
+func TestRound_drawCard(t *testing.T) {
+	r := createTestRound(100, "")
+	r.Games = []*SingleGame{
+		{
+			FirstCard:  deck.CardFromString("2d"),
+			MiddleCard: deck.CardFromString("3d"),
+			LastCard:   deck.CardFromString("4d"),
+			gameOver:   true,
+		},
+		{
+			FirstCard: deck.CardFromString("2h"),
+			LastCard:  deck.CardFromString("4h"),
+		},
+	}
+	r.deck.Cards = deck.CardsFromString("2c,3c")
+
+	assertDrawCard := func(r *Round, expectedCard string) {
+		t.Helper()
+
+		card, err := r.drawCard()
+		assert.NoError(t, err)
+		assert.Equal(t, expectedCard, deck.CardToString(card))
+	}
+
+	assertDrawCard(r, "2c")
+	assertDrawCard(r, "3c")
+	assert.Equal(t, 0, r.deck.CardsLeft())
+	seed = 1
+	assertDrawCard(r, "14c")
+	assert.Equal(t, 49, r.deck.CardsLeft())
+
+	foundCard := make(map[string]bool)
+	for _, card := range r.deck.Cards {
+		foundCard[deck.CardToString(card)] = true
+	}
+
+	// only the cards from the unfinished game aren't shuffled in
+	assert.True(t, foundCard["2d"])
+	assert.True(t, foundCard["3d"])
+	assert.True(t, foundCard["4d"])
+	assert.True(t, foundCard["2c"])
+	assert.True(t, foundCard["3c"])
+	assert.False(t, foundCard["2h"])
+	assert.False(t, foundCard["4h"])
+	assert.False(t, foundCard["14c"])
+}
+
+func TestRound_getActiveCardsInGame(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(125, "")
+	r.Games = []*SingleGame{
+		{
+			FirstCard:  deck.CardFromString("2c"),
+			MiddleCard: deck.CardFromString("3c"),
+			LastCard:   deck.CardFromString("4c"),
+			gameOver:   true,
+		},
+		{
+			FirstCard: deck.CardFromString("2d"),
+			LastCard:  deck.CardFromString("3d"),
+		},
+	}
+
+	r.State = RoundStateRoundOver
+	a.Nil(r.getCardsInActiveGame())
+
+	r.State = RoundStateBetPlaced
+	a.Equal("2d,3d", deck.CardsToString(r.getCardsInActiveGame()))
+
+	r.Games = []*SingleGame{
+		{
+			FirstCard:  deck.CardFromString("2c"),
+			MiddleCard: deck.CardFromString("3c"),
+			LastCard:   deck.CardFromString("4c"),
+			gameOver:   true,
+		},
+		{},
+	}
+
+	a.Nil(r.getCardsInActiveGame())
+}
+
+func TestRound_SetAce(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(125, "14c")
+	a.NoError(r.DealCard())
+
+	a.True(r.Games[0].FirstCard.IsBitSet(aceStateUndecided))
+	a.NoError(r.SetAce(false))
+	a.False(r.Games[0].FirstCard.IsBitSet(aceStateUndecided))
+	a.False(r.Games[0].FirstCard.IsBitSet(aceStateHigh))
+	a.True(r.Games[0].FirstCard.IsBitSet(aceStateLow))
+
+	a.EqualError(r.SetAce(false), "cannot choose ace low/high from state: first-card-dealt")
+
+	r.State = RoundStatePendingAceDecision
+	a.NoError(r.SetAce(true))
+	a.False(r.Games[0].FirstCard.IsBitSet(aceStateUndecided))
+	a.True(r.Games[0].FirstCard.IsBitSet(aceStateHigh))
+	a.False(r.Games[0].FirstCard.IsBitSet(aceStateLow))
+
+	// this should NEVER happen
+	r = createTestRound(125, "5c")
+	a.NoError(r.DealCard())
+	r.State = RoundStatePendingAceDecision
+	a.PanicsWithValue("first card is 5♣, but the state is pending-ace-decision", func() { _ = r.SetAce(false) })
+}
+
+func TestRound_nextGameState(t *testing.T) {
+	a := assert.New(t)
+
+	r := createTestRound(125, "")
+	r.Games = []*SingleGame{
+		{gameOver: true},
+		{FirstCard: deck.CardFromString("5s")},
+	}
+	r.State = RoundStateGameOver
+	a.NoError(r.nextGame())
+	a.Equal(RoundStateFirstCardDealt, r.State)
+
+	r = createTestRound(125, "")
+	r.Games = []*SingleGame{
+		{gameOver: true},
+		{FirstCard: deck.CardFromString("14s")},
+	}
+	r.State = RoundStateGameOver
+	a.NoError(r.nextGame())
+	a.Equal(RoundStatePendingAceDecision, r.State)
+}
+
+func TestRound_panicWithLastCardWhenAceNotSet(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(125, "14c,2c,4c")
+	a.NoError(r.DealCard())
+	r.State = RoundStateFirstCardDealt // this should NEVER happen
+
+	a.PanicsWithValue("bit not properly set on first ace", func() {
+		_ = r.DealCard()
+	})
+}
+
 func createTestRound(pot int, cards string) *Round {
 	d := deck.New()
 	for i, card := range deck.CardsFromString(cards) {
@@ -244,4 +461,17 @@ func cardsFromGame(g *SingleGame) string {
 func simulateWait(r *Round) {
 	r.nextAction.Time = time.Time{}
 	r.checkWaiting()
+}
+
+func TestRound_halfPot(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(100, "")
+
+	a.Equal(50, r.halfPot())
+
+	r.Pot = 75
+	a.Equal(25, r.halfPot())
+
+	r.Pot = 125
+	a.Equal(50, r.halfPot())
 }

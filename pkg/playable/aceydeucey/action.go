@@ -28,8 +28,6 @@ const (
 	ActionBet
 	ActionBetTheGap
 	ActionPass
-
-	ActionContinue
 )
 
 func (a Action) String() string {
@@ -46,8 +44,6 @@ func (a Action) String() string {
 		return "Bet the Gap"
 	case ActionPass:
 		return "Pass"
-	case ActionContinue:
-		return "Continue"
 	}
 
 	panic(fmt.Sprintf("invalid action: %d", a))
@@ -60,7 +56,7 @@ func ActionFromString(action string) (Action, error) {
 		return 0, err
 	}
 
-	if actionInt >= 0 && actionInt <= int(ActionContinue) {
+	if actionInt >= 0 && actionInt <= int(ActionPass) {
 		return Action(actionInt), nil
 	}
 
@@ -74,11 +70,6 @@ func (a *AceyDeucey) getActionsForParticipant(playerID int64) []Action {
 	}
 
 	switch a.currentRound.State {
-	case RoundStateStart:
-		// no-op
-	case RoundStateFirstCardDealt:
-		// no-op
-
 	case RoundStatePendingAceDecision:
 		return []Action{ActionPickAceLow, ActionPickAceHigh}
 
@@ -88,11 +79,6 @@ func (a *AceyDeucey) getActionsForParticipant(playerID int64) []Action {
 		}
 
 		return []Action{ActionBet}
-	case RoundStateGameOver:
-		// no-op
-
-	case RoundStateRoundOver:
-		// no-op
 	}
 
 	return nil
