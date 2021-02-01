@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
 	"time"
 )
 
@@ -23,6 +25,7 @@ type Round struct {
 	Games    []*SingleGame
 	State    RoundState
 	Pot      int
+	logChan  chan []*playable.LogMessage
 
 	activeGameIndex int
 	deck            *deck.Deck
@@ -112,21 +115,31 @@ func (r *Round) DealCard() error {
 
 	switch r.State {
 	case RoundStateStart:
+		r.sendLogMessage("Left card dealt", card, 0)
 		r.dealFirstCard(card)
+		return nil
 	case RoundStateFirstCardDealt:
-		err = r.dealLastCard(card)
+		if err := r.dealLastCard(card); err != nil {
+			r.deck.UndoDraw(card)
+			return err
+		}
+
+		// if we are back to the same state, it's because there's a free game
+		if r.State == RoundStateFirstCardDealt {
+			r.sendLogMessage("Bonus game", card, 0)
+		} else {
+			r.sendLogMessage("Right card dealt", card, 0)
+		}
+
+		return nil
 	case RoundStateBetPlaced:
+		r.sendLogMessage("Middle card dealt", card, 0)
 		r.dealMiddleCard(card)
-	default:
-		err = fmt.Errorf("cannot deal card from state: %s", r.State)
+		return nil
 	}
 
-	if err != nil {
-		r.deck.UndoDraw(card)
-		return err
-	}
-
-	return nil
+	r.deck.UndoDraw(card)
+	return fmt.Errorf("cannot deal card from state: %s", r.State)
 }
 
 // SetBet will set an active bet
@@ -161,6 +174,12 @@ func (r *Round) SetBet(bet int, isHalfPotBet bool) error {
 	game.Bet = Bet{
 		Amount:  bet,
 		HalfPot: isHalfPotBet,
+	}
+
+	if game.Bet.HalfPot {
+		r.sendLogMessage(fmt.Sprintf("{} bet ${%d} for half-pot", game.Bet.Amount), nil, r.PlayerID)
+	} else {
+		r.sendLogMessage(fmt.Sprintf("{} bet ${%d}", game.Bet.Amount), nil, r.PlayerID)
 	}
 
 	r.State = RoundStateBetPlaced
@@ -222,6 +241,15 @@ func (r *Round) finalizeGame(g *SingleGame, result SingleGameResult, adjustment 
 	g.Adjustment = adjustment
 	g.Result = result
 	r.Pot -= adjustment
+
+	switch result {
+	case SingleGameResultFreeGame:
+		r.sendLogMessage("{} received a free game", nil, r.PlayerID)
+	case SingleGameResultPost:
+		r.sendLogMessage(fmt.Sprintf("{} posted and lost ${%d}", adjustment), nil, r.PlayerID)
+	default:
+		r.sendLogMessage(fmt.Sprintf("{} %s ${%d}", result, adjustment), nil, r.PlayerID)
+	}
 
 	// if this is the last game or the Pot is empty, end it
 	if r.activeGameIndex+1 == len(r.Games) || r.Pot == 0 {
@@ -347,10 +375,13 @@ func (r *Round) SetAce(highAce bool) error {
 
 	card.UnsetAllBits()
 	bit := aceStateLow
+	chose := "low"
 	if highAce {
 		bit = aceStateHigh
+		chose = "high"
 	}
 
+	r.sendLogMessage(fmt.Sprintf("{} chose ace %s", chose), nil, r.PlayerID)
 	r.State = RoundStateFirstCardDealt
 	card.SetBit(bit)
 	return nil
@@ -411,6 +442,29 @@ func (r *Round) checkWaiting() {
 		if time.Now().After(r.nextAction.Time) {
 			r.State = r.nextAction.NextState
 			r.nextAction = nil
+		}
+	}
+}
+
+func (r *Round) sendLogMessage(message string, card *deck.Card, playerID int64) {
+	if r.logChan != nil {
+		var playerIDs []int64
+		if playerID > 0 {
+			playerIDs = []int64{playerID}
+		}
+
+		var cards []*deck.Card
+		if card != nil {
+			cards = []*deck.Card{card}
+		}
+
+		r.logChan <- []*playable.LogMessage{
+			{
+				UUID:      uuid.New().String(),
+				PlayerIDs: playerIDs,
+				Cards:     cards,
+				Message:   message,
+			},
 		}
 	}
 }

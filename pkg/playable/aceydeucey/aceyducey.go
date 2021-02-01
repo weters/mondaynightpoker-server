@@ -17,7 +17,7 @@ type Game struct {
 	orderedParticipants []*Participant
 	participants        map[int64]*Participant
 	deck                *deck.Deck
-	logChan             chan []playable.LogMessage
+	logChan             chan []*playable.LogMessage
 	turnIndex           int
 	logger              logrus.FieldLogger
 
@@ -60,7 +60,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		orderedParticipants: orderedParticipants,
 		participants:        idToParticipant,
 		deck:                d,
-		logChan:             make(chan []playable.LogMessage, 256),
+		logChan:             make(chan []*playable.LogMessage, 256),
 		turnIndex:           0,
 		pot:                 len(playerIDs) * options.Ante,
 		logger:              logger,
@@ -169,7 +169,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 // LogChan should return a channel that a game will send log messages to
 func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return nil
+	return g.logChan
 }
 
 func (g *Game) getCurrentTurn() *Participant {
@@ -196,7 +196,9 @@ func (g *Game) isGameOver() bool {
 // NOTE: do not call this method until the correct participant is lined up
 func (g *Game) newRound() {
 	turn := g.getCurrentTurn()
-	g.rounds = append(g.rounds, NewRound(turn.PlayerID, g.deck, g.pot))
+	r := NewRound(turn.PlayerID, g.deck, g.pot)
+	r.logChan = g.logChan
+	g.rounds = append(g.rounds, r)
 }
 
 func (g *Game) endRound() error {
