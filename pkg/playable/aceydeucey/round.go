@@ -25,7 +25,9 @@ type Round struct {
 	Games    []*SingleGame
 	State    RoundState
 	Pot      int
-	logChan  chan []*playable.LogMessage
+	// HalfPotMax will limit the bet to half-pot if true
+	HalfPotMax bool
+	logChan    chan []*playable.LogMessage
 
 	activeGameIndex int
 	deck            *deck.Deck
@@ -161,8 +163,8 @@ func (r *Round) SetBet(bet int, isHalfPotBet bool) error {
 		return errors.New("bet must be in increments of ${25}")
 	}
 
-	if bet > r.Pot {
-		return fmt.Errorf("bet of ${%d} exceeds the size of the pot ${%d}", bet, r.Pot)
+	if maxBet := r.getMaxBet(); bet > maxBet {
+		return fmt.Errorf("bet of ${%d} exceeds the max bet of ${%d}", bet, maxBet)
 	}
 
 	if isHalfPotBet {
@@ -279,7 +281,7 @@ func (r *Round) dealMiddleCard(card *deck.Card) {
 
 	if card.Rank > lowCard && card.Rank < highCard {
 		if game.Bet.HalfPot {
-			r.finalizeGame(game, SingleGameResultWon, r.halfPot())
+			r.finalizeGame(game, SingleGameResultWon, r.getHalfPot())
 		} else {
 			r.finalizeGame(game, SingleGameResultWon, game.Bet.Amount)
 		}
@@ -290,8 +292,8 @@ func (r *Round) dealMiddleCard(card *deck.Card) {
 	r.finalizeGame(game, SingleGameResultLost, -1*game.Bet.Amount)
 }
 
-// halfPot returns half of the pot, rounded down to the nearest 25
-func (r *Round) halfPot() int {
+// getHalfPot returns half of the pot, rounded down to the nearest 25
+func (r *Round) getHalfPot() int {
 	halfPot := r.Pot / 2
 	halfPot -= halfPot % 25
 
@@ -471,4 +473,22 @@ func (r *Round) sendLogMessage(message string, card *deck.Card, playerID int64) 
 			},
 		}
 	}
+}
+
+func (r *Round) getMaxBet() int {
+	if r.Pot <= 0 {
+		return 0
+	}
+
+	// if HalfPotMax is false, the pot is the max bet
+	if !r.HalfPotMax {
+		return r.Pot
+	}
+
+	halfPot := r.getHalfPot()
+	if halfPot < 50 {
+		return 25
+	}
+
+	return halfPot
 }

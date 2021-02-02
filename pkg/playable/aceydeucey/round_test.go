@@ -248,7 +248,7 @@ func TestRound_SetBet(t *testing.T) {
 
 	r.Games[0].gameOver = false
 	a.EqualError(r.SetBet(26, false), "bet must be in increments of ${25}")
-	a.EqualError(r.SetBet(150, false), "bet of ${150} exceeds the size of the pot ${125}")
+	a.EqualError(r.SetBet(150, false), "bet of ${150} exceeds the max bet of ${125}")
 	a.EqualError(r.SetBet(0, false), "bet must be at least ${25}")
 	a.EqualError(r.SetBet(50, true), "bet the gap for half-pot requires a one-card gap")
 	a.Equal(RoundStatePendingBet, r.State)
@@ -282,7 +282,7 @@ func TestRound_SetBet(t *testing.T) {
 	r = createTestRound(25, "2c,4c")
 	a.NoError(r.DealCard())
 	a.NoError(r.DealCard())
-	a.EqualError(r.SetBet(50, true), "bet of ${50} exceeds the size of the pot ${25}")
+	a.EqualError(r.SetBet(50, true), "bet of ${50} exceeds the max bet of ${25}")
 }
 
 func TestRound_canBetTheGap(t *testing.T) {
@@ -488,11 +488,35 @@ func TestRound_halfPot(t *testing.T) {
 	a := assert.New(t)
 	r := createTestRound(100, "")
 
-	a.Equal(50, r.halfPot())
+	a.Equal(50, r.getHalfPot())
 
 	r.Pot = 75
-	a.Equal(25, r.halfPot())
+	a.Equal(25, r.getHalfPot())
 
 	r.Pot = 125
-	a.Equal(50, r.halfPot())
+	a.Equal(50, r.getHalfPot())
+}
+
+func TestRound_getMaxBet(t *testing.T) {
+	a := assert.New(t)
+	r := &Round{Pot: 200}
+
+	// test get full pot
+	a.Equal(200, r.getMaxBet())
+
+	testHalfPot := func(t *testing.T, pot, expects int) {
+		t.Helper()
+
+		r.HalfPotMax = true
+		r.Pot = pot
+		a.Equal(expects, r.getMaxBet())
+	}
+
+	testHalfPot(t, 225, 100)
+	testHalfPot(t, 200, 100)
+	testHalfPot(t, 175, 75)
+	testHalfPot(t, 150, 75)
+	testHalfPot(t, 50, 25)
+	testHalfPot(t, 25, 25)
+	testHalfPot(t, 0, 0)
 }

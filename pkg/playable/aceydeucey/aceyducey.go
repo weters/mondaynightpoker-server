@@ -202,6 +202,9 @@ func (g *Game) newRound() {
 	r := NewRound(turn.PlayerID, g.deck, g.pot)
 	r.logChan = g.logChan
 	g.rounds = append(g.rounds, r)
+
+	// limit the bet to half the pot if not all participants went yet
+	r.HalfPotMax = len(g.rounds) <= len(g.participants)
 }
 
 func (g *Game) endRound() error {

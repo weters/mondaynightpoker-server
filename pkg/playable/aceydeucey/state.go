@@ -19,6 +19,7 @@ type GameState struct {
 	CurrentTurn  int64                  `json:"currentTurn"`
 	Round        *Round                 `json:"round"`
 	Participants []*Participant         `json:"participants"`
+	MaxBet       int                    `json:"maxBet"`
 	Config       map[string]interface{} `json:"config"`
 }
 
@@ -35,10 +36,12 @@ func (g *Game) getGameState() *GameState {
 		currentTurn = p.PlayerID
 	}
 
+	round := g.getCurrentRound()
 	return &GameState{
 		CurrentTurn:  currentTurn,
-		Round:        g.getCurrentRound(),
+		Round:        round,
 		Participants: g.orderedParticipants,
+		MaxBet:       round.getMaxBet(),
 		Config:       config,
 	}
 }
