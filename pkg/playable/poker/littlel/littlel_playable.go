@@ -25,16 +25,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
 
 		return playable.OK(), true, nil
-	case "next-round":
-		if err := g.NextRound(); err != nil {
-			return nil, false, err
-		}
-
-		if !g.IsGameOver() {
-			g.logChan <- playable.SimpleLogMessageSlice(0, "Next round started")
-		}
-
-		return playable.OK(), true, nil
 	case "check":
 		if err := g.ParticipantChecks(p); err != nil {
 			return nil, false, err
@@ -77,13 +67,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
 		}
 
-		return playable.OK(), true, nil
-	case "end-game":
-		if !g.IsGameOver() {
-			return nil, false, errors.New("game is not over")
-		}
-
-		g.done = true
 		return playable.OK(), true, nil
 	}
 

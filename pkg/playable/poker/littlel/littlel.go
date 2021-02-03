@@ -9,6 +9,7 @@ import (
 	"mondaynightpoker-server/pkg/playable"
 	"sort"
 	"strings"
+	"time"
 )
 
 // ErrNotPlayersTurn is an error when a player attempts to act out of turn
@@ -52,6 +53,8 @@ type Game struct {
 	winners []*Participant
 
 	lastAdjustmentRound round // the last round an adjustment ran
+
+	endGameAt time.Time
 }
 
 // NewGame returns a new instance of the game
@@ -492,12 +495,6 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 				actions = append(actions, ActionCall, ActionRaise, ActionFold)
 			}
 		}
-	}
-
-	if g.IsGameOver() {
-		actions = append(actions, ActionEndGame)
-	} else if g.IsRoundOver() {
-		actions = append(actions, ActionNextRound)
 	}
 
 	return actions

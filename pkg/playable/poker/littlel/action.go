@@ -10,25 +10,21 @@ type Action string
 
 // action constants
 const (
-	ActionTrade     Action = "trade"
-	ActionFold      Action = "fold"
-	ActionCheck     Action = "check"
-	ActionCall      Action = "call"
-	ActionBet       Action = "bet"
-	ActionRaise     Action = "raise"
-	ActionNextRound Action = "next-round"
-	ActionEndGame   Action = "end-game"
+	ActionTrade Action = "trade"
+	ActionFold  Action = "fold"
+	ActionCheck Action = "check"
+	ActionCall  Action = "call"
+	ActionBet   Action = "bet"
+	ActionRaise Action = "raise"
 )
 
 var allowedActions = map[Action]bool{
-	ActionTrade:     true,
-	ActionFold:      true,
-	ActionCheck:     true,
-	ActionCall:      true,
-	ActionBet:       true,
-	ActionRaise:     true,
-	ActionNextRound: true,
-	ActionEndGame:   true,
+	ActionTrade: true,
+	ActionFold:  true,
+	ActionCheck: true,
+	ActionCall:  true,
+	ActionBet:   true,
+	ActionRaise: true,
 }
 
 // ActionFromString returns an action for the given string
@@ -54,10 +50,6 @@ func (a Action) String() string {
 		return "Bet"
 	case ActionRaise:
 		return "Raise"
-	case ActionNextRound:
-		return "Continue"
-	case ActionEndGame:
-		return "End Game"
 	}
 
 	panic("unknown action")
