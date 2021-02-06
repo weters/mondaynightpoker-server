@@ -95,7 +95,7 @@ func (g *Game) getGameState() *GameState {
 		Pot:           g.pot,
 		Round:         g.roundNo,
 		IsRoundOver:   g.isRoundOver(),
-		IsGameOver:    g.result != nil,
+		IsGameOver:    g.isGameOver(),
 		CurrentTurn:   currentTurn,
 	}
 }

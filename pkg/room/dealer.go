@@ -634,7 +634,20 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 }
 
 func (d *Dealer) unsetGame() {
+	if game := d.game; game != nil {
+	LOG:
+		for {
+			select {
+			case msgs := <-game.LogChan():
+				d.sendLogMessages(msgs)
+			default:
+				break LOG
+			}
+		}
+	}
+
 	d.game = nil
+
 	if d.ticker != nil {
 		d.ticker.Stop()
 		d.ticker = nil

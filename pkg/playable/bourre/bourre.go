@@ -43,8 +43,76 @@ type Game struct {
 	logger  logrus.FieldLogger
 	logChan chan []*playable.LogMessage
 
+	pendingDealerAction *pendingDealerAction
+
 	// done will be set after the game is over and the user's have stated they want to proceed
 	done bool
+}
+
+// Delay determines how often Tick() should be called
+func (g *Game) Delay() time.Duration {
+	return time.Second
+}
+
+// Tick will check the state of the game and possibly move the state along
+func (g *Game) Tick() (bool, error) {
+	if g.done {
+		return false, nil
+	}
+
+	if g.pendingDealerAction != nil {
+		if time.Now().After(g.pendingDealerAction.ExecuteAfter) {
+			action := g.pendingDealerAction.Action
+			switch action {
+			case dealerActionReplaceDiscards:
+				if err := g.replaceDiscards(); err != nil {
+					logrus.WithError(err).Error("could not go to the next round")
+				}
+			case dealerActionNextRound:
+				if err := g.nextRound(); err != nil {
+					logrus.WithError(err).Error("could not go to the next round")
+				}
+			case dealerActionDone:
+				// endGame will do all the end of game calculations
+				// will set a new pendingDealerAction to trigger the clear
+				if err := g.endGame(); err != nil {
+					logrus.WithError(err).Error("could not end the game")
+				}
+			case dealerActionClearGame:
+				g.done = true
+			default:
+				panic(fmt.Sprintf("unknown dealer action: %d", g.pendingDealerAction.Action))
+			}
+
+			// only keep pendingDealerAction if it changed
+			if g.pendingDealerAction.Action == action {
+				g.pendingDealerAction = nil
+			}
+
+			return true, nil
+		}
+
+		return false, nil
+	}
+
+	if g.isGameOver() {
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionDone,
+			ExecuteAfter: time.Now().Add(time.Second * 2),
+		}
+	} else if g.isRoundOver() {
+		action := dealerActionNextRound
+		if g.roundNo == 0 {
+			action = dealerActionReplaceDiscards
+		}
+
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       action,
+			ExecuteAfter: time.Now().Add(time.Second * 1),
+		}
+	}
+
+	return false, nil
 }
 
 // Name returns "bourre"
@@ -80,14 +148,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		return playable.OK(), true, nil
-	case "replaceDiscards":
-		log.Debug("replaceDiscards triggered")
-		if err := g.replaceDiscards(); err != nil {
-			return nil, false, err
-		}
-
-		g.sendLogMessages(newLogMessage(0, nil, "Dealer replaced discards"))
-		return playable.OK(), true, nil
 	case "playCard":
 		if len(message.Cards) != 1 {
 			return nil, false, fmt.Errorf("expected to get 1 card, got %d", len(message.Cards))
@@ -100,68 +160,65 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 		g.sendLogMessages(newLogMessage(player.PlayerID, message.Cards[0], "{} played a card"))
 		return playable.OK(), true, nil
-	case "nextRound":
-		log.Debug("nextRound triggered")
-		if err := g.nextRound(); err != nil {
-			return nil, false, err
-		}
-
-		g.sendLogMessages(newLogMessage(0, nil, "Next round started"))
-		return playable.OK(), true, nil
-	case "done":
-		res := g.result
-		if res == nil {
-			return nil, false, errors.New("done cannot be called yet")
-		}
-
-		messages := make([]*playable.LogMessage, 0)
-
-		if res.WinningAmount > 0 {
-			messages = append(messages, newLogMessage(res.Winners[0].PlayerID, nil, "{} won %d¢", res.WinningAmount))
-		} else {
-			messages = append(messages, newLogMessageWithPlayers(res.Winners, "{} tied for most tricks"))
-		}
-
-		if len(res.PaidPot) > 0 {
-			messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} pays the pot of %d¢", res.OldPot))
-		}
-
-		if len(res.PaidAnte) > 0 {
-			messages = append(messages, newLogMessageWithPlayers(res.PaidAnte, "{} pays the ante of %d¢", res.Ante))
-		}
-
-		if len(res.Booted) > 0 {
-			messages = append(messages, newLogMessageWithPlayers(res.Booted, "{} was booted"))
-		}
-
-		log.Debug("done triggered")
-		if res.ShouldContinue() {
-			log.Debug("new game created")
-			game, err := res.NewGame()
-			if err != nil {
-				return nil, false, err
-			}
-
-			if err := game.Deal(); err != nil {
-				return nil, false, err
-			}
-
-			messages = append(messages, newLogMessage(0, nil, "Another game is required"))
-
-			*g = *game
-		} else {
-			log.Debug("game is done")
-			g.done = true
-
-			messages = append(messages, newLogMessage(0, nil, "The game ends"))
-		}
-
-		g.sendLogMessages(messages...)
-		return playable.OK(), true, nil
-
 	default:
 		return nil, false, fmt.Errorf("unknown action: %s", message.Action)
 	}
+}
+
+func (g *Game) endGame() error {
+	log := logrus.StandardLogger()
+
+	res := g.result
+	if res == nil {
+		return errors.New("done cannot be called yet")
+	}
+
+	messages := make([]*playable.LogMessage, 0)
+
+	if res.WinningAmount > 0 {
+		messages = append(messages, newLogMessage(res.Winners[0].PlayerID, nil, "{} won %d¢", res.WinningAmount))
+	} else {
+		messages = append(messages, newLogMessageWithPlayers(res.Winners, "{} tied for most tricks"))
+	}
+
+	if len(res.PaidPot) > 0 {
+		messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} pays the pot of %d¢", res.OldPot))
+	}
+
+	if len(res.PaidAnte) > 0 {
+		messages = append(messages, newLogMessageWithPlayers(res.PaidAnte, "{} pays the ante of %d¢", res.Ante))
+	}
+
+	if len(res.Booted) > 0 {
+		messages = append(messages, newLogMessageWithPlayers(res.Booted, "{} was booted"))
+	}
+
+	log.Debug("done triggered")
+	if res.ShouldContinue() {
+		log.Debug("new game created")
+		game, err := res.NewGame()
+		if err != nil {
+			return err
+		}
+
+		if err := game.Deal(); err != nil {
+			return err
+		}
+
+		messages = append(messages, newLogMessage(0, nil, "Another game is required"))
+
+		*g = *game
+	} else {
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionClearGame,
+			ExecuteAfter: time.Now().Add(time.Second),
+		}
+
+		messages = append(messages, newLogMessage(0, nil, "The game ends"))
+	}
+
+	g.sendLogMessages(messages...)
+	return nil
 }
 
 // GetEndOfGameDetails returns details at the end of the game
@@ -635,6 +692,11 @@ func (g *Game) playerDidPlayCard(player *Player, card *deck.Card) error {
 	}
 
 	return nil
+}
+
+// isGameOver returns true if the game is over
+func (g *Game) isGameOver() bool {
+	return g.result != nil
 }
 
 // isRoundOver returns true if the round is over
