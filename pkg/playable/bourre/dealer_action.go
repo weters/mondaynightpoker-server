@@ -8,7 +8,6 @@ type dealerAction int
 const (
 	dealerActionNextRound dealerAction = iota
 	dealerActionReplaceDiscards
-	dealerActionDone
 	dealerActionClearGame
 )
 

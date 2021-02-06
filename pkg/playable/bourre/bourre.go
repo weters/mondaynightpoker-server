@@ -72,23 +72,13 @@ func (g *Game) Tick() (bool, error) {
 				if err := g.nextRound(); err != nil {
 					logrus.WithError(err).Error("could not go to the next round")
 				}
-			case dealerActionDone:
-				// endGame will do all the end of game calculations
-				// will set a new pendingDealerAction to trigger the clear
-				if err := g.endGame(); err != nil {
-					logrus.WithError(err).Error("could not end the game")
-				}
 			case dealerActionClearGame:
 				g.done = true
 			default:
 				panic(fmt.Sprintf("unknown dealer action: %d", g.pendingDealerAction.Action))
 			}
 
-			// only keep pendingDealerAction if it changed
-			if g.pendingDealerAction.Action == action {
-				g.pendingDealerAction = nil
-			}
-
+			g.pendingDealerAction = nil
 			return true, nil
 		}
 
@@ -96,9 +86,13 @@ func (g *Game) Tick() (bool, error) {
 	}
 
 	if g.isGameOver() {
+		if err := g.endGame(); err != nil {
+			logrus.WithError(err).Error("could not end game")
+		}
+
 		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionDone,
-			ExecuteAfter: time.Now().Add(time.Second * 2),
+			Action:       dealerActionClearGame,
+			ExecuteAfter: time.Now().Add(time.Second),
 		}
 	} else if g.isRoundOver() {
 		action := dealerActionNextRound
