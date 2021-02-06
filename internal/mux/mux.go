@@ -75,6 +75,7 @@ func NewMux(version string) *Mux {
 		r.Methods(http.MethodPost).Path("/player/{id:[0-9]+}").Handler(this.postPlayerID())
 
 		r.Methods(http.MethodGet).Path("/table").Handler(this.getTable())
+		r.Methods(http.MethodPost).Path("/table").Handler(this.postTable())
 
 		tr := r.PathPrefix("/table/{uuid:(?i)[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}}").Subrouter()
 		tr.Use(this.tableMiddleware)
@@ -88,7 +89,6 @@ func NewMux(version string) *Mux {
 	// depends on authMiddlemare
 	{
 		r := this.adminRouter
-		r.Methods(http.MethodPost).Path("/table").Handler(this.postTable())
 		r.Methods(http.MethodGet).Path("/player").Handler(this.getPlayer())
 		r.Methods(http.MethodGet).Path("/player/{id:[0-9]+}/table").Handler(this.getPlayerIDTable())
 

@@ -37,6 +37,15 @@ func main() {
 
 		fmt.Printf("Created user %d\n", player.ID)
 
+		name, err := getInput("Name")
+		if err != nil {
+			logrus.WithError(err).Fatal("could not get answer")
+		}
+		player.DisplayName = name
+		if err := player.Save(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("could not save player")
+		}
+
 		promote, err := getInput("Make admin (Y/n)")
 		if err != nil {
 			logrus.WithError(err).Fatal("could not get answer")

@@ -4,23 +4,30 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/db"
 	"time"
 )
 
+// tableCreationCoolDown is how long non-admins must wait before creating another table
+const tableCreationCoolDown = time.Minute
+
 const tableColumns = `
 tables.uuid,
 tables.name,
+tables.player_id,
 tables.created`
 
 // Table represents a poker table
 // A table has many players and can have many games
 type Table struct {
-	UUID    string    `json:"uuid"`
-	Name    string    `json:"name"`
-	Created time.Time `json:"created"`
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+	// PlayerID is who created the table
+	PlayerID int64     `json:"playerId"`
+	Created  time.Time `json:"created"`
 }
 
 // ErrPlayerNotAtTable happens when user is not a member of the table
@@ -28,6 +35,10 @@ var ErrPlayerNotAtTable = errors.New("player is not a member of the table")
 
 // CreateTable creates a new table
 func (p *Player) CreateTable(ctx context.Context, name string) (*Table, error) {
+	if err := p.canCreateTable(ctx); err != nil {
+		return nil, err
+	}
+
 	tx, err := db.Instance().BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -35,12 +46,12 @@ func (p *Player) CreateTable(ctx context.Context, name string) (*Table, error) {
 
 	u := uuid.New().String()
 	const query = `
-INSERT INTO tables (uuid, name)
-VALUES ($1, $2)
+INSERT INTO tables (uuid, name, player_id)
+VALUES ($1, $2, $3)
 RETURNING created
 `
 	var created time.Time
-	row := tx.QueryRowContext(ctx, query, u, name)
+	row := tx.QueryRowContext(ctx, query, u, name, p.ID)
 	if err := row.Scan(&created); err != nil {
 		rollback(tx)
 		return nil, err
@@ -59,10 +70,38 @@ VALUES ($1, $2, true)`
 	}
 
 	return &Table{
-		UUID:    u,
-		Name:    name,
-		Created: created,
+		UUID:     u,
+		Name:     name,
+		Created:  created,
+		PlayerID: p.ID,
 	}, nil
+}
+
+// canCreateTable will see if the user is allowed to create a table
+// returns nil if the user can create a table
+func (p *Player) canCreateTable(ctx context.Context) error {
+	// site admins can always create a table
+	if p.IsSiteAdmin {
+		return nil
+	}
+
+	const query = `
+SELECT COUNT(*)
+FROM tables
+WHERE player_id = $1
+  AND created >= $2 AT TIME ZONE 'UTC'`
+
+	row := db.Instance().QueryRowContext(ctx, query, p.ID, time.Now().In(time.UTC).Add(tableCreationCoolDown*-1))
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return fmt.Errorf("you must wait before you create another table")
+	}
+
+	return nil
 }
 
 func getTableByRow(row db.Scanner, additionalColumns ...interface{}) (*Table, error) {
@@ -70,6 +109,7 @@ func getTableByRow(row db.Scanner, additionalColumns ...interface{}) (*Table, er
 	columns := []interface{}{
 		&t.UUID,
 		&t.Name,
+		&t.PlayerID,
 		&t.Created,
 	}
 

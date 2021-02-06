@@ -18,3 +18,7 @@ keys: .keys/public.pem
 dev-database:
 	-docker run --name mondaynightpoker -e POSTGRES_HOST_AUTH_METHOD=trust -d -p 5432:5432 postgres:9.4
 	go run ./cmd/migrate
+
+clean:
+	-docker rm -v -f mondaynightpoker
+	rm -rf .keys/public.pem .keys/private.key

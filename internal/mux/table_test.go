@@ -17,6 +17,7 @@ func Test_getTable(t *testing.T) {
 
 	p, j := player()
 
+	p.IsSiteAdmin = true // so we can rapidly create tables
 	tbl1, _ := p.CreateTable(cbg, "Table 1")
 	tbl2, _ := p.CreateTable(cbg, "Table 2")
 	tbl3, _ := p.CreateTable(cbg, "Table 3")
@@ -55,7 +56,7 @@ func Test_postTable(t *testing.T) {
 	defer ts.Close()
 
 	// verify it requires admin access
-	assertPost(t, ts, "/table", postTablePayload{Name: "Test"}, nil, 403, j)
+	assertPost(t, ts, "/table", postTablePayload{Name: "Test"}, nil, 401)
 
 	// actually test it
 	_ = p.SetIsSiteAdmin(context.Background(), true)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"mondaynightpoker-server/internal/util"
+	"mondaynightpoker-server/pkg/db"
 	"strconv"
 	"strings"
 	"testing"
@@ -86,11 +87,37 @@ func TestPlayer_CreateTable(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, table)
 	assert.NotEmpty(t, table.UUID)
+	assert.Equal(t, table.PlayerID, player.ID)
 
 	table2, err := player.CreateTable(cbg, "my table")
+	assert.EqualError(t, err, "you must wait before you create another table")
+	assert.Nil(t, table2)
+
+	const query = `
+UPDATE tables
+SET created = (now() at time zone 'utc') - interval '61 second'
+WHERE uuid = $1`
+	_, err = db.Instance().Exec(query, table.UUID)
+	assert.NoError(t, err)
+
+	table2, err = player.CreateTable(cbg, "my table")
 	assert.NoError(t, err)
 	assert.NotNil(t, table2)
 	assert.NotEqual(t, table2.UUID, table.UUID)
+	assert.Equal(t, table2.PlayerID, player.ID)
+
+	table3, err := player.CreateTable(cbg, "my table")
+	assert.EqualError(t, err, "you must wait before you create another table")
+	assert.Nil(t, table3)
+	player.IsSiteAdmin = true
+	table3, err = player.CreateTable(cbg, "my table")
+	assert.NoError(t, err)
+	assert.NotNil(t, table3)
+
+	table, err = GetTableByUUID(cbg, table.UUID)
+	assert.NoError(t, err)
+	assert.Equal(t, "my table", table.Name)
+	assert.Equal(t, player.ID, table.PlayerID)
 }
 
 func TestPlayer_Join(t *testing.T) {
@@ -125,6 +152,7 @@ func TestPlayer_SetIsSiteAdmin(t *testing.T) {
 
 func TestPlayer_GetTables(t *testing.T) {
 	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
 	tbl1, _ := p.CreateTable(cbg, "Table 1")
 	tbl2, _ := p.CreateTable(cbg, "Table 2")
 	tbl3, _ := p.CreateTable(cbg, "Table 3")
