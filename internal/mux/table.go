@@ -47,13 +47,18 @@ func (m *Mux) postTable() http.HandlerFunc {
 		}
 
 		player := r.Context().Value(ctxPlayerKey).(*table.Player)
-		table, err := player.CreateTable(r.Context(), pp.Name)
+		tbl, err := player.CreateTable(r.Context(), pp.Name)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err)
+			var ue table.UserError
+			if errors.As(err, &ue) {
+				writeJSONError(w, http.StatusBadRequest, err)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, err)
+			}
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, table)
+		writeJSON(w, http.StatusCreated, tbl)
 	}
 }
 

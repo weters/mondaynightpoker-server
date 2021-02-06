@@ -73,3 +73,8 @@ Variable | Default | Description
 `RECAPTCHA_SECRET` | | Recaptcha v3 secret key
 `DISABLE_ACCESS_LOGS` | | Disables access logging. Only recommended for dev
 `START_GAME_DELAY` | `10` | How many seconds to wait after player starts a game
+`EMAIL_FROM` | `Monday Night Poker <no-replay@monday-night.poker>` | Email from address
+`EMAIL_SENDER` | `no-replay@monday-night.poker` | Email sender
+`EMAIL_USERNAME` | `dealer@monday-night.poker` | Username for the mailbox
+`EMAIL_PASSWORD` | | Password for the mailbox
+`EMAIL_HOST` | `mail.privateemail.com:587` | SMTP host and port

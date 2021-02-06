@@ -2,7 +2,9 @@ package mux
 
 import (
 	"context"
+	"mondaynightpoker-server/internal/email"
 	"mondaynightpoker-server/internal/jwt"
+	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/room"
 	"mondaynightpoker-server/pkg/table"
 	"net/http"
@@ -27,6 +29,7 @@ type Mux struct {
 	version   string
 	recaptcha recaptcha
 	pitBoss   *room.PitBoss
+	email     *email.Client
 
 	// store for testing purposes
 	authRouter  *gmux.Router
@@ -43,10 +46,16 @@ func NewMux(version string) *Mux {
 	pitBoss := room.NewPitBoss()
 	pitBoss.StartShift()
 
+	e, err := emailClient()
+	if err != nil {
+		panic(err)
+	}
+
 	this := &Mux{
 		Router:  gmux.NewRouter(),
 		version: version,
 		pitBoss: pitBoss,
+		email:   e,
 		config: config{
 			playerCreateDelay: time.Minute,
 		},
@@ -140,4 +149,13 @@ func (m *Mux) adminMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func emailClient() (*email.Client, error) {
+	sender := util.Getenv("EMAIL_SENDER", "Monday Night Poker <no-reply@monday-night.poker>")
+	username := util.Getenv("EMAIL_USERNAME", "dealer@monday-night.poker")
+	password := util.Getenv("EMAIL_PASSWORD", "")
+	host := util.Getenv("EMAIL_HOST", "mail.privateemail:587")
+
+	return email.NewClient(sender, username, password, host)
 }

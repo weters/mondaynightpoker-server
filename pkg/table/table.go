@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/db"
@@ -98,7 +97,7 @@ WHERE player_id = $1
 	}
 
 	if count > 0 {
-		return fmt.Errorf("you must wait before you create another table")
+		return UserError("you must wait before you create another table")
 	}
 
 	return nil
