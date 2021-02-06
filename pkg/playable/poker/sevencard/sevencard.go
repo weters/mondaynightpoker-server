@@ -8,6 +8,7 @@ import (
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
+	"time"
 )
 
 const maxParticipants = 7
@@ -37,6 +38,8 @@ type Game struct {
 	pendingLogs []*playable.LogMessage
 	logChan     chan []*playable.LogMessage
 	logger      logrus.FieldLogger
+
+	setDoneAt time.Time // set done to true after this time
 
 	// done will be set to true if the game has ended, and the players advance
 	done bool

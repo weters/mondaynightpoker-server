@@ -22,28 +22,22 @@ func (a Action) MarshalJSON() ([]byte, error) {
 
 // Action constants
 const (
-	ActionFold    Action = "fold"
-	ActionCheck   Action = "check"
-	ActionBet     Action = "bet"
-	ActionRaise   Action = "raise"
-	ActionCall    Action = "call"
-	ActionEndGame Action = "end-game"
+	ActionFold  Action = "fold"
+	ActionCheck Action = "check"
+	ActionBet   Action = "bet"
+	ActionRaise Action = "raise"
+	ActionCall  Action = "call"
 )
 
 var allowedActions = map[Action]bool{
-	ActionFold:    true,
-	ActionCheck:   true,
-	ActionBet:     true,
-	ActionRaise:   true,
-	ActionCall:    true,
-	ActionEndGame: true,
+	ActionFold:  true,
+	ActionCheck: true,
+	ActionBet:   true,
+	ActionRaise: true,
+	ActionCall:  true,
 }
 
 func (a Action) String() string {
-	if a == ActionEndGame {
-		return "End Game"
-	}
-
 	if _, ok := allowedActions[a]; !ok {
 		panic(fmt.Sprintf("unknown action: %s", string(a)))
 	}
@@ -71,10 +65,6 @@ func (g *Game) getActionsForParticipant(p *participant) []Action {
 		} else {
 			actions = append(actions, ActionFold, ActionCall, ActionRaise)
 		}
-	}
-
-	if g.isGameOver() {
-		actions = append(actions, ActionEndGame)
 	}
 
 	return actions

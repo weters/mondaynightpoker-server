@@ -10,7 +10,6 @@ func TestAction_String(t *testing.T) {
 
 	a.Equal("Fold", ActionFold.String())
 	a.Equal("Raise", ActionRaise.String())
-	a.Equal("End Game", ActionEndGame.String())
 
 	a.PanicsWithValue("unknown action: bad", func() {
 		_ = Action("bad").String()
@@ -36,9 +35,12 @@ func TestGame_getActionsForParticipant(t *testing.T) {
 	a.Equal([]Action{}, game.getActionsForParticipant(p(2)))
 
 	game.endGame()
-	a.Equal([]Action{ActionEndGame}, game.getActionsForParticipant(p(1)))
-	a.Equal([]Action{ActionEndGame}, game.getActionsForParticipant(p(2)))
-	a.Equal([]Action{ActionEndGame}, game.getActionsForParticipant(p(3)))
+
+	// participants no longer have to end the game manually. ensure there
+	// are no actions for them
+	a.Equal([]Action{}, game.getActionsForParticipant(p(1)))
+	a.Equal([]Action{}, game.getActionsForParticipant(p(2)))
+	a.Equal([]Action{}, game.getActionsForParticipant(p(3)))
 }
 
 func TestAction_MarshalJSON(t *testing.T) {

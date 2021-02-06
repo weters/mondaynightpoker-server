@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/playable"
 	"testing"
+	"time"
 )
 
 func TestGame_Name(t *testing.T) {
@@ -90,9 +91,10 @@ func TestGame_Action(t *testing.T) {
 	assertActionOK(2, payload("call"))
 
 	assertActionOK(2, payload("bet", 25))
-	assertActionError(3, payload("end-game"), "game is not over")
+	// user can no longer end the game manually
+	assertActionError(3, payload("end-game"), "unknown action: end-game")
 	assertActionOK(3, payload("fold"))
-	assertActionOK(3, payload("end-game"))
+	assertActionError(3, payload("end-game"), "unknown action: end-game")
 }
 
 func TestGame_GetEndOfGameDetails(t *testing.T) {
@@ -107,7 +109,23 @@ func TestGame_GetEndOfGameDetails(t *testing.T) {
 	a.False(isGameOver)
 	a.Nil(details)
 
-	a.NoError(game.participantEndsGame(p(1)))
+	// first ticket will set setDoneAt time
+	// GetEndOfGameDetails still return false
+	update, err := game.Tick()
+	a.False(update)
+	a.NoError(err)
+
+	details, isGameOver = game.GetEndOfGameDetails()
+	a.False(isGameOver)
+	a.Nil(details)
+
+	a.True(game.setDoneAt.After(time.Now()))
+	game.setDoneAt = time.Now().Add(time.Second * -1)
+
+	// now that setDoneAt is non-zero and in the past, the game should end
+	update, err = game.Tick()
+	a.True(update)
+	a.NoError(err)
 
 	details, isGameOver = game.GetEndOfGameDetails()
 	a.True(isGameOver)

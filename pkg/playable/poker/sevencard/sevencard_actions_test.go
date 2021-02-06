@@ -162,12 +162,3 @@ func TestGame_participantRaises(t *testing.T) {
 	a.Equal(-25, p(3).balance)
 	a.Equal(0, p(3).currentBet)
 }
-
-func TestGame_participantEndsGame(t *testing.T) {
-	a := assert.New(t)
-	game, p := createTestGame()
-	a.EqualError(game.participantEndsGame(p(1)), "game is not over")
-	a.NoError(game.participantFolds(p(1)))
-	a.NoError(game.participantFolds(p(2)))
-	a.NoError(game.participantEndsGame(p(1)))
-}

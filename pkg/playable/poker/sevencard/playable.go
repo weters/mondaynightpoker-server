@@ -63,10 +63,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
-	case ActionEndGame:
-		if err := g.participantEndsGame(p); err != nil {
-			return nil, false, err
-		}
 	}
 
 	if len(g.pendingLogs) > 0 {

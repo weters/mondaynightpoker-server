@@ -107,17 +107,6 @@ func (g *Game) bet(p *participant, betType string, amount, min int) error {
 	return nil
 }
 
-func (g *Game) participantEndsGame(p *participant) error {
-	_ = p
-
-	if !g.isGameOver() {
-		return errors.New("game is not over")
-	}
-
-	g.done = true
-	return nil
-}
-
 func (g *Game) getMaxBet() int {
 	return g.pot + g.currentBet
 }
