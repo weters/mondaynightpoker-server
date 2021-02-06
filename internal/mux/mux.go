@@ -152,10 +152,11 @@ func (m *Mux) adminMiddleware(next http.Handler) http.Handler {
 }
 
 func emailClient() (*email.Client, error) {
-	sender := util.Getenv("EMAIL_SENDER", "Monday Night Poker <no-reply@monday-night.poker>")
+	from := util.Getenv("EMAIL_FROM", "Monday Night Poker <no-reply@monday-night.poker>")
+	sender := util.Getenv("EMAIL_SENDER", "no-reply@monday-night.poker")
 	username := util.Getenv("EMAIL_USERNAME", "dealer@monday-night.poker")
 	password := util.Getenv("EMAIL_PASSWORD", "")
-	host := util.Getenv("EMAIL_HOST", "mail.privateemail:587")
+	host := util.Getenv("EMAIL_HOST", "mail.privateemail.com:587")
 
-	return email.NewClient(sender, username, password, host)
+	return email.NewClient(from, sender, username, password, host)
 }
