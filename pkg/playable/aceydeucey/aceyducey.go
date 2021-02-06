@@ -29,8 +29,8 @@ type Game struct {
 	rounds []*Round
 }
 
-// Delay is how long we should wait before updating the game state
-func (g *Game) Delay() time.Duration {
+// Interval is how long we should wait before updating the game state
+func (g *Game) Interval() time.Duration {
 	return time.Second
 }
 

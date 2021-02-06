@@ -68,7 +68,7 @@ func TestAceyDeucey_Key(t *testing.T) {
 
 func TestGame_Delay(t *testing.T) {
 	g := &Game{}
-	assert.Equal(t, time.Second, g.Delay())
+	assert.Equal(t, time.Second, g.Interval())
 }
 
 func TestGame_getCurrentTurn(t *testing.T) {

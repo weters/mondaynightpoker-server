@@ -34,16 +34,11 @@ const (
 	// ActionGoToDeck happens when the dealer announces their intention to go to the deck
 	ActionGoToDeck
 	ActionDrawFromDeck
-
-	// game based actions (i.e., not player specific)
-	ActionEndRound
-	ActionNextRound
-	ActionEndGame
 )
 
 // GameActionFromInt returns a GameAction object from an integer
 func GameActionFromInt(i int) (GameAction, error) {
-	if i >= 0 && i <= int(ActionEndGame) {
+	if i >= 0 && i <= int(ActionDrawFromDeck) {
 		return GameAction(i), nil
 	}
 
@@ -66,12 +61,6 @@ func (g GameAction) String() string {
 		return "Go to Deck"
 	case ActionDrawFromDeck:
 		return "Draw Card from Deck"
-	case ActionEndRound:
-		return "End Round"
-	case ActionNextRound:
-		return "Next Round"
-	case ActionEndGame:
-		return "End Game"
 	}
 
 	panic(fmt.Sprintf("invalid action %d", g))

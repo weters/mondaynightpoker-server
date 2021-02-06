@@ -49,8 +49,8 @@ type Game struct {
 	done bool
 }
 
-// Delay determines how often Tick() should be called
-func (g *Game) Delay() time.Duration {
+// Interval determines how often Tick() should be called
+func (g *Game) Interval() time.Duration {
 	return time.Second
 }
 

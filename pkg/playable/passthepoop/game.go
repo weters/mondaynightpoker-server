@@ -12,10 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// how long you must wait before you can hit next round after
-// you end a round
-const nextRoundDelay = time.Second * 2
-
 // Game is an individual game of pass the poop
 type Game struct {
 	options         Options
@@ -47,11 +43,8 @@ type Game struct {
 
 	// endGameAck is when a player acknowledges the game is over and the UI can go to
 	// game select screen
-	endGameAck bool
-
-	// nextRoundStartTime if not zero, cannot start next round unless
-	// after now
-	nextRoundStartTime time.Time
+	endGameAck            bool
+	pendingTickableAction *pendingTickableAction
 
 	// gameLog keeps track of all moves and will be returned
 	// by GetEndOfGameDetails() to be stored in the database
@@ -530,36 +523,11 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
-		switch action {
-		case ActionEndRound:
-			if err := g.EndRound(); err != nil {
-				return nil, false, err
-			}
-
-			g.nextRoundStartTime = time.Now().Add(nextRoundDelay)
-
-			return playable.OK(), true, nil
-		case ActionNextRound:
-			diff := time.Until(g.nextRoundStartTime)
-			if !g.nextRoundStartTime.IsZero() && diff > 0 {
-				return nil, false, fmt.Errorf("please wait %.1f s until starting the next round", float64(diff)/float64(time.Second))
-			}
-
-			if err := g.nextRound(); err != nil {
-				return nil, false, err
-			}
-
-			return playable.OK(), true, nil
-		case ActionEndGame:
-			g.endGameAck = true
-			return playable.OK(), true, nil
-		default:
-			if err := g.ExecuteTurnForPlayer(playerID, action); err != nil {
-				return nil, false, err
-			}
-
-			return playable.OK(), true, nil
+		if err := g.ExecuteTurnForPlayer(playerID, action); err != nil {
+			return nil, false, err
 		}
+
+		return playable.OK(), true, nil
 	default:
 		return nil, false, fmt.Errorf("unsupported action: %s", message.Action)
 	}
@@ -635,14 +603,6 @@ func (g *Game) getActionsForParticipant(participant *Participant) []GameAction {
 				}
 			}
 		}
-	}
-
-	if g.isGameOver() {
-		actions = append(actions, ActionEndGame)
-	} else if g.isRoundOver() {
-		actions = append(actions, ActionNextRound)
-	} else if g.getCurrentTurn() == nil {
-		actions = append(actions, ActionEndRound)
 	}
 
 	return actions

@@ -626,7 +626,7 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 	d.game = game
 
 	if t, ok := game.(playable.Tickable); ok {
-		d.ticker = time.NewTicker(t.Delay())
+		d.ticker = time.NewTicker(t.Interval())
 	}
 
 	d.stateChanged <- stateGameEvent

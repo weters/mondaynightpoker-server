@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// Delay specifies how frequently a Tick() should happen
-func (g *Game) Delay() time.Duration {
+// Interval specifies how frequently a Tick() should happen
+func (g *Game) Interval() time.Duration {
 	return time.Second
 }
 

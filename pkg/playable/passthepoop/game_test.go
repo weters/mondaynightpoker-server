@@ -410,22 +410,16 @@ func TestGame_getActionsForParticipant(t *testing.T) {
 	execOK(2, ActionDrawFromDeck)
 
 	actions = game.getActionsForParticipant(game.idToParticipant[1])
-	assert.Equal(t, []GameAction{
-		ActionEndRound,
-	}, actions)
+	assert.Equal(t, []GameAction{}, actions)
 	actions = game.getActionsForParticipant(game.idToParticipant[2])
-	assert.Equal(t, []GameAction{
-		ActionEndRound,
-	}, actions)
+	assert.Equal(t, []GameAction{}, actions)
 
 	game.idToParticipant[1].card = card("3c")
 	game.idToParticipant[2].card = card("4c")
 	assert.NoError(t, game.EndRound())
 
 	actions = game.getActionsForParticipant(game.idToParticipant[2])
-	assert.Equal(t, []GameAction{
-		ActionNextRound,
-	}, actions)
+	assert.Equal(t, []GameAction{}, actions)
 
 	assert.NoError(t, game.nextRound())
 
@@ -441,9 +435,7 @@ func TestGame_getActionsForParticipant(t *testing.T) {
 	assert.NoError(t, game.EndRound())
 
 	actions = game.getActionsForParticipant(game.idToParticipant[2])
-	assert.Equal(t, []GameAction{
-		ActionEndGame,
-	}, actions)
+	assert.Equal(t, []GameAction{}, actions)
 
 	assert.True(t, game.isGameOver())
 }
