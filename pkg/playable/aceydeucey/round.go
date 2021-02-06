@@ -305,7 +305,7 @@ func (r *Round) dealMiddleCard(card *deck.Card) {
 	r.finalizeGame(game, SingleGameResultLost, -1*game.Bet.Amount)
 }
 
-// PassRound() will finalize a round that was passed
+// PassRound will finalize a round that was passed
 // this method must only be called after ensuring the state is RoundStatePassed
 func (r *Round) PassRound() {
 	game := r.Games[r.activeGameIndex]

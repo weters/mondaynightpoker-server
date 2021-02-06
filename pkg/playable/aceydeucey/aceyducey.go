@@ -201,6 +201,10 @@ func (g *Game) isGameOver() bool {
 // newRound starts a new round
 // NOTE: do not call this method until the correct participant is lined up
 func (g *Game) newRound() {
+	if g.options.ContinuousShoe {
+		g.deck.Shuffle(seed)
+	}
+
 	turn := g.getCurrentTurn()
 	r := NewRound(turn.PlayerID, g.deck, g.pot)
 	r.logChan = g.logChan

@@ -299,3 +299,34 @@ func betPayload(amount int) map[string]interface{} {
 		"amount": float64(amount),
 	}
 }
+
+func TestGame_newRound(t *testing.T) {
+	a := assert.New(t)
+	opts := DefaultOptions()
+
+	// test no continuous shoe
+	{
+		game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+
+		a.NoError(err)
+		a.NotNil(game)
+
+		// ensure the deck wasn't shuffled when newRound was called
+		hc := game.deck.HashCode()
+		game.newRound()
+		a.Equal(hc, game.getCurrentRound().deck.HashCode())
+	}
+
+	// test continuous shoe
+	{
+		opts.ContinuousShoe = true
+		game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+		a.NoError(err)
+		a.NotNil(game)
+
+		// ensure the deck is shuffled when newRound is called
+		hc := game.deck.HashCode()
+		game.newRound()
+		a.NotEqual(hc, game.getCurrentRound().deck.HashCode())
+	}
+}
