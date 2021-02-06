@@ -154,7 +154,9 @@ func TestGame_basicFlow(t *testing.T) {
 	game.deck.Cards = deck.CardsFromString("2c,14c,4d")
 	assertTick(t, game)
 	assertTick(t, game)
-	assertSuccessfulAction(t, game, 1, ActionBet, map[string]interface{}{"amount": float64(200)})
+	// allowPass isn't true, so ensure user cannot pass
+	assertFailedAction(t, game, 1, ActionPass, nil, "you cannot perform the action: Pass")
+	assertSuccessfulAction(t, game, 1, ActionBet, betPayload(200))
 	assertTick(t, game)
 	simulateGameWait(game)
 	assert.Equal(t, RoundStateRoundOver, game.getCurrentRound().State)
@@ -176,6 +178,71 @@ func TestGame_basicFlow(t *testing.T) {
 
 	log := details.Log.([]*Round)
 	a.Equal(4, len(log))
+}
+
+func TestGame_allowPass(t *testing.T) {
+	a := assert.New(t)
+
+	opts := Options{
+		Ante:           100,
+		AllowPass:      true,
+		ContinuousShoe: false,
+	}
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+	a.NoError(err)
+
+	game.deck.Cards = deck.CardsFromString("2c,5c")
+
+	// two ticks will deal the first two cards
+	assertTick(t, game)
+	assertTick(t, game)
+	a.Equal(RoundStatePendingBet, game.getCurrentRound().State)
+
+	a.Equal([]Action{ActionPass, ActionBet}, game.getActionsForParticipant(1))
+	assertSuccessfulAction(t, game, 1, ActionPass, nil)
+
+	a.Equal(RoundStatePassed, game.getCurrentRound().State)
+	assertTick(t, game)
+	simulateGameWait(game)
+	sg := game.getCurrentRound().Games[game.getCurrentRound().activeGameIndex]
+	a.Equal(SingleGameResultPass, sg.Result)
+	a.Equal(RoundStateRoundOver, game.getCurrentRound().State)
+
+	// next round
+	assertTick(t, game)
+	a.Equal(RoundStateStart, game.getCurrentRound().State)
+
+	game.deck.Cards = deck.CardsFromString("2c,5c,3c")
+	assertTick(t, game) // deal card 1
+	assertTick(t, game) // deal card 2
+	assertSuccessfulAction(t, game, 2, ActionBet, betPayload(150))
+	assertTick(t, game) // deal card 3
+	sg = game.getCurrentRound().Games[game.getCurrentRound().activeGameIndex]
+	a.Equal(SingleGameResultWon, sg.Result)
+
+	simulateGameWait(game)
+	a.Equal(RoundStateRoundOver, game.getCurrentRound().State) // round over
+
+	// next round
+	assertTick(t, game)
+	a.Equal(RoundStateStart, game.getCurrentRound().State)
+
+	a.Equal(150, game.pot)
+	a.Equal(-100, game.participants[1].Balance) // passed
+	a.Equal(50, game.participants[2].Balance)   // won $1.50
+	a.Equal(-100, game.participants[3].Balance) // didn't play yet
+}
+
+func assertFailedAction(t *testing.T, game *Game, id int64, action Action, payload map[string]interface{}, expectedErr string) {
+	resp, didUpdate, err := game.Action(id, &playable.PayloadIn{
+		Subject:        strconv.Itoa(int(action)),
+		AdditionalData: payload,
+	})
+
+	t.Helper()
+	assert.EqualError(t, err, expectedErr)
+	assert.Nil(t, resp)
+	assert.False(t, didUpdate)
 }
 
 func assertSuccessfulAction(t *testing.T, game *Game, id int64, action Action, payload map[string]interface{}) {
@@ -225,4 +292,10 @@ func TestGame_newRound_maxBet(t *testing.T) {
 	// player 1 - max bet
 	g.newRound()
 	a.Equal(300, g.getCurrentRound().getMaxBet())
+}
+
+func betPayload(amount int) map[string]interface{} {
+	return map[string]interface{}{
+		"amount": float64(amount),
+	}
 }

@@ -36,6 +36,7 @@ const (
 	SingleGameResultLost     SingleGameResult = "lost"
 	SingleGameResultPost     SingleGameResult = "post"
 	SingleGameResultWon      SingleGameResult = "won"
+	SingleGameResultPass     SingleGameResult = "pass"
 )
 
 func newSingleGame() *SingleGame {

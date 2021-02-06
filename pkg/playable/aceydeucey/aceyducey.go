@@ -122,7 +122,10 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 		return playable.OK(), true, nil
 	case ActionPass:
-		panic("implement me")
+		if err := round.SetPass(); err != nil {
+			return nil, false, err
+		}
+		return playable.OK(), true, nil
 	case ActionBetTheGap:
 		if err := round.SetBet(betTheGapAmount, true); err != nil {
 			return nil, false, err
@@ -240,6 +243,9 @@ func (g *Game) Tick() (didUpdate bool, err error) {
 			return false, err
 		}
 
+		return true, nil
+	case RoundStatePassed:
+		currentRound.PassRound()
 		return true, nil
 	case RoundStateGameOver:
 		if err := currentRound.nextGame(); err != nil {

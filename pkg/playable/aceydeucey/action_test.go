@@ -64,6 +64,10 @@ func TestAceyDeucey_getActionsForParticipant(t *testing.T) {
 
 	a.NoError(game.getCurrentRound().DealCard())
 	a.Equal([]Action{ActionBet}, game.getActionsForParticipant(1))
+	game.options.AllowPass = true
+	a.Equal([]Action{ActionPass, ActionBet}, game.getActionsForParticipant(1))
+	game.options.AllowPass = false
+
 	a.Nil(game.getActionsForParticipant(2))
 	a.Nil(game.getActionsForParticipant(3))
 
@@ -71,6 +75,9 @@ func TestAceyDeucey_getActionsForParticipant(t *testing.T) {
 	a.Equal([]Action{ActionBet}, game.getActionsForParticipant(1))
 	game.getCurrentRound().Pot = betTheGapAmount * 2
 	a.Equal([]Action{ActionBet, ActionBetTheGap}, game.getActionsForParticipant(1))
+
+	game.options.AllowPass = true
+	a.Equal([]Action{ActionPass, ActionBet, ActionBetTheGap}, game.getActionsForParticipant(1))
 
 	// test ace
 	game, err = NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())

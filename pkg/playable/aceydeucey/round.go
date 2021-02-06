@@ -75,6 +75,9 @@ const (
 	// RoundStatePendingBet means the last card has been dealt and we are waiting for participant to place bet
 	RoundStatePendingBet RoundState = "pending-bet"
 
+	// RoundStatePassed means the participant passed instead of placing a bet
+	RoundStatePassed RoundState = "passed"
+
 	// RoundStateBetPlaced means a bet has been successfully placed
 	RoundStateBetPlaced RoundState = "bet-placed"
 
@@ -142,6 +145,16 @@ func (r *Round) DealCard() error {
 
 	r.deck.UndoDraw(card)
 	return fmt.Errorf("cannot deal card from state: %s", r.State)
+}
+
+// SetPass will pass the current round
+func (r *Round) SetPass() error {
+	if r.State != RoundStatePendingBet {
+		return fmt.Errorf("cannot pass from state: %s", r.State)
+	}
+
+	r.State = RoundStatePassed
+	return nil
 }
 
 // SetBet will set an active bet
@@ -290,6 +303,13 @@ func (r *Round) dealMiddleCard(card *deck.Card) {
 	}
 
 	r.finalizeGame(game, SingleGameResultLost, -1*game.Bet.Amount)
+}
+
+// PassRound() will finalize a round that was passed
+// this method must only be called after ensuring the state is RoundStatePassed
+func (r *Round) PassRound() {
+	game := r.Games[r.activeGameIndex]
+	r.finalizeGame(game, SingleGameResultPass, 0)
 }
 
 // getHalfPot returns half of the pot, rounded down to the nearest 25

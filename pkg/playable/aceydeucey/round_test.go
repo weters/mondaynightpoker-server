@@ -83,6 +83,24 @@ func TestRound_standardGames(t *testing.T) {
 	test(t, "4c,6c,4c", 100, 25, SingleGameResultPost, -50)          // 4 4 6 (post)
 }
 
+func TestRound_pass(t *testing.T) {
+	a := assert.New(t)
+	r := createTestRound(500, "2c,4c")
+	a.NoError(r.DealCard())
+
+	a.EqualError(r.SetPass(), "cannot pass from state: first-card-dealt")
+
+	a.NoError(r.DealCard())
+	a.NoError(r.SetPass())
+	a.Equal(RoundStatePassed, r.State)
+	r.PassRound()
+	simulateWait(r)
+	a.Equal(RoundStateRoundOver, r.State)
+
+	a.Equal(0, r.ParticipantAdjustments())
+	a.Equal(500, r.Pot)
+}
+
 func TestRound_betTheGap(t *testing.T) {
 	a := assert.New(t)
 	r := createTestRound(1025, "2c,4c,3c")
@@ -519,4 +537,15 @@ func TestRound_getMaxBet(t *testing.T) {
 	testHalfPot(t, 50, 25)
 	testHalfPot(t, 25, 25)
 	testHalfPot(t, 0, 0)
+}
+
+func TestRound_Pass(t *testing.T) {
+	a := assert.New(t)
+	r := &Round{}
+	r.State = RoundStateStart
+	a.EqualError(r.SetPass(), "cannot pass from state: start")
+
+	r.State = RoundStatePendingBet
+	a.NoError(r.SetPass())
+	a.Equal(RoundStatePassed, r.State)
 }

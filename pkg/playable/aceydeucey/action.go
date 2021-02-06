@@ -75,11 +75,16 @@ func (g *Game) getActionsForParticipant(playerID int64) []Action {
 		return []Action{ActionPickAceLow, ActionPickAceHigh}
 
 	case RoundStatePendingBet:
-		if currentRound.canBetTheGap() {
-			return []Action{ActionBet, ActionBetTheGap}
+		actions := make([]Action, 0)
+		if g.options.AllowPass {
+			actions = append(actions, ActionPass)
 		}
 
-		return []Action{ActionBet}
+		if currentRound.canBetTheGap() {
+			return append(actions, ActionBet, ActionBetTheGap)
+		}
+
+		return append(actions, ActionBet)
 	}
 
 	return nil
