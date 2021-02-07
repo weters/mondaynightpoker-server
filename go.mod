@@ -12,6 +12,7 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.2
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/lib/pq v1.5.1
 	github.com/prometheus/common v0.2.0
 	github.com/rs/cors v1.7.0
@@ -19,4 +20,5 @@ require (
 	github.com/stretchr/testify v1.5.1
 	github.com/synacor/argon2id v0.0.0-20190318165710-18569dfc600b
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
+	gopkg.in/yaml.v2 v2.2.7
 )
