@@ -14,7 +14,7 @@ func TestInstance(t *testing.T) {
 
 	a := assert.New(t)
 	cfg := Instance()
-	a.Equal("postgres://localhost", cfg.Database.DSN)
+	a.Equal("user@monday-night.poker", cfg.Email.Username)
 	a.Equal("public.pem", cfg.JWT.PublicKey)
 	a.Equal("private2.key", cfg.JWT.PrivateKey)
 
@@ -29,7 +29,7 @@ func TestInstance(t *testing.T) {
 func TestDefaults(t *testing.T) {
 	assert.NoError(t, Load())
 	cfg := Instance()
-	assert.Equal(t, "https://monday-night.poker", cfg.Host)
+	assert.Equal(t, "no-reply@monday-night.poker", cfg.Email.Sender)
 }
 
 func setEnv(key, val string) func() {

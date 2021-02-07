@@ -1,5 +1,5 @@
-database:
-  dsn: postgres://localhost
+email:
+  username: user@monday-night.poker
 jwt:
   publicKey: public.pem
   privateKey: private.key
