@@ -37,6 +37,23 @@ func LoadInstance() {
 
 // Migrate runs the migrations
 func Migrate() {
+	m := getMigrate()
+	if err := m.Up(); err != nil {
+		if err != migrate.ErrNoChange {
+			panic(err)
+		}
+	}
+}
+
+// MigrateTo migrates to the specified version
+func MigrateTo(version uint) {
+	m := getMigrate()
+	if err := m.Migrate(version); err != nil {
+		panic(err)
+	}
+}
+
+func getMigrate() *migrate.Migrate {
 	migrationsPath := config.Instance().Database.MigrationsPath
 	db := Instance()
 
@@ -51,11 +68,7 @@ func Migrate() {
 		panic(err)
 	}
 
-	if err := m.Up(); err != nil {
-		if err != migrate.ErrNoChange {
-			panic(err)
-		}
-	}
+	return m
 }
 
 // Scanner is an interface that sql should've provided

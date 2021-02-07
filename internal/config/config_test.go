@@ -29,7 +29,7 @@ func TestInstance(t *testing.T) {
 func TestDefaults(t *testing.T) {
 	assert.NoError(t, Load())
 	cfg := Instance()
-	assert.Equal(t, ".keys/public.pem", cfg.JWT.PublicKey)
+	assert.Equal(t, "https://monday-night.poker", cfg.Host)
 }
 
 func setEnv(key, val string) func() {

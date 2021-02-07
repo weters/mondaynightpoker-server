@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/kelseyhightower/envconfig"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"os"
 )
@@ -22,10 +21,12 @@ var defaultConfig = Config{
 	StartGameDelay:    10,
 	PlayerCreateDelay: 60,
 	Email: Email{
-		From:     "Monday Night Poker <no-replay@monday-night.poker>",
-		Sender:   "no-reply@monday-night.poker",
-		Username: "dealer@monday-night.poker",
-		Host:     "mail.privateemail.com:587",
+		From:         "Monday Night Poker <no-replay@monday-night.poker>",
+		Sender:       "no-reply@monday-night.poker",
+		Username:     "dealer@monday-night.poker",
+		Password:     "",
+		Host:         "mail.privateemail.com:587",
+		TemplatesDir: "templates",
 	},
 }
 
@@ -58,6 +59,8 @@ type JWT struct {
 type Email struct {
 	From, Sender, Username, Password, Host string
 	TemplatesDir                           string `yaml:"templatesDir" envconfig:"templates_dir"`
+	// if true, do not send emails
+	Disable bool
 }
 
 var config Config
@@ -78,20 +81,10 @@ func Instance() Config {
 func Load() error {
 	config = defaultConfig
 
-	configFile := "config.yaml"
-	if c := os.Getenv("MNP_CONFIG_FILE"); c != "" {
-		configFile = c
-	}
+	if cfgFile, ok := getConfigFile(); ok {
+		defer cfgFile.Close()
 
-	if file, err := os.Open(configFile); err != nil {
-		if os.IsNotExist(err) {
-			logrus.Warn(err)
-		} else {
-			return err
-		}
-	} else {
-		defer file.Close()
-		if err := yaml.NewDecoder(file).Decode(&config); err != nil {
+		if err := yaml.NewDecoder(cfgFile).Decode(&config); err != nil {
 			return err
 		}
 	}
@@ -102,4 +95,22 @@ func Load() error {
 
 	config.loaded = true
 	return nil
+}
+
+func getConfigFile() (*os.File, bool) {
+	paths := []string{os.Getenv("MNP_CONFIG_FILE"), "config.yaml", "testdata/config.yaml"}
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+
+		return file, true
+	}
+
+	return nil, false
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
@@ -334,13 +335,13 @@ func (m *Mux) postAdminPlayerID() http.HandlerFunc {
 	}
 }
 
-type postPlayerForgotPasswordPayload struct {
+type postPlayerResetPasswordRequestPayload struct {
 	Email string `json:"email"`
 }
 
-func (m *Mux) postPlayerForgotPassword() http.HandlerFunc {
+func (m *Mux) postPlayerResetPasswordRequest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var payload postPlayerForgotPasswordPayload
+		var payload postPlayerResetPasswordRequestPayload
 		if ok := decodeRequest(w, r, &payload); !ok {
 			return
 		}
@@ -351,14 +352,95 @@ func (m *Mux) postPlayerForgotPassword() http.HandlerFunc {
 		}
 
 		if player, _ := table.GetPlayerByEmail(r.Context(), payload.Email); player != nil {
+			token, err := player.CreatePasswordResetRequest(r.Context())
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err)
+				return
+			}
+
 			go func() {
+				if config.Instance().Email.Disable {
+					return
+				}
+
+				data := map[string]string{
+					"url":   fmt.Sprintf("%s/reset-password/%s", config.Instance().Host, token),
+					"email": player.Email,
+				}
+
+				msg, err := m.emailTemplates.RenderTemplate("password_reset.html", data)
+				if err != nil {
+					logrus.WithError(err).Error("could not render the template")
+					return
+				}
+
 				log := logrus.WithField("to", player.Email)
-				if err := m.email.SendSimple(player.Email, "Password Reset Request", "<p>Hi, you want a password rest?"); err != nil {
+				if err := m.email.SendSimple(player.Email, "Password Reset Request", msg); err != nil {
 					log.WithError(err).Error("could not send email")
 				} else {
 					log.Info("sent password reset email")
 				}
 			}()
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
+	}
+}
+
+func (m *Mux) getPlayerResetPasswordToken() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := mux.Vars(r)["token"]
+		if err := table.IsPasswordResetTokenValid(r.Context(), token); err != nil {
+			writeJSONError(w, http.StatusNotFound, nil)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
+	}
+}
+
+type postPlayerResetPasswordPayload struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := mux.Vars(r)["token"]
+
+		var payload postPlayerResetPasswordPayload
+		if ok := decodeRequest(w, r, &payload); !ok {
+			return
+		}
+
+		if err := table.IsPasswordResetTokenValid(r.Context(), token); err != nil {
+			writeJSONError(w, http.StatusNotFound, nil)
+			return
+		}
+
+		if payload.Email == "" {
+			writeJSONError(w, http.StatusBadRequest, errors.New("email is required"))
+			return
+		}
+
+		if len(payload.Password) < 6 {
+			writeJSONError(w, http.StatusBadRequest, errors.New("password must be at least 6 characters"))
+			return
+		}
+
+		player, err := table.GetPlayerByEmail(r.Context(), payload.Email)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				writeJSONError(w, http.StatusInternalServerError, err)
+			} else {
+				writeJSONError(w, http.StatusBadRequest, nil)
+			}
+			return
+		}
+
+		if err := player.ResetPassword(r.Context(), payload.Password, token); err != nil {
+			writeJSONError(w, http.StatusBadRequest, nil)
+			return
 		}
 
 		writeJSON(w, http.StatusOK, statusOK)

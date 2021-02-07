@@ -1,0 +1,3 @@
+email:
+  templatesDir: "testdata/templates"
+  disable: true

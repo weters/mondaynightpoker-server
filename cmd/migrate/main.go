@@ -2,14 +2,24 @@ package main
 
 import (
 	"database/sql"
+	"flag"
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/db"
 	"time"
 )
 
+var version = flag.Int("v", -1, "version to migrate to (if not specified, migrate up)")
+
 func main() {
+	flag.Parse()
+
 	waitForDB()
-	db.Migrate()
+
+	if *version >= 0 {
+		db.MigrateTo(uint(*version))
+	} else {
+		db.Migrate()
+	}
 }
 
 func waitForDB() {

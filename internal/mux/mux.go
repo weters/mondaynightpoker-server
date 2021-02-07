@@ -26,7 +26,10 @@ type Mux struct {
 	version   string
 	recaptcha recaptcha
 	pitBoss   *room.PitBoss
-	email     *email.Client
+
+	// XXX: refactor this?
+	email          *email.Client
+	emailTemplates *email.Template
 
 	// store for testing purposes
 	authRouter  *gmux.Router
@@ -43,12 +46,18 @@ func NewMux(version string) *Mux {
 		panic(err)
 	}
 
+	tpl, err := email.NewTemplate(config.Instance().Email.TemplatesDir)
+	if err != nil {
+		panic(err)
+	}
+
 	this := &Mux{
-		Router:    gmux.NewRouter(),
-		version:   version,
-		pitBoss:   pitBoss,
-		email:     e,
-		recaptcha: newRecaptcha(),
+		Router:         gmux.NewRouter(),
+		version:        version,
+		pitBoss:        pitBoss,
+		email:          e,
+		emailTemplates: tpl,
+		recaptcha:      newRecaptcha(),
 	}
 
 	this.authRouter = this.Router.NewRoute().Subrouter()
@@ -64,7 +73,9 @@ func NewMux(version string) *Mux {
 		r.Methods(http.MethodPost).Path("/player").Handler(this.postPlayer())
 		r.Methods(http.MethodPost).Path("/player/auth").Handler(this.postPlayerAuth())
 		r.Methods(http.MethodGet).Path("/player/auth/{jwt:.*}").Handler(this.getPlayerAuthJWT())
-		r.Methods(http.MethodPost).Path("/player/forgot-password").Handler(this.postPlayerForgotPassword())
+		r.Methods(http.MethodPost).Path("/player/reset-password-request").Handler(this.postPlayerResetPasswordRequest())
+		r.Methods(http.MethodPost).Path("/player/reset-password/{token:[a-zA-Z0-9_-]{20}}").Handler(this.postPlayerResetPasswordToken())
+		r.Methods(http.MethodGet).Path("/player/reset-password/{token:[a-zA-Z0-9_-]{20}}").Handler(this.getPlayerResetPasswordToken())
 	}
 
 	// requires bearer authorization

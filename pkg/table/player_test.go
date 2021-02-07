@@ -257,3 +257,54 @@ func TestPlayer_SetPassword(t *testing.T) {
 	a.NotNil(player)
 	a.NoError(err)
 }
+
+func TestPlayer_ResetPassword(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	differentPlayer := player()
+
+	tkn, err := p.CreatePasswordResetRequest(cbg)
+	a.NoError(err)
+	a.Equal(20, len(tkn))
+
+	// test a bad token
+	a.EqualError(p.ResetPassword(cbg, "test", "bad-token"), "could not reset the password")
+
+	// ensure token only works for the correct player
+	a.EqualError(differentPlayer.ResetPassword(cbg, "test", tkn), "could not reset the password")
+
+	// verify it works
+	a.NoError(p.ResetPassword(cbg, "my new password", tkn))
+
+	p2, err := GetPlayerByEmailAndPassword(cbg, p.Email, "my new password")
+	a.NoError(err)
+	a.NotNil(p2)
+
+	// ensure token can only be used once
+	a.EqualError(p.ResetPassword(cbg, "another new password", tkn), "could not reset the password")
+}
+
+// ensure that a reset password request is only valid for one hour
+func TestPlayer_ResetPassword_expired(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	token, err := p.CreatePasswordResetRequest(cbg)
+	a.NoError(err)
+
+	a.NoError(IsPasswordResetTokenValid(cbg, token))
+
+	const query = `
+UPDATE player_password_resets
+SET created = (NOW() AT TIME ZONE 'UTC') - INTERVAL '2 hour'
+WHERE token = $1
+`
+
+	_, err = db.Instance().Exec(query, token)
+	a.NoError(err)
+
+	a.Equal(ErrPasswordResetRequestExpired, IsPasswordResetTokenValid(cbg, token))
+
+	a.EqualError(p.ResetPassword(cbg, "my new password", token), "could not reset the password")
+}

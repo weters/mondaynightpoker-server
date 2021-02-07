@@ -9,7 +9,9 @@ import (
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
+	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -350,4 +352,67 @@ func TestMux_postAdminPlayerID(t *testing.T) {
 		Key:   "password",
 		Value: "new-pw",
 	}, nil, http.StatusForbidden, j2)
+}
+
+func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
+	a := assert.New(t)
+
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	var er errorResponse
+	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{}, &er, http.StatusBadRequest)
+	a.Equal("missing email", er.Message)
+
+	p, _ := player()
+	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{Email: p.Email}, nil, http.StatusOK)
+
+	row := db.Instance().QueryRow("SELECT token FROM player_password_resets WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
+	var resetToken string
+	a.NoError(row.Scan(&resetToken))
+
+	diffToken, err := token.Generate(20)
+	a.NoError(err)
+
+	assertGet(t, ts, "/player/reset-password/"+resetToken, nil, http.StatusOK)
+	assertGet(t, ts, "/player/reset-password/"+diffToken, nil, http.StatusNotFound)
+
+	assertPost(t, ts, "/player/reset-password/"+resetToken, postPlayerResetPasswordPayload{
+		Email:    "",
+		Password: "",
+	}, &er, http.StatusBadRequest)
+	a.Equal("email is required", er.Message)
+
+	assertPost(t, ts, "/player/reset-password/"+resetToken, postPlayerResetPasswordPayload{
+		Email:    p.Email,
+		Password: "12345",
+	}, &er, http.StatusBadRequest)
+	a.Equal("password must be at least 6 characters", er.Message)
+
+	diffPlayer, _ := player()
+	assertPost(t, ts, "/player/reset-password/"+resetToken, postPlayerResetPasswordPayload{
+		Email:    diffPlayer.Email,
+		Password: "123456",
+	}, nil, http.StatusBadRequest)
+
+	assertPost(t, ts, "/player/reset-password/"+resetToken, postPlayerResetPasswordPayload{
+		Email:    p.Email + "unknown",
+		Password: "123456",
+	}, nil, http.StatusBadRequest)
+
+	assertPost(t, ts, "/player/reset-password/"+diffToken, postPlayerResetPasswordPayload{
+		Email:    p.Email,
+		Password: "123456",
+	}, nil, http.StatusNotFound)
+
+	assertPost(t, ts, "/player/reset-password/"+resetToken, postPlayerResetPasswordPayload{
+		Email:    p.Email,
+		Password: "123456",
+	}, nil, http.StatusOK)
+
+	assertPost(t, ts, "/player/auth", map[string]string{
+		"email":    p.Email,
+		"password": "123456",
+	}, nil, http.StatusOK)
 }

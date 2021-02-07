@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"mondaynightpoker-server/pkg/db"
+	"mondaynightpoker-server/pkg/token"
 	"strconv"
 	"time"
 
 	"github.com/lib/pq"
 	"github.com/synacor/argon2id"
 )
+
+const passwordResetRequestTTL = time.Hour
 
 const playerColumns = `
 players.id,
@@ -28,6 +31,9 @@ var ErrInvalidEmailOrPassword = errors.New("invalid email address and/or passwor
 
 // ErrDuplicateKey happens if a user tries to create a player with a taken email
 var ErrDuplicateKey = errors.New("duplicate key constraint violation")
+
+// ErrPasswordResetRequestExpired is an error if the password reset request is no longer valid
+var ErrPasswordResetRequestExpired = errors.New("password reset required has expired")
 
 // Player is a record in the `players` table
 type Player struct {
@@ -321,4 +327,83 @@ OFFSET $1
 LIMIT $2`
 
 	return getPlayers(db.Instance().QueryContext(ctx, query, offset, limit))
+}
+
+// CreatePasswordResetRequest generates a new password request and returns the token
+func (p *Player) CreatePasswordResetRequest(ctx context.Context) (string, error) {
+	resetToken, err := token.Generate(20)
+	if err != nil {
+		return "", err
+	}
+
+	if err := p.expirePasswordRequests(ctx); err != nil {
+		return "", err
+	}
+
+	const query = `
+INSERT INTO player_password_resets (token, player_id)
+VALUES ($1, $2)`
+
+	if _, err := db.Instance().ExecContext(ctx, query, resetToken, p.ID); err != nil {
+		return "", err
+	}
+
+	return resetToken, nil
+}
+
+// expirePasswordRequests ensures all existing password requests are disabled
+func (p *Player) expirePasswordRequests(ctx context.Context) error {
+	const query = `
+UPDATE player_password_resets
+SET active = 'f'
+WHERE player_id = $1`
+
+	_, err := db.Instance().ExecContext(ctx, query, p.ID)
+	return err
+}
+
+// ResetPassword will attempt to reset the player's password
+func (p *Player) ResetPassword(ctx context.Context, newPassword, resetToken string) error {
+	newPasswordHash, err := argon2id.DefaultHashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	const query = `
+SELECT reset_password
+FROM reset_password($1, $2, $3, $4)`
+
+	row := db.Instance().QueryRowContext(ctx, query, p.ID, newPasswordHash, resetToken, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+
+	var ok bool
+	if err := row.Scan(&ok); err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("could not reset the password")
+	}
+
+	return nil
+}
+
+// IsPasswordResetTokenValid checks if the token is still valid
+func IsPasswordResetTokenValid(ctx context.Context, resetToken string) error {
+	const query = `
+SELECT true
+FROM player_password_resets
+WHERE token = $1
+  AND created > $2
+  AND active`
+
+	row := db.Instance().QueryRowContext(ctx, query, resetToken, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+
+	var found bool
+	_ = row.Scan(&found)
+
+	if !found {
+		return ErrPasswordResetRequestExpired
+	}
+
+	return nil
 }
