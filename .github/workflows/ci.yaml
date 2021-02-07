@@ -34,11 +34,11 @@ jobs:
       - run: go run ./cmd/migrate
         name: Run Migrations
         env:
-          PG_DSN: postgres://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/postgres?sslmode=disable
+          MNP_DATABASE_DSN: postgres://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/postgres?sslmode=disable
       - run: go test -v -covermode=atomic ./...
         name: Run Tests
         env:
-          PG_DSN: postgres://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/postgres?sslmode=disable
+          MNP_DATABASE_DSN: postgres://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/postgres?sslmode=disable
   build:
     name: 'Build and Push'
     needs: [ci]
