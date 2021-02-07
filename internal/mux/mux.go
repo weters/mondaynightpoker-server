@@ -2,17 +2,15 @@ package mux
 
 import (
 	"context"
+	gmux "github.com/gorilla/mux"
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/email"
 	"mondaynightpoker-server/internal/jwt"
-	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/room"
 	"mondaynightpoker-server/pkg/table"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
-
-	gmux "github.com/gorilla/mux"
 )
 
 type ctxKey int
@@ -25,7 +23,6 @@ const (
 // Mux handles HTTP requests
 type Mux struct {
 	*gmux.Router
-	config    config
 	version   string
 	recaptcha recaptcha
 	pitBoss   *room.PitBoss
@@ -34,11 +31,6 @@ type Mux struct {
 	// store for testing purposes
 	authRouter  *gmux.Router
 	adminRouter *gmux.Router
-}
-
-type config struct {
-	// playerCreateDelay is the minimum duration between two player create events from a single remote address
-	playerCreateDelay time.Duration
 }
 
 // NewMux returns a new HTTP mux
@@ -52,13 +44,10 @@ func NewMux(version string) *Mux {
 	}
 
 	this := &Mux{
-		Router:  gmux.NewRouter(),
-		version: version,
-		pitBoss: pitBoss,
-		email:   e,
-		config: config{
-			playerCreateDelay: time.Minute,
-		},
+		Router:    gmux.NewRouter(),
+		version:   version,
+		pitBoss:   pitBoss,
+		email:     e,
 		recaptcha: newRecaptcha(),
 	}
 
@@ -75,6 +64,7 @@ func NewMux(version string) *Mux {
 		r.Methods(http.MethodPost).Path("/player").Handler(this.postPlayer())
 		r.Methods(http.MethodPost).Path("/player/auth").Handler(this.postPlayerAuth())
 		r.Methods(http.MethodGet).Path("/player/auth/{jwt:.*}").Handler(this.getPlayerAuthJWT())
+		r.Methods(http.MethodPost).Path("/player/forgot-password").Handler(this.postPlayerForgotPassword())
 	}
 
 	// requires bearer authorization
@@ -152,11 +142,6 @@ func (m *Mux) adminMiddleware(next http.Handler) http.Handler {
 }
 
 func emailClient() (*email.Client, error) {
-	from := util.Getenv("EMAIL_FROM", "Monday Night Poker <no-reply@monday-night.poker>")
-	sender := util.Getenv("EMAIL_SENDER", "no-reply@monday-night.poker")
-	username := util.Getenv("EMAIL_USERNAME", "dealer@monday-night.poker")
-	password := util.Getenv("EMAIL_PASSWORD", "")
-	host := util.Getenv("EMAIL_HOST", "mail.privateemail.com:587")
-
-	return email.NewClient(from, sender, username, password, host)
+	cfg := config.Instance().Email
+	return email.NewClient(cfg.From, cfg.Sender, cfg.Username, cfg.Password, cfg.Host)
 }

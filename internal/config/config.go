@@ -2,25 +2,58 @@ package config
 
 import (
 	"github.com/kelseyhightower/envconfig"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
-	"mondaynightpoker-server/internal/util"
 	"os"
 )
 
 // Config provides configuration for Monday Night Poker
 type Config struct {
-	loaded         bool
-	PGDSN          string `yaml:"pgDsn" envconfig:"pg_dsn"`
+	loaded            bool
+	Database          Database
+	JWT               JWT
+	RecaptchaSecret   string `yaml:"recaptchaSecret" envconfig:"recaptcha_secret"`
+	StartGameDelay    int    `yaml:"startGameDelay" envconfig:"start_game_delay"`
+	PlayerCreateDelay int    `yaml:"playerCreateDelay" envconfig:"player_create_delay"`
+	Email             Email
+}
+
+// Database represents database configuration
+type Database struct {
+	DSN            string
 	MigrationsPath string `yaml:"migrationsPath" envconfig:"migrations_path"`
-	JWT            struct {
-		PublicKey  string `yaml:"publicKey" envconfig:"public_key"`
-		PrivateKey string `yaml:"privateKey" envconfig:"private_key"`
-	}
-	RecaptchaSecret string `yaml:"recaptchaSecret" envconfig:"recaptcha_secret"`
-	StartGameDelay  int    `yaml:"startGameDelay" envconfig:"start_game_delay"`
-	Email           struct {
-		From, Sender, Username, Password, Host string
-	}
+}
+
+// JWT represents JWT configuration
+type JWT struct {
+	PublicKey  string `yaml:"publicKey" envconfig:"public_key"`
+	PrivateKey string `yaml:"privateKey" envconfig:"private_key"`
+}
+
+// Email represents configuration for sending emails
+type Email struct {
+	From, Sender, Username, Password, Host string
+	TemplatesDir                           string `yaml:"templatesDir" envconfig:"templates_dir"`
+}
+
+var defaultConfig = Config{
+	Database: Database{
+		DSN:            "postgres://postgres@localhost:5432/postgres?sslmode=disable",
+		MigrationsPath: "./sql",
+	},
+	JWT: JWT{
+		PublicKey:  ".keys/public.pem",
+		PrivateKey: ".keys/private.pem",
+	},
+	RecaptchaSecret:   "-",
+	StartGameDelay:    10,
+	PlayerCreateDelay: 60,
+	Email: Email{
+		From:     "Monday Night Poker <no-replay@monday-night.poker>",
+		Sender:   "no-reply@monday-night.poker",
+		Username: "dealer@monday-night.poker",
+		Host:     "mail.privateemail.com:587",
+	},
 }
 
 var config Config
@@ -39,16 +72,24 @@ func Instance() Config {
 
 // Load will load the configuration
 func Load() error {
-	configFile := util.Getenv("MNP_CONFIG_FILE", "config.yaml")
-	file, err := os.Open(configFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+	config = defaultConfig
 
-	config = Config{}
-	if err := yaml.NewDecoder(file).Decode(&config); err != nil {
-		return err
+	configFile := "config.yaml"
+	if c := os.Getenv("MNP_CONFIG_FILE"); c != "" {
+		configFile = c
+	}
+
+	if file, err := os.Open(configFile); err != nil {
+		if os.IsNotExist(err) {
+			logrus.Warn(err)
+		} else {
+			return err
+		}
+	} else {
+		defer file.Close()
+		if err := yaml.NewDecoder(file).Decode(&config); err != nil {
+			return err
+		}
 	}
 
 	if err := envconfig.Process("mnp", &config); err != nil {

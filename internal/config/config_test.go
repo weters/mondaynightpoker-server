@@ -7,11 +7,14 @@ import (
 )
 
 func TestInstance(t *testing.T) {
-	_ = os.Setenv("MNP_CONFIG_FILE", "testdata/config.yaml")
-	_ = os.Setenv("MNP_JWT_PRIVATE_KEY", "private2.key")
+	clear1 := setEnv("MNP_CONFIG_FILE", "testdata/config.yaml")
+	defer clear1()
+	clear2 := setEnv("MNP_JWT_PRIVATE_KEY", "private2.key")
+	defer clear2()
+
 	a := assert.New(t)
 	cfg := Instance()
-	a.Equal("postgres://localhost", cfg.PGDSN)
+	a.Equal("postgres://localhost", cfg.Database.DSN)
 	a.Equal("public.pem", cfg.JWT.PublicKey)
 	a.Equal("private2.key", cfg.JWT.PrivateKey)
 
@@ -21,5 +24,22 @@ func TestInstance(t *testing.T) {
 	cfg.JWT.PrivateKey = "bad"
 	cfg = Instance()
 	a.Equal("private2.key", cfg.JWT.PrivateKey)
+}
 
+func TestDefaults(t *testing.T) {
+	assert.NoError(t, Load())
+	cfg := Instance()
+	assert.Equal(t, ".keys/public.pem", cfg.JWT.PublicKey)
+}
+
+func setEnv(key, val string) func() {
+	orig := os.Getenv(key)
+	_ = os.Setenv(key, val)
+	return func() {
+		if orig == "" {
+			_ = os.Unsetenv(key)
+		} else {
+			_ = os.Setenv(key, orig)
+		}
+	}
 }

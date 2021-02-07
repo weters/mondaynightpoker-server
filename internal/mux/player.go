@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
@@ -68,7 +70,8 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
-		if time.Since(at) < m.config.playerCreateDelay {
+		playerCreateDelay := time.Second * time.Duration(config.Instance().PlayerCreateDelay)
+		if time.Since(at) < playerCreateDelay {
 			writeJSONError(w, http.StatusBadRequest, errors.New("please wait before creating another player"))
 			return
 		}
@@ -325,6 +328,37 @@ func (m *Mux) postAdminPlayerID() http.HandlerFunc {
 		default:
 			writeJSONError(w, http.StatusBadRequest, errors.New("bad payload"))
 			return
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
+	}
+}
+
+type postPlayerForgotPasswordPayload struct {
+	Email string `json:"email"`
+}
+
+func (m *Mux) postPlayerForgotPassword() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var payload postPlayerForgotPasswordPayload
+		if ok := decodeRequest(w, r, &payload); !ok {
+			return
+		}
+
+		if payload.Email == "" {
+			writeJSONError(w, http.StatusBadRequest, errors.New("missing email"))
+			return
+		}
+
+		if player, _ := table.GetPlayerByEmail(r.Context(), payload.Email); player != nil {
+			go func() {
+				log := logrus.WithField("to", player.Email)
+				if err := m.email.SendSimple(player.Email, "Password Reset Request", "<p>Hi, you want a password rest?"); err != nil {
+					log.WithError(err).Error("could not send email")
+				} else {
+					log.Info("sent password reset email")
+				}
+			}()
 		}
 
 		writeJSON(w, http.StatusOK, statusOK)

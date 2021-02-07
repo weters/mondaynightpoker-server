@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
@@ -14,7 +15,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
 type mockRecaptcha struct {
@@ -35,8 +35,12 @@ func (m *mockRecaptcha) Verify(token string) error {
 }
 
 func Test_postPlayer(t *testing.T) {
+	unset := util.SetEnv("MNP_PLAYER_CREATE_DELAY", "-1")
+	defer unset()
+
+	assert.NoError(t, config.Load())
+
 	m := NewMux("")
-	m.config.playerCreateDelay = time.Second * -1
 	mr := newMockRecaptcha(false)
 	m.recaptcha = mr
 
@@ -112,7 +116,11 @@ func Test_postPlayer(t *testing.T) {
 	assert.Equal(t, email, pObj.Email)
 	assert.Equal(t, "Tommy", pObj.DisplayName)
 
-	m.config.playerCreateDelay = time.Hour
+	unset2 := util.SetEnv("MNP_PLAYER_CREATE_DELAY", "3600")
+	defer unset2()
+
+	assert.NoError(t, config.Load())
+
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", playerPayload{
 		Email:    util.RandomEmail(),

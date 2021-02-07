@@ -77,15 +77,20 @@ WHERE id = $4`
 	return err
 }
 
-// GetPlayerByEmailAndPassword will return a user if the email and password are valid
-func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*Player, error) {
+// GetPlayerByEmail will return a user by the email address
+func GetPlayerByEmail(ctx context.Context, email string) (*Player, error) {
 	const query = `
 SELECT ` + playerColumns + `
 FROM players
 WHERE lower(email) = Lower($1)`
 
 	row := db.Instance().QueryRowContext(ctx, query, email)
-	player, err := getPlayerByRow(row)
+	return getPlayerByRow(row)
+}
+
+// GetPlayerByEmailAndPassword will return a user if the email and password are valid
+func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*Player, error) {
+	player, err := GetPlayerByEmail(ctx, email)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// prevent timing attacks

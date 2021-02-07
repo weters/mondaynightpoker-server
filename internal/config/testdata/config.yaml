@@ -1,4 +1,5 @@
-pgDsn: postgres://localhost
+database:
+  dsn: postgres://localhost
 jwt:
   publicKey: public.pem
   privateKey: private.key

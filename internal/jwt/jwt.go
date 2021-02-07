@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"mondaynightpoker-server/internal/util"
-	"path/filepath"
+	"mondaynightpoker-server/internal/config"
 	"strconv"
 	"time"
 
@@ -21,20 +20,15 @@ const Issuer = "us.taproom.mondaynightpoker"
 // Audience is the intended JWT audience
 const Audience = "mondaynightpoker.taproom.us"
 
-const jwtPublicKeyPathEnvKey = "JWT_PUBLIC_KEY"
-const jwtPrivateKeyPathEnvKey = "JWT_PRIVATE_KEY"
-
-var defaultPublicKeyPath = filepath.Join(".keys/public.pem")
-var defaultPrivateKeyPath = filepath.Join(".keys/private.key")
-
 var publicKey *rsa.PublicKey
 var privateKey *rsa.PrivateKey
 
 // LoadKeys will load the public and private keys
 // this method should only be called once.
 func LoadKeys() {
-	privateKey = loadPrivateKey(util.Getenv(jwtPrivateKeyPathEnvKey, defaultPrivateKeyPath))
-	publicKey = loadPublicKey(util.Getenv(jwtPublicKeyPathEnvKey, defaultPublicKeyPath))
+	cfg := config.Instance().JWT
+	privateKey = loadPrivateKey(cfg.PrivateKey)
+	publicKey = loadPublicKey(cfg.PublicKey)
 }
 
 // Sign will sign a JWT for the user ID

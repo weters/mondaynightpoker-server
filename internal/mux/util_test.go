@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/table"
@@ -61,7 +62,11 @@ func player() (*table.Player, string) {
 }
 
 func setupJWT() {
-	os.Setenv("JWT_PUBLIC_KEY", "testdata/public.pem")
-	os.Setenv("JWT_PRIVATE_KEY", "testdata/private.key")
+	os.Setenv("MNP_JWT_PUBLIC_KEY", "testdata/public.pem")
+	os.Setenv("MNP_JWT_PRIVATE_KEY", "testdata/private.key")
+	if err := config.Load(); err != nil {
+		panic(err)
+	}
+
 	jwt.LoadKeys()
 }

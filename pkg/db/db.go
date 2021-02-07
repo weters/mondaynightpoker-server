@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
-	"github.com/sirupsen/logrus"
-	"mondaynightpoker-server/internal/util"
-
 	_ "github.com/golang-migrate/migrate/v4/source/file" // needed
+	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/internal/config"
 )
 
 var instance *sql.DB
@@ -24,9 +23,7 @@ func Instance() *sql.DB {
 
 // LoadInstance will load the database instance
 func LoadInstance() {
-	dsn := util.Getenv("PG_DSN", "postgres://postgres@localhost:5432/postgres?sslmode=disable")
-
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", config.Instance().Database.DSN)
 	if err != nil {
 		panic(err)
 	}
@@ -40,7 +37,7 @@ func LoadInstance() {
 
 // Migrate runs the migrations
 func Migrate() {
-	migrationsPath := util.Getenv("MIGRATIONS_PATH", "./sql")
+	migrationsPath := config.Instance().Database.MigrationsPath
 	db := Instance()
 
 	logrus.WithField("migrationsPath", migrationsPath).Info("running migrations")

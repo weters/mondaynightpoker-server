@@ -2,12 +2,16 @@ package util
 
 import "os"
 
-// Getenv will return an environment variable or a default value
-func Getenv(key, defaultValue string) string {
-	val := os.Getenv(key)
-	if val != "" {
-		return val
-	}
+// SetEnv will set an environment variable and return a function for unsetting it
+func SetEnv(key, value string) func() {
+	origVal, found := os.LookupEnv(key)
+	_ = os.Setenv(key, value)
 
-	return defaultValue
+	return func() {
+		if found {
+			_ = os.Setenv(key, origVal)
+		} else {
+			_ = os.Unsetenv(key)
+		}
+	}
 }
