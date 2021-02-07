@@ -17,4 +17,5 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=build /build/server /bin/server
 COPY ./sql/ ./sql/
+COPY ./templates/ ./templates/
 ENTRYPOINT [ "/bin/server" ]
