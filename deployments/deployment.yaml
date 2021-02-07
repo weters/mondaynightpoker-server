@@ -30,17 +30,22 @@ spec:
             - mountPath: /app/.keys
               name: keys
           env:
-            - name: RECAPTCHA_SECRET
+            - name: MNP_RECAPTCHA_SECRET
               valueFrom:
                 secretKeyRef:
                   name: mondaynightpoker-server-config
                   key: recaptcha_secret
-            - name: PG_DSN
+            - name: MNP_DATABASE_DSN
               valueFrom:
                 secretKeyRef:
                   name: mondaynightpoker-server-config
                   key: pg_dsn
-            - name: LOG_LEVEL
+            - name: MNP_EMAIL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: email_password
+                  name: mondaynightpoker-server-config
+            - name: MNP_LOG_LEVEL
               value: DEBUG
       volumes:
         - name: keys
