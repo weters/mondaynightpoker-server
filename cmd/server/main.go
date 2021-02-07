@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/mux"
 	"mondaynightpoker-server/pkg/db"
@@ -30,8 +31,8 @@ func main() {
 	// fail fast
 	jwt.LoadKeys()
 
-	if os.Getenv("RECAPTCHA_SECRET") == "" {
-		logrus.Fatal("missing RECAPTCHA_SECRET")
+	if config.Instance().RecaptchaSecret == "" {
+		logrus.Fatal("missing recaptcha secret in configuration")
 	}
 
 	// run the db migrations
@@ -61,7 +62,7 @@ func loggingHandler(next http.Handler) http.Handler {
 }
 
 func setupLogger() {
-	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+	if lvl := config.Instance().LogLevel; lvl != "" {
 		level, err := logrus.ParseLevel(lvl)
 		if err != nil {
 			logrus.WithError(err).Fatal("could not parse level")

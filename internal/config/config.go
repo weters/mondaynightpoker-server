@@ -7,9 +7,33 @@ import (
 	"os"
 )
 
+var defaultConfig = Config{
+	Host:     "https://monday-night.poker",
+	LogLevel: "info",
+	Database: Database{
+		DSN:            "postgres://postgres@localhost:5432/postgres?sslmode=disable",
+		MigrationsPath: "./sql",
+	},
+	JWT: JWT{
+		PublicKey:  ".keys/public.pem",
+		PrivateKey: ".keys/private.key",
+	},
+	RecaptchaSecret:   "-",
+	StartGameDelay:    10,
+	PlayerCreateDelay: 60,
+	Email: Email{
+		From:     "Monday Night Poker <no-replay@monday-night.poker>",
+		Sender:   "no-reply@monday-night.poker",
+		Username: "dealer@monday-night.poker",
+		Host:     "mail.privateemail.com:587",
+	},
+}
+
 // Config provides configuration for Monday Night Poker
 type Config struct {
 	loaded            bool
+	Host              string
+	LogLevel          string `yaml:"logLevel" envconfig:"log_level"`
 	Database          Database
 	JWT               JWT
 	RecaptchaSecret   string `yaml:"recaptchaSecret" envconfig:"recaptcha_secret"`
@@ -34,26 +58,6 @@ type JWT struct {
 type Email struct {
 	From, Sender, Username, Password, Host string
 	TemplatesDir                           string `yaml:"templatesDir" envconfig:"templates_dir"`
-}
-
-var defaultConfig = Config{
-	Database: Database{
-		DSN:            "postgres://postgres@localhost:5432/postgres?sslmode=disable",
-		MigrationsPath: "./sql",
-	},
-	JWT: JWT{
-		PublicKey:  ".keys/public.pem",
-		PrivateKey: ".keys/private.pem",
-	},
-	RecaptchaSecret:   "-",
-	StartGameDelay:    10,
-	PlayerCreateDelay: 60,
-	Email: Email{
-		From:     "Monday Night Poker <no-replay@monday-night.poker>",
-		Sender:   "no-reply@monday-night.poker",
-		Username: "dealer@monday-night.poker",
-		Host:     "mail.privateemail.com:587",
-	},
 }
 
 var config Config
