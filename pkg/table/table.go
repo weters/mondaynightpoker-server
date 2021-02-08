@@ -195,16 +195,12 @@ ORDER BY players_tables.id`
 
 	records := make([]*PlayerTable, 0)
 	for rows.Next() {
-		var p Player
-		var pt PlayerTable
-		if err := rows.Scan(&p.ID, &p.Email, &p.DisplayName, &p.IsSiteAdmin, &p.passwordHash, &p.Created, &p.Updated,
-			&pt.ID, &pt.PlayerID, &pt.TableUUID, &pt.IsTableAdmin, &pt.CanStart, &pt.CanRestart, &pt.CanTerminate,
-			&pt.Balance, &pt.Active, &pt.IsBlocked, &pt.Created, &pt.Updated); err != nil {
+		p, err := getPlayerTableByRow(rows)
+		if err != nil {
 			return nil, err
 		}
 
-		pt.Player = &p
-		records = append(records, &pt)
+		records = append(records, p)
 	}
 
 	return records, nil

@@ -41,7 +41,7 @@ func getPlayerTableByRow(row db.Scanner) (*PlayerTable, error) {
 	var p Player
 	var pt PlayerTable
 
-	if err := row.Scan(&p.ID, &p.Email, &p.DisplayName, &p.IsSiteAdmin, &p.passwordHash, &p.Created, &p.Updated,
+	if err := row.Scan(&p.ID, &p.Email, &p.DisplayName, &p.IsSiteAdmin, &p.Verified, &p.passwordHash, &p.Created, &p.Updated,
 		&pt.ID, &pt.PlayerID, &pt.TableUUID, &pt.IsTableAdmin, &pt.CanStart, &pt.CanRestart, &pt.CanTerminate,
 		&pt.Balance, &pt.Active, &pt.IsBlocked, &pt.Created, &pt.Updated); err != nil {
 		return nil, err

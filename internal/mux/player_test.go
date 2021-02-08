@@ -173,8 +173,8 @@ func Test_postPlayerID(t *testing.T) {
 }
 
 func Test_postPlayerAuth(t *testing.T) {
-	os.Setenv("JWT_PUBLIC_KEY", "testdata/public.pem")
-	os.Setenv("JWT_PRIVATE_KEY", "testdata/private.key")
+	os.Setenv("MNP_JWT_PUBLIC_KEY", "testdata/public.pem")
+	os.Setenv("MNP_JWT_PRIVATE_KEY", "testdata/private.key")
 	jwt.LoadKeys()
 
 	ts := httptest.NewServer(NewMux(""))
@@ -188,6 +188,9 @@ func Test_postPlayerAuth(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	player.Verified = true
+	_ = player.Save(cbg)
 
 	var resp postPlayerAuthResponse
 	assertPost(t, ts, "/player/auth", playerPayload{
@@ -367,6 +370,9 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 
 	p, _ := player()
 	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{Email: p.Email}, nil, http.StatusOK)
+
+	p.Verified = true
+	_ = p.Save(cbg)
 
 	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
 	var resetToken string

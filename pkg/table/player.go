@@ -17,7 +17,7 @@ const passwordResetRequestTTL = time.Hour
 
 const (
 	tokenTypePasswordReset       = "password_reset"
-	tokenTypeAccountVerification = "account_verification"
+	tokenTypeAccountVerification = "account_verification" // nolint
 )
 
 const playerColumns = `
@@ -25,6 +25,7 @@ players.id,
 players.email,
 players.display_name,
 players.is_site_admin,
+players.verified,
 players.password_hash,
 players.created,
 players.updated`
@@ -40,12 +41,16 @@ var ErrDuplicateKey = errors.New("duplicate key constraint violation")
 // ErrTokenExpired is an error if the password reset request is no longer valid
 var ErrTokenExpired = errors.New("token is expired")
 
+// ErrAccountNotVerified is an error if the user tries to log in without being verified
+var ErrAccountNotVerified = UserError("account not verified")
+
 // Player is a record in the `players` table
 type Player struct {
 	ID           int64  `json:"id"`
 	Email        string `json:"-"`
 	DisplayName  string `json:"displayName"`
 	IsSiteAdmin  bool   `json:"isSiteAdmin"`
+	Verified     bool   `json:"verified"`
 	passwordHash string
 	Created      time.Time `json:"created"`
 	Updated      time.Time `json:"updated"`
@@ -59,7 +64,7 @@ type WithBalance struct {
 
 func getPlayerByRow(row db.Scanner) (*Player, error) {
 	var player Player
-	if err := row.Scan(&player.ID, &player.Email, &player.DisplayName, &player.IsSiteAdmin, &player.passwordHash, &player.Created, &player.Updated); err != nil {
+	if err := row.Scan(&player.ID, &player.Email, &player.DisplayName, &player.IsSiteAdmin, &player.Verified, &player.passwordHash, &player.Created, &player.Updated); err != nil {
 		return nil, err
 	}
 
@@ -81,10 +86,14 @@ WHERE id = $1`
 func (p *Player) Save(ctx context.Context) error {
 	const query = `
 UPDATE players
-SET email = $1, display_name = $2, is_site_admin = $3, updated = (NOW() AT TIME ZONE 'utc')
-WHERE id = $4`
+SET email = $1,
+    display_name = $2,
+    is_site_admin = $3,
+    verified = $4,
+    updated = (NOW() AT TIME ZONE 'utc')
+WHERE id = $5`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.DisplayName, p.IsSiteAdmin, p.ID)
+	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.DisplayName, p.IsSiteAdmin, p.Verified, p.ID)
 	return err
 }
 
@@ -114,6 +123,10 @@ func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*
 
 	if err := argon2id.Compare(player.passwordHash, password); err != nil {
 		return nil, ErrInvalidEmailOrPassword
+	}
+
+	if !player.Verified {
+		return nil, ErrAccountNotVerified
 	}
 
 	return player, nil

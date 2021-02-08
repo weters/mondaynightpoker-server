@@ -57,6 +57,17 @@ func TestCreatePlayer(t *testing.T) {
 	assert.Nil(t, player2)
 
 	player2, err = GetPlayerByEmailAndPassword(cbg, email, "password")
+	assert.Equal(t, ErrAccountNotVerified, err)
+	assert.Nil(t, player2)
+
+	// verify the account
+	{
+		p2, _ := GetPlayerByEmail(cbg, email)
+		p2.Verified = true
+		assert.NoError(t, p2.Save(cbg))
+	}
+
+	player2, err = GetPlayerByEmailAndPassword(cbg, email, "password")
 	assert.NoError(t, err)
 	assert.NotNil(t, player2)
 
@@ -186,6 +197,15 @@ func TestPlayer_GetTables(t *testing.T) {
 	assert.Equal(t, tbl2.UUID, tables[1].UUID)
 }
 
+func verifiedPlayer() *Player {
+	p := player()
+
+	p.Verified = true
+	_ = p.Save(cbg)
+
+	return p
+}
+
 func player() *Player {
 	player, err := CreatePlayer(cbg, util.RandomEmail(), "test-player", "", "127.0.0.1")
 	if err != nil {
@@ -246,7 +266,7 @@ func TestGetPlayers(t *testing.T) {
 func TestPlayer_SetPassword(t *testing.T) {
 	const newPassword = "my-new-password"
 	a := assert.New(t)
-	p := player()
+	p := verifiedPlayer()
 	player, err := GetPlayerByEmailAndPassword(context.Background(), p.Email, newPassword)
 	a.Nil(player)
 	a.EqualError(err, "invalid email address and/or password")
@@ -261,8 +281,8 @@ func TestPlayer_SetPassword(t *testing.T) {
 func TestPlayer_ResetPassword(t *testing.T) {
 	a := assert.New(t)
 
-	p := player()
-	differentPlayer := player()
+	p := verifiedPlayer()
+	differentPlayer := verifiedPlayer()
 
 	tkn, err := p.CreatePasswordResetRequest(cbg)
 	a.NoError(err)

@@ -15,7 +15,8 @@ func TestGame_EndGame(t *testing.T) {
 	assert.Nil(t, g2.data)
 	assert.True(t, g2.Ended.IsZero())
 
-	playerTable, _ := player.GetPlayerTable(cbg, table)
+	playerTable, err := player.GetPlayerTable(cbg, table)
+	assert.NoError(t, err)
 
 	before := time.Now()
 	err = game.EndGame(cbg, map[string]string{"foo": "bar", "tar": "car"}, map[int64]int{playerTable.PlayerID: 123})
