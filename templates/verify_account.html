@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Monday Night Poker: Password Reset Request</title>
+    <title>Monday Night Poker: Verify Account</title>
     <meta charset="UTF-8">
     <meta name="color-scheme" content="light only">
     <style>
@@ -42,21 +42,20 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Monday Night Poker</h1>
-        </header>
-        <main>
-            <h2>Password Reset Request</h2>
+<div class="container">
+    <header>
+        <h1>Monday Night Poker</h1>
+    </header>
+    <main>
+        <h2>Verify Your Account</h2>
 
-            <p>If you requested a password reset, please use the link below to complete your request. If you didn't make
-            this request, please ignore this email.</p>
+        <p>You have registered {{ .email }} for an account on Monday Night Poker.</p>
 
-            <p><a href="{{ .url }}">{{ .url }}</a></p>
-        </main>
-        <footer>
-            <p>This email was intended for {{ .email }}</p>
-        </footer>
-    </div>
+        <p>To complete your sign-up, please verify your account by clicking the following URL: <a href="{{ .url }}">{{ .url }}</a></p>
+    </main>
+    <footer>
+        <p>This email was intended for {{ .email }}</p>
+    </footer>
+</div>
 </body>
 </html>

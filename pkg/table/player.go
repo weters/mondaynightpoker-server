@@ -33,7 +33,7 @@ players.updated`
 const pqDuplicateKeyErrorCode pq.ErrorCode = "23505"
 
 // ErrInvalidEmailOrPassword is an error for an invalid email or password
-var ErrInvalidEmailOrPassword = errors.New("invalid email address and/or password")
+var ErrInvalidEmailOrPassword = UserError("invalid email address and/or password")
 
 // ErrDuplicateKey happens if a user tries to create a player with a taken email
 var ErrDuplicateKey = errors.New("duplicate key constraint violation")
@@ -353,11 +353,20 @@ func (p *Player) CreatePasswordResetRequest(ctx context.Context) (string, error)
 		return "", err
 	}
 
-	return p.CreatePlayerToken(ctx, tokenTypePasswordReset)
+	return p.createPlayerToken(ctx, tokenTypePasswordReset)
 }
 
-// CreatePlayerToken creates a new player token
-func (p *Player) CreatePlayerToken(ctx context.Context, tokenType string) (string, error) {
+// CreateAccountVerificationToken generates a new account verification token
+func (p *Player) CreateAccountVerificationToken(ctx context.Context) (string, error) {
+	if err := p.expirePlayerTokens(ctx, tokenTypeAccountVerification); err != nil {
+		return "", err
+	}
+
+	return p.createPlayerToken(ctx, tokenTypeAccountVerification)
+}
+
+// createPlayerToken creates a new player token
+func (p *Player) createPlayerToken(ctx context.Context, tokenType string) (string, error) {
 	const query = `
 INSERT INTO player_tokens (token, player_id, type)
 VALUES ($1, $2, $3)`
@@ -367,7 +376,7 @@ VALUES ($1, $2, $3)`
 		return "", err
 	}
 
-	if _, err := db.Instance().ExecContext(ctx, query, resetToken, p.ID, tokenTypePasswordReset); err != nil {
+	if _, err := db.Instance().ExecContext(ctx, query, resetToken, p.ID, tokenType); err != nil {
 		return "", err
 	}
 
@@ -412,28 +421,60 @@ FROM reset_password($1, $2, $3, $4)`
 
 // IsPasswordResetTokenValid will return an error if the token is not valid
 func IsPasswordResetTokenValid(ctx context.Context, t string) error {
-	return isPlayerTokenValid(ctx, t, tokenTypePasswordReset, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+	_, err := isPlayerTokenValid(ctx, t, tokenTypePasswordReset, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+	return err
 }
 
 // isPlayerTokenValid checks if the token is still valid
-func isPlayerTokenValid(ctx context.Context, playerToken, expectedType string, createdAfter time.Time) error {
+func isPlayerTokenValid(ctx context.Context, playerToken, expectedType string, createdAfter time.Time) (int64, error) {
 	const query = `
-SELECT type, created
+SELECT player_id, type, created
 FROM player_tokens
 WHERE token = $1
   AND active`
 
 	row := db.Instance().QueryRowContext(ctx, query, playerToken)
 
+	var playerID int64
 	var tokenType string
 	var created time.Time
-	if err := row.Scan(&tokenType, &created); err != nil {
-		return ErrTokenExpired
+	if err := row.Scan(&playerID, &tokenType, &created); err != nil {
+		return 0, ErrTokenExpired
 	}
 
 	if tokenType != expectedType || created.Before(createdAfter) {
-		return ErrTokenExpired
+		return 0, ErrTokenExpired
 	}
 
-	return nil
+	return playerID, nil
+}
+
+// VerifyAccount will verify the account if the token is valid
+func VerifyAccount(ctx context.Context, verifyToken string) error {
+	playerID, err := isPlayerTokenValid(ctx, verifyToken, tokenTypeAccountVerification, time.Time{})
+	if err != nil {
+		return err
+	}
+
+	player, err := GetPlayerByID(ctx, playerID)
+	if err != nil {
+		return err
+	}
+
+	if err := expireToken(ctx, verifyToken); err != nil {
+		return err
+	}
+
+	player.Verified = true
+	return player.Save(ctx)
+}
+
+func expireToken(ctx context.Context, t string) error {
+	const query = `
+UPDATE player_tokens
+SET active = 'f'
+WHERE token = $1`
+
+	_, err := db.Instance().ExecContext(ctx, query, t)
+	return err
 }

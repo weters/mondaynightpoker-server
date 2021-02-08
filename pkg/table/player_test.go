@@ -328,3 +328,27 @@ WHERE token = $1
 
 	a.EqualError(p.ResetPassword(cbg, "my new password", token), "could not reset the password")
 }
+
+func TestPlayer_accountVerification(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	a.NoError(p.SetPassword("test"))
+	a.False(p.Verified)
+
+	_, err := GetPlayerByEmailAndPassword(cbg, p.Email, "test")
+	a.Equal(ErrAccountNotVerified, err)
+
+	token, err := p.CreateAccountVerificationToken(cbg)
+	a.NoError(err)
+
+	a.EqualError(VerifyAccount(cbg, "bad-token"), "token is expired")
+	a.NoError(VerifyAccount(cbg, token))
+
+	p2, err := GetPlayerByEmailAndPassword(cbg, p.Email, "test")
+	a.NoError(err)
+	a.NotNil(p2)
+
+	// can't re-use token
+	a.EqualError(VerifyAccount(cbg, token), "token is expired")
+}

@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -19,7 +20,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type playerPayload struct {
+type postPlayerPayload struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
 	Password    string `json:"password"`
@@ -39,7 +40,7 @@ var statusOK = map[string]string{
 
 func (m *Mux) postPlayer() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var pp playerPayload
+		var pp postPlayerPayload
 		if !decodeRequest(w, r, &pp) {
 			return
 		}
@@ -95,10 +96,40 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
+		verifyToken, err := player.CreateAccountVerificationToken(context.Background())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		go m.sendAccountVerificationEmail(player, verifyToken)
+
 		writeJSON(w, http.StatusCreated, &playerWithEmail{
 			Player: player,
 			Email:  player.Email,
 		})
+	}
+}
+
+func (m *Mux) sendAccountVerificationEmail(player *table.Player, verifyToken string) {
+	if config.Instance().Email.Disable {
+		return
+	}
+
+	log := logrus.WithField("playerId", player.ID)
+
+	body, err := m.emailTemplates.RenderTemplate("verify_account.html", map[string]string{
+		"url":   fmt.Sprintf("%s/verify-account/%s", config.Instance().Host, verifyToken),
+		"email": player.Email,
+	})
+
+	if err != nil {
+		log.WithError(err).Error("could not render template")
+		return
+	}
+
+	if err := m.email.SendSimple(player.Email, "Verify Your Account", body); err != nil {
+		log.WithError(err).Error("could not send account verification email")
 	}
 }
 
@@ -199,14 +230,15 @@ type postPlayerAuthResponse struct {
 
 func (m *Mux) postPlayerAuth() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var pp playerPayload
+		var pp postPlayerPayload
 		if !decodeRequest(w, r, &pp) {
 			return
 		}
 
 		player, err := table.GetPlayerByEmailAndPassword(r.Context(), pp.Email, pp.Password)
 		if err != nil {
-			if err == table.ErrInvalidEmailOrPassword {
+			var ue table.UserError
+			if errors.As(err, &ue) {
 				writeJSONError(w, http.StatusUnauthorized, err)
 				return
 			}
@@ -440,6 +472,23 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 
 		if err := player.ResetPassword(r.Context(), payload.Password, token); err != nil {
 			writeJSONError(w, http.StatusBadRequest, nil)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
+	}
+}
+
+func (m *Mux) postPlayerVerifyAccountToken() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := mux.Vars(r)["token"]
+		if err := table.VerifyAccount(r.Context(), token); err != nil {
+			if errors.Is(err, table.ErrTokenExpired) {
+				writeJSONError(w, http.StatusBadRequest, err)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, err)
+			}
+
 			return
 		}
 

@@ -66,7 +66,7 @@ func Test_postPlayer(t *testing.T) {
 	assert.Equal(t, "good", mr.token)
 
 	obj = errorResponse{}
-	assertPost(t, ts, "/player", playerPayload{
+	assertPost(t, ts, "/player", postPlayerPayload{
 		DisplayName: "&",
 		Email:       "",
 		Password:    "",
@@ -74,7 +74,7 @@ func Test_postPlayer(t *testing.T) {
 	assert.Equal(t, "display name must only contain letters, numbers, and spaces, and be 40 characters or less", obj.Message)
 
 	obj = errorResponse{}
-	assertPost(t, ts, "/player", playerPayload{
+	assertPost(t, ts, "/player", postPlayerPayload{
 		DisplayName: strings.Repeat("A", 41),
 		Email:       "",
 		Password:    "",
@@ -83,7 +83,7 @@ func Test_postPlayer(t *testing.T) {
 
 	email := util.RandomEmail()
 	obj = errorResponse{}
-	assertPost(t, ts, "/player", playerPayload{
+	assertPost(t, ts, "/player", postPlayerPayload{
 		Email:    email,
 		Password: "",
 	}, &obj, 400)
@@ -92,7 +92,7 @@ func Test_postPlayer(t *testing.T) {
 	// test random name
 	var pObj *playerWithEmail
 	rand.Seed(0)
-	assertPost(t, ts, "/player", playerPayload{
+	assertPost(t, ts, "/player", postPlayerPayload{
 		Email:    email,
 		Password: "123456",
 	}, &pObj, 201)
@@ -101,7 +101,7 @@ func Test_postPlayer(t *testing.T) {
 	assert.Equal(t, "Waiving Lion", pObj.DisplayName)
 
 	obj = errorResponse{}
-	assertPost(t, ts, "/player", &playerPayload{
+	assertPost(t, ts, "/player", &postPlayerPayload{
 		Email:    email,
 		Password: "123456",
 	}, &obj, 400)
@@ -109,7 +109,7 @@ func Test_postPlayer(t *testing.T) {
 
 	// test display name
 	email = util.RandomEmail()
-	assertPost(t, ts, "/player", playerPayload{
+	assertPost(t, ts, "/player", postPlayerPayload{
 		Email:       email,
 		Password:    "123456",
 		DisplayName: "Tommy",
@@ -124,7 +124,7 @@ func Test_postPlayer(t *testing.T) {
 	assert.NoError(t, config.Load())
 
 	obj = errorResponse{}
-	assertPost(t, ts, "/player", playerPayload{
+	assertPost(t, ts, "/player", postPlayerPayload{
 		Email:    util.RandomEmail(),
 		Password: "123456",
 	}, &obj, 400)
@@ -193,7 +193,7 @@ func Test_postPlayerAuth(t *testing.T) {
 	_ = player.Save(cbg)
 
 	var resp postPlayerAuthResponse
-	assertPost(t, ts, "/player/auth", playerPayload{
+	assertPost(t, ts, "/player/auth", postPlayerPayload{
 		Email:    email,
 		Password: pw,
 	}, &resp, 200)
@@ -237,7 +237,7 @@ func Test_postPlayerAuth_BadCreds(t *testing.T) {
 	}
 
 	var errObj errorResponse
-	assertPost(t, ts, "/player/auth", playerPayload{
+	assertPost(t, ts, "/player/auth", postPlayerPayload{
 		Email:    email,
 		Password: "bad-password",
 	}, &errObj, 401)
@@ -421,4 +421,49 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 		"email":    p.Email,
 		"password": "123456",
 	}, nil, http.StatusOK)
+}
+
+func TestMux_accountVerification(t *testing.T) {
+	a := assert.New(t)
+
+	m := NewMux("")
+	m.recaptcha = newMockRecaptcha(true)
+
+	setupJWT()
+	ts := httptest.NewServer(m)
+	defer ts.Close()
+
+	email := util.RandomEmail()
+	password := "my-password"
+	assertPost(t, ts, "/player", postPlayerPayload{
+		DisplayName: "Test Name",
+		Email:       email,
+		Password:    password,
+	}, nil, http.StatusCreated)
+
+	var er errorResponse
+	assertPost(t, ts, "/player/auth", map[string]string{
+		"email":    email,
+		"password": password,
+	}, &er, http.StatusUnauthorized)
+	a.Equal("account not verified", er.Message)
+
+	player, err := table.GetPlayerByEmail(context.Background(), email)
+	a.NoError(err)
+
+	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 AND type = 'account_verification'", player.ID)
+	var verifyToken string
+	a.NoError(row.Scan(&verifyToken))
+
+	badToken, _ := token.Generate(20)
+	assertPost(t, ts, "/player/verify/"+badToken, nil, nil, http.StatusBadRequest)
+	assertPost(t, ts, "/player/verify/"+verifyToken, nil, nil, http.StatusOK)
+
+	assertPost(t, ts, "/player/auth", map[string]string{
+		"email":    email,
+		"password": password,
+	}, &er, http.StatusOK)
+
+	// can't re-use
+	assertPost(t, ts, "/player/verify/"+verifyToken, nil, nil, http.StatusBadRequest)
 }

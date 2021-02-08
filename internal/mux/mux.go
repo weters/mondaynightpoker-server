@@ -73,6 +73,7 @@ func NewMux(version string) *Mux {
 		r.Methods(http.MethodPost).Path("/player").Handler(this.postPlayer())
 		r.Methods(http.MethodPost).Path("/player/auth").Handler(this.postPlayerAuth())
 		r.Methods(http.MethodGet).Path("/player/auth/{jwt:.*}").Handler(this.getPlayerAuthJWT())
+		r.Methods(http.MethodPost).Path("/player/verify/{token:[a-zA-Z0-9_-]{20}}").Handler(this.postPlayerVerifyAccountToken())
 		r.Methods(http.MethodPost).Path("/player/reset-password-request").Handler(this.postPlayerResetPasswordRequest())
 		r.Methods(http.MethodPost).Path("/player/reset-password/{token:[a-zA-Z0-9_-]{20}}").Handler(this.postPlayerResetPasswordToken())
 		r.Methods(http.MethodGet).Path("/player/reset-password/{token:[a-zA-Z0-9_-]{20}}").Handler(this.getPlayerResetPasswordToken())
