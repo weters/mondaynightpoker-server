@@ -41,10 +41,6 @@ Table | Description
 
 ![Database Design](assets/tables.png)
 
-## Deployment
-
-Todo...
-
 ## Code Layout
 
 This codebase tries to adhere to the [Standard Go Project Layout](https://github.com/golang-standards/project-layout).
@@ -69,6 +65,10 @@ Dir | Description
 [templates](templates) | Email templates
 
 Todo: go in depth about playable and room
+
+## Deployment
+
+Todo...
 
 ## Future Enhancements
 
