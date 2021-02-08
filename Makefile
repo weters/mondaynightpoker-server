@@ -22,3 +22,25 @@ dev-database:
 clean:
 	-docker rm -v -f mondaynightpoker
 	rm -rf .keys/public.pem .keys/private.key
+
+assets/uml_room.png:
+	goplantuml -aggregate-private-members \
+			   -show-aggregations \
+			   pkg/room pkg/playable \
+		| PLANTUML_LIMIT_SIZE=16768 java -Xmx2048m -jar ~/Downloads/plantuml.jar -pipe > assets/uml_room.png
+
+assets/uml_playable.png:
+	goplantuml -aggregate-private-members \
+			   -show-aggregations \
+			   pkg/playable \
+			   pkg/playable/poker/handanalyzer \
+			   pkg/playable/poker/sevencard \
+		| PLANTUML_LIMIT_SIZE=16768 java -Xmx2048m -jar ~/Downloads/plantuml.jar -pipe > assets/uml_playable.png
+
+assets/uml_deck.png:
+	goplantuml -aggregate-private-members \
+			   -show-aggregations \
+			   pkg/deck \
+		| PLANTUML_LIMIT_SIZE=16768 java -Xmx2048m -jar ~/Downloads/plantuml.jar -pipe > assets/uml_deck.png
+
+uml: assets/uml_playable.png assets/uml_room.png assets/uml_deck.png
