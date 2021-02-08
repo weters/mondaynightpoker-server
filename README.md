@@ -2,7 +2,7 @@
 
 [![.github/workflows/ci.yaml](https://github.com/weters/mondaynightpoker-server/workflows/.github/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/weters/mondaynightpoker-server/actions?query=workflow%3A.github%2Fworkflows%2Fci.yaml+branch%3Amaster)
 
-mondaynightpoker-server is the backend application for the Monday Night Poker site. The front-end code can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue).
+mondaynightpoker-server is the backend application for the Monday Night Poker site (see: [monday-night.poker](https://monday-night.poker)). The front-end code can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue).
 
 For more information about the architecture of this open-source project, see the [architecture](architecture.md) document.
 
