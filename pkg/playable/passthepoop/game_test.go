@@ -144,8 +144,8 @@ func TestGame_ExecuteTurnForPlayer_WithBlocks(t *testing.T) {
 
 	game.idToParticipant[1].card = deck.CardFromString("2c")
 	game.idToParticipant[2].card = deck.CardFromString("3c")
-	game.idToParticipant[2].card = deck.CardFromString("4c")
-	game.idToParticipant[2].card = deck.CardFromString("5c")
+	game.idToParticipant[3].card = deck.CardFromString("4c")
+	game.idToParticipant[4].card = deck.CardFromString("5c")
 
 	execOK, execErr = createExecFunctions(t, game)
 	execOK(1, ActionTrade)
