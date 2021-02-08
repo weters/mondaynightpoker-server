@@ -15,6 +15,11 @@ import (
 
 const passwordResetRequestTTL = time.Hour
 
+const (
+	tokenTypePasswordReset       = "password_reset"
+	tokenTypeAccountVerification = "account_verification"
+)
+
 const playerColumns = `
 players.id,
 players.email,
@@ -32,8 +37,8 @@ var ErrInvalidEmailOrPassword = errors.New("invalid email address and/or passwor
 // ErrDuplicateKey happens if a user tries to create a player with a taken email
 var ErrDuplicateKey = errors.New("duplicate key constraint violation")
 
-// ErrPasswordResetRequestExpired is an error if the password reset request is no longer valid
-var ErrPasswordResetRequestExpired = errors.New("password reset required has expired")
+// ErrTokenExpired is an error if the password reset request is no longer valid
+var ErrTokenExpired = errors.New("token is expired")
 
 // Player is a record in the `players` table
 type Player struct {
@@ -331,34 +336,39 @@ LIMIT $2`
 
 // CreatePasswordResetRequest generates a new password request and returns the token
 func (p *Player) CreatePasswordResetRequest(ctx context.Context) (string, error) {
+	if err := p.expirePlayerTokens(ctx, tokenTypePasswordReset); err != nil {
+		return "", err
+	}
+
+	return p.CreatePlayerToken(ctx, tokenTypePasswordReset)
+}
+
+// CreatePlayerToken creates a new player token
+func (p *Player) CreatePlayerToken(ctx context.Context, tokenType string) (string, error) {
+	const query = `
+INSERT INTO player_tokens (token, player_id, type)
+VALUES ($1, $2, $3)`
+
 	resetToken, err := token.Generate(20)
 	if err != nil {
 		return "", err
 	}
 
-	if err := p.expirePasswordRequests(ctx); err != nil {
-		return "", err
-	}
-
-	const query = `
-INSERT INTO player_password_resets (token, player_id)
-VALUES ($1, $2)`
-
-	if _, err := db.Instance().ExecContext(ctx, query, resetToken, p.ID); err != nil {
+	if _, err := db.Instance().ExecContext(ctx, query, resetToken, p.ID, tokenTypePasswordReset); err != nil {
 		return "", err
 	}
 
 	return resetToken, nil
 }
 
-// expirePasswordRequests ensures all existing password requests are disabled
-func (p *Player) expirePasswordRequests(ctx context.Context) error {
+// expirePlayerTokens ensures all existing password requests are disabled
+func (p *Player) expirePlayerTokens(ctx context.Context, tokenType string) error {
 	const query = `
-UPDATE player_password_resets
+UPDATE player_tokens
 SET active = 'f'
-WHERE player_id = $1`
+WHERE player_id = $1 AND type = $2`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.ID)
+	_, err := db.Instance().ExecContext(ctx, query, p.ID, tokenType)
 	return err
 }
 
@@ -387,22 +397,29 @@ FROM reset_password($1, $2, $3, $4)`
 	return nil
 }
 
-// IsPasswordResetTokenValid checks if the token is still valid
-func IsPasswordResetTokenValid(ctx context.Context, resetToken string) error {
+// IsPasswordResetTokenValid will return an error if the token is not valid
+func IsPasswordResetTokenValid(ctx context.Context, t string) error {
+	return isPlayerTokenValid(ctx, t, tokenTypePasswordReset, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+}
+
+// isPlayerTokenValid checks if the token is still valid
+func isPlayerTokenValid(ctx context.Context, playerToken, expectedType string, createdAfter time.Time) error {
 	const query = `
-SELECT true
-FROM player_password_resets
+SELECT type, created
+FROM player_tokens
 WHERE token = $1
-  AND created > $2
   AND active`
 
-	row := db.Instance().QueryRowContext(ctx, query, resetToken, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+	row := db.Instance().QueryRowContext(ctx, query, playerToken)
 
-	var found bool
-	_ = row.Scan(&found)
+	var tokenType string
+	var created time.Time
+	if err := row.Scan(&tokenType, &created); err != nil {
+		return ErrTokenExpired
+	}
 
-	if !found {
-		return ErrPasswordResetRequestExpired
+	if tokenType != expectedType || created.Before(createdAfter) {
+		return ErrTokenExpired
 	}
 
 	return nil

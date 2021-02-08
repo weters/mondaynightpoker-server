@@ -368,7 +368,7 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 	p, _ := player()
 	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{Email: p.Email}, nil, http.StatusOK)
 
-	row := db.Instance().QueryRow("SELECT token FROM player_password_resets WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
+	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
 	var resetToken string
 	a.NoError(row.Scan(&resetToken))
 

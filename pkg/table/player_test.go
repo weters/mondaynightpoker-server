@@ -296,7 +296,7 @@ func TestPlayer_ResetPassword_expired(t *testing.T) {
 	a.NoError(IsPasswordResetTokenValid(cbg, token))
 
 	const query = `
-UPDATE player_password_resets
+UPDATE player_tokens
 SET created = (NOW() AT TIME ZONE 'UTC') - INTERVAL '2 hour'
 WHERE token = $1
 `
@@ -304,7 +304,7 @@ WHERE token = $1
 	_, err = db.Instance().Exec(query, token)
 	a.NoError(err)
 
-	a.Equal(ErrPasswordResetRequestExpired, IsPasswordResetTokenValid(cbg, token))
+	a.Equal(ErrTokenExpired, IsPasswordResetTokenValid(cbg, token))
 
 	a.EqualError(p.ResetPassword(cbg, "my new password", token), "could not reset the password")
 }
