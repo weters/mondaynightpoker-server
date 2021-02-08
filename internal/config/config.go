@@ -97,6 +97,11 @@ func Load() error {
 	return nil
 }
 
+// DefaultConfig returns the default configuration
+func DefaultConfig() Config {
+	return defaultConfig
+}
+
 func getConfigFile() (*os.File, bool) {
 	paths := []string{os.Getenv("MNP_CONFIG_FILE"), "config.yaml", "testdata/config.yaml"}
 	for _, path := range paths {

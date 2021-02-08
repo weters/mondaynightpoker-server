@@ -49,7 +49,7 @@ $ go run ./cmd/admin -c user
 4. Run the server
 
 ```
-$ RECAPTCHA_SECRET=X go run ./cmd/server
+$ MNP_RECAPTCHA_SECRET=X go run ./cmd/server
 ```
     
 5. Verify the server is running
@@ -60,21 +60,39 @@ $ curl http://localhost:5000/health
     
 6. Start the Vue.js front-end. Repo can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue)
 
-#### Environment Variables
+### Configuration
 
-The following environment variables can be supplied when running the server.
+The service can be configured through two methods:
 
-Variable | Default | Description
---- | --- | ---
-`PG_DSN` | `postgres://localhost:5000/postgres?sslmode=disable` | PostgreSQL DSN
-`MIGRATIONS_PATH` | `./sql` | Path to the database migrations
-`JWT_PUBLIC_KEY` | `.keys/public.pem` | Path to the RSA 256 public key for JWT validation
-`JWT_PRIVATE_KEY` | `.keys/private.key` | Path to the RSA 256 private key for JWT signing
-`RECAPTCHA_SECRET` | | Recaptcha v3 secret key
-`DISABLE_ACCESS_LOGS` | | Disables access logging. Only recommended for dev
-`START_GAME_DELAY` | `10` | How many seconds to wait after player starts a game
-`EMAIL_FROM` | `Monday Night Poker <no-replay@monday-night.poker>` | Email from address
-`EMAIL_SENDER` | `no-replay@monday-night.poker` | Email sender
-`EMAIL_USERNAME` | `dealer@monday-night.poker` | Username for the mailbox
-`EMAIL_PASSWORD` | | Password for the mailbox
-`EMAIL_HOST` | `mail.privateemail.com:587` | SMTP host and port
+1. **YAML Configuration:** By default, the service will look for `config.yaml`. You can also change the filename by setting a `MNP_CONFIG_FILE` environment variable.
+2. **Environment Variables:** All configuration settings can be set by environment variables. Every variable is prefixed by `MNP_` and `camelCase` is transformed to `SNAKE_CASE`. Example, `jwt.publicKey` will become `MNP_JWT_PUBLIC_KEY`.
+
+Any environment variables take precedence over values defined in YAML. The default configuration values are defined below.
+
+```yaml
+host: https://monday-night.poker
+logLevel: info
+database:
+  dsn: postgres://postgres@localhost:5432/postgres?sslmode=disable
+  migrationsPath: ./sql
+jwt:
+  publicKey: .keys/public.pem
+  privateKey: .keys/private.key
+recaptchaSecret: '-'
+startGameDelay: 10
+playerCreateDelay: 60
+email:
+  from: Monday Night Poker <no-replay@monday-night.poker>
+  sender: no-reply@monday-night.poker
+  username: dealer@monday-night.poker
+  password: ""
+  host: mail.privateemail.com:587
+  templatesDir: templates
+  disable: false
+```
+
+You can generate a YAML file with the defaults by running:
+
+```shell
+$ go run ./cmd/generate-config
+```
