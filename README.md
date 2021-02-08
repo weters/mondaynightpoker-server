@@ -4,6 +4,8 @@
 
 mondaynightpoker-server is the backend application for the Monday Night Poker site. The front-end code can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue).
 
+For more information about the architecture of this open-source project, see the [architecture](architecture.md) document.
+
 ## Supported Card Games
 
 * Bourré
