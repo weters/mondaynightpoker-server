@@ -42,6 +42,7 @@ func main() {
 			logrus.WithError(err).Fatal("could not get answer")
 		}
 		player.DisplayName = name
+		player.Verified = true
 		if err := player.Save(context.Background()); err != nil {
 			logrus.WithError(err).Fatal("could not save player")
 		}
