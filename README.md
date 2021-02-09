@@ -84,7 +84,7 @@ recaptchaSecret: '-'
 startGameDelay: 10
 playerCreateDelay: 60
 email:
-  from: Monday Night Poker <no-replay@monday-night.poker>
+  from: Monday Night Poker <no-reply@monday-night.poker>
   sender: no-reply@monday-night.poker
   username: dealer@monday-night.poker
   password: ""

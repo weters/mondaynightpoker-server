@@ -21,7 +21,7 @@ var defaultConfig = Config{
 	StartGameDelay:    10,
 	PlayerCreateDelay: 60,
 	Email: Email{
-		From:         "Monday Night Poker <no-replay@monday-night.poker>",
+		From:         "Monday Night Poker <no-reply@monday-night.poker>",
 		Sender:       "no-reply@monday-night.poker",
 		Username:     "dealer@monday-night.poker",
 		Password:     "",
