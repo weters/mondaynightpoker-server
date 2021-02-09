@@ -45,6 +45,9 @@ type Game struct {
 
 	pendingDealerAction *pendingDealerAction
 
+	// sendUpdate will send update if true
+	sendUpdate bool
+
 	// done will be set after the game is over and the user's have stated they want to proceed
 	done bool
 }
@@ -56,6 +59,11 @@ func (g *Game) Interval() time.Duration {
 
 // Tick will check the state of the game and possibly move the state along
 func (g *Game) Tick() (bool, error) {
+	if g.sendUpdate {
+		g.sendUpdate = false
+		return true, nil
+	}
+
 	if g.done {
 		return false, nil
 	}
@@ -88,11 +96,6 @@ func (g *Game) Tick() (bool, error) {
 	if g.isGameOver() {
 		if err := g.endGame(); err != nil {
 			logrus.WithError(err).Error("could not end game")
-		}
-
-		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionClearGame,
-			ExecuteAfter: time.Now().Add(time.Second),
 		}
 	} else if g.isRoundOver() {
 		action := dealerActionNextRound
@@ -202,6 +205,7 @@ func (g *Game) endGame() error {
 		messages = append(messages, newLogMessage(0, nil, "Another game is required"))
 
 		*g = *game
+		g.sendUpdate = true
 	} else {
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionClearGame,
