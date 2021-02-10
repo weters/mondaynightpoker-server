@@ -1,15 +1,11 @@
 package room
 
 import (
-	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room/gamefactory"
-	"os"
-	"strconv"
 	"time"
 )
-
-const defaultSecondsUntilStart = time.Second * 10
 
 var secondsUntilStart = getSecondsUntilStart()
 
@@ -49,14 +45,5 @@ func newPendingGame(c *Client, msg *playable.PayloadIn) (*pendingGame, error) {
 }
 
 func getSecondsUntilStart() time.Duration {
-	if val := os.Getenv("START_GAME_DELAY"); val != "" {
-		delay, err := strconv.Atoi(val)
-		if err != nil {
-			logrus.WithError(err).Panic("could not parse START_GAME_DELAY")
-		}
-
-		return time.Second * time.Duration(delay)
-	}
-
-	return defaultSecondsUntilStart
+	return time.Duration(config.Instance().StartGameDelay) * time.Second
 }
