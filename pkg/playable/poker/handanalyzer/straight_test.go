@@ -38,7 +38,7 @@ func Test_randomStraights(t *testing.T) {
 	for i := 0; i < 100000; i++ {
 		h := make(deck.Hand, 0)
 		d := deck.New()
-		d.Shuffle(0)
+		d.Shuffle()
 
 		for i := 0; i < 7; i++ {
 			card, err := d.Draw()

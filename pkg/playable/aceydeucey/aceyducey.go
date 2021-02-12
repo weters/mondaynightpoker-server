@@ -13,8 +13,6 @@ import (
 // Should we make this configurable? Maybe double the ante?
 const betTheGapAmount = 50
 
-var seed = int64(0)
-
 // Game is a game of Acey Deucey
 type Game struct {
 	options             Options
@@ -57,7 +55,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	}
 
 	d := deck.New()
-	d.Shuffle(seed)
+	d.Shuffle()
 
 	a := &Game{
 		options:             options,
@@ -202,7 +200,7 @@ func (g *Game) isGameOver() bool {
 // NOTE: do not call this method until the correct participant is lined up
 func (g *Game) newRound() {
 	if g.options.ContinuousShoe {
-		g.deck.Shuffle(seed)
+		g.deck.Shuffle()
 	}
 
 	turn := g.getCurrentTurn()

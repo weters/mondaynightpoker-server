@@ -7,8 +7,12 @@ import (
 )
 
 var defaultConfig = Config{
-	Host:     "https://monday-night.poker",
-	LogLevel: "info",
+	loaded: false,
+	Host:   "https://monday-night.poker",
+	Log: Log{
+		DisableAccessLogs: false,
+		Level:             "info",
+	},
 	Database: Database{
 		DSN:            "postgres://postgres@localhost:5432/postgres?sslmode=disable",
 		MigrationsPath: "./sql",
@@ -34,13 +38,19 @@ var defaultConfig = Config{
 type Config struct {
 	loaded            bool
 	Host              string
-	LogLevel          string `yaml:"logLevel" envconfig:"log_level"`
+	Log               Log
 	Database          Database
 	JWT               JWT
 	RecaptchaSecret   string `yaml:"recaptchaSecret" envconfig:"recaptcha_secret"`
 	StartGameDelay    int    `yaml:"startGameDelay" envconfig:"start_game_delay"`
 	PlayerCreateDelay int    `yaml:"playerCreateDelay" envconfig:"player_create_delay"`
 	Email             Email
+}
+
+// Log represents logging configuration
+type Log struct {
+	DisableAccessLogs bool `yaml:"disableAccessLogs" envconfig:"disable_access_logs"`
+	Level             string
 }
 
 // Database represents database configuration

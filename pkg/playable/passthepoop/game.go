@@ -12,6 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// seed must be -1 to ensure crypto-secure randomness
+var seed int64 = -1
+
 // Game is an individual game of pass the poop
 type Game struct {
 	options         Options
@@ -51,10 +54,6 @@ type Game struct {
 	gameLog *GameLog
 }
 
-// random seed generator
-// defined here for testing purposes
-var seed = int64(0)
-
 // NewGame returns a new game
 func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
 	if len(playerIDs) < 2 {
@@ -70,7 +69,8 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	}
 
 	d := deck.New()
-	d.Shuffle(seed)
+	d.SetSeed(seed)
+	d.Shuffle()
 
 	idToParticipants := make(map[int64]*Participant)
 	participants := make([]*Participant, len(playerIDs))
@@ -465,7 +465,7 @@ func (g *Game) deal() error {
 
 	// +1 because dealer may go to the deck
 	if !g.deck.CanDraw(len(g.participants) + 1) {
-		g.deck.Shuffle(seed)
+		g.deck.Shuffle()
 	}
 
 	for _, p := range g.idToParticipant {

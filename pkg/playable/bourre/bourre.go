@@ -295,7 +295,7 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 	}
 
 	d := deck.New()
-	d.Shuffle(0)
+	d.Shuffle()
 
 	foldedPlayersMap := make(map[*Player]bool)
 	for _, player := range foldedPlayers {

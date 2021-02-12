@@ -1,11 +1,8 @@
 package deck
 
 import (
-	"math/rand"
-	"testing"
-	"time"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestNewDeck(t *testing.T) {
@@ -19,14 +16,8 @@ func TestNewDeck(t *testing.T) {
 
 	assert.Equal(t, "79441517e1184e0e3c37383d2f7bc54996872dd8", deck.HashCode())
 
-	if deck.GetSeed() != -1 {
-		t.Errorf("Shuffle() did not return the initial seed value (-1)")
-	}
-
-	deck.Shuffle(1)
-	if deck.GetSeed() != 1 {
-		t.Errorf("Shuffle() did not set a seed value")
-	}
+	deck.SetSeed(1)
+	deck.Shuffle()
 
 	assert.Equal(t, Card{Suit: Clubs, Rank: 14}, *deck.Cards[0])
 
@@ -35,10 +26,7 @@ func TestNewDeck(t *testing.T) {
 	const expected = "3ba18276fa61c15ea5195929327d2bc7dda0c0c0"
 	assert.Equal(t, expected, deck.HashCode())
 
-	now := time.Now().UnixNano()
-	deck.Shuffle(0)
-
-	assert.Greater(t, deck.GetSeed(), now)
+	deck.Shuffle()
 
 	assert.NotEqual(t, expected, deck.HashCode())
 }
@@ -78,7 +66,7 @@ func TestDeck_Draw(t *testing.T) {
 		t.Errorf("expected err to be ErrEndOfDeck, got %#v", err)
 	}
 
-	deck.Shuffle(0)
+	deck.Shuffle()
 	if !deck.CanDraw(52) {
 		t.Errorf("expected Shuffle() to reshuffle the deck")
 	}
@@ -87,14 +75,12 @@ func TestDeck_Draw(t *testing.T) {
 func TestDeck_ShuffleDiscards(t *testing.T) {
 	d := New()
 	d.SetSeed(0)
+
 	c1, _ := d.Draw()
 	c2, _ := d.Draw()
 	c3, _ := d.Draw()
 	c4, _ := d.Draw()
 	discards := []*Card{c1, c2, c3, c4}
-
-	// ensure our seed does not use the global seed
-	rand.Seed(5)
 
 	d.ShuffleDiscards(discards)
 	assert.True(t, discards[0].Equal(c1))

@@ -54,7 +54,7 @@ func main() {
 }
 
 func loggingHandler(next http.Handler) http.Handler {
-	if os.Getenv("DISABLE_ACCESS_LOGS") != "" {
+	if config.Instance().Log.DisableAccessLogs {
 		return next
 	}
 
@@ -62,7 +62,7 @@ func loggingHandler(next http.Handler) http.Handler {
 }
 
 func setupLogger() {
-	if lvl := config.Instance().LogLevel; lvl != "" {
+	if lvl := config.Instance().Log.Level; lvl != "" {
 		level, err := logrus.ParseLevel(lvl)
 		if err != nil {
 			logrus.WithError(err).Fatal("could not parse level")

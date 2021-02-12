@@ -8,7 +8,6 @@ import (
 // GameState is the overall game state
 // This is safe for all players to see
 type GameState struct {
-	Seed          int64                `json:"seed"`
 	Players       []*GameStatePlayer   `json:"players"`
 	FoldedPlayers []*GameStatePlayer   `json:"foldedPlayers"`
 	TrumpCard     *deck.Card           `json:"trumpCard"`
@@ -85,7 +84,6 @@ func (g *Game) getGameState() *GameState {
 	}
 
 	return &GameState{
-		Seed:          g.deck.GetSeed(),
 		Players:       players,
 		FoldedPlayers: foldedPlayers,
 		TrumpCard:     g.trumpCard,

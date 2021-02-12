@@ -4,8 +4,11 @@ import (
 	"crypto/sha1" // nolint:gosec
 	"encoding/hex"
 	"errors"
+	"flag"
+	"github.com/sirupsen/logrus"
 	"math/rand"
-	"time"
+	"mondaynightpoker-server/internal/rng"
+	"runtime/debug"
 )
 
 // ErrEndOfDeck is an error when Draw() is attempted and there are no more cards
@@ -14,26 +17,18 @@ var ErrEndOfDeck = errors.New("end of deck reached")
 // Deck represents a playing deck
 type Deck struct {
 	Cards []*Card `json:"cards"`
-	seed  int64
-	rng   *rand.Rand
+	rng   rng.Generator
 }
 
 // New returns a new deck of cards.
 // Important! this deck is unshuffled. You must call the Shuffle() method to shuffle the cards
 func New() *Deck {
 	d := &Deck{
-		seed: -1,
+		rng: rng.Crypto{},
 	}
 
 	d.buildDeck()
 	return d
-}
-
-// SetSeed will set the seed
-// This should only be used by tests. Setting the seed is normally handled when you call Shuffle()
-func (d *Deck) SetSeed(seed int64) {
-	d.seed = seed
-	d.rng = rand.New(rand.NewSource(seed))
 }
 
 func (d *Deck) buildDeck() {
@@ -51,23 +46,12 @@ func (d *Deck) buildDeck() {
 }
 
 // Shuffle will shuffle the deck of cards
-// You can manually specify the seed, or you can leave it as 0. This method returns the seed used.
-func (d *Deck) Shuffle(seed int64) {
-	if seed < 0 {
-		panic("seed cannot be < 0")
-	}
-
+func (d *Deck) Shuffle() {
 	// we always want to shuffle from an unshuffled deck.
 	// this check here is to make sure we aren't double building the deck
-	if len(d.Cards) != 52 || d.seed != -1 {
+	if len(d.Cards) != 52 {
 		d.buildDeck()
 	}
-
-	if seed == 0 {
-		seed = time.Now().UnixNano()
-	}
-
-	d.SetSeed(seed)
 
 	for j := len(d.Cards) - 1; j > 0; j-- {
 		i := d.rng.Intn(j + 1)
@@ -88,11 +72,6 @@ func (d *Deck) ShuffleDiscards(discards []*Card) {
 	}
 
 	d.Cards = cards
-}
-
-// GetSeed returns the seed used to shuffle the deck
-func (d *Deck) GetSeed() int64 {
-	return d.seed
 }
 
 // HashCode returns a SHA1 hash code of the deck.
@@ -150,4 +129,24 @@ func (d *Deck) RemoveCard(targetCard *Card) bool {
 
 	d.Cards = newDeck
 	return cardWasRemoved
+}
+
+// SetSeed is a TESTING method for setting pseudo random number generator with a seed
+// If seed < 0, the default crypto rng will be used
+func (d *Deck) SetSeed(seed int64) {
+	if seed < 0 {
+		d.rng = rng.Crypto{}
+		return
+	}
+
+	// if this isn't a test, ignore request
+	if flag.Lookup("test.v") == nil {
+		stack := debug.Stack()
+		logrus.WithField("stack", string(stack)).Error("attempted to call SetSeed() from non-test context")
+
+		d.rng = rng.Crypto{}
+		return
+	}
+
+	d.rng = rand.New(rand.NewSource(seed))
 }

@@ -73,7 +73,9 @@ Any environment variables take precedence over values defined in YAML. The defau
 
 ```yaml
 host: https://monday-night.poker
-logLevel: info
+log:
+  level: info
+  disableAccessLogs: false
 database:
   dsn: postgres://postgres@localhost:5432/postgres?sslmode=disable
   migrationsPath: ./sql

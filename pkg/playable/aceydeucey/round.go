@@ -324,7 +324,7 @@ func (r *Round) getHalfPot() int {
 func (r *Round) drawCard() (*deck.Card, error) {
 	if !r.deck.CanDraw(1) {
 		cards := r.getCardsInActiveGame()
-		r.deck.Shuffle(seed)
+		r.deck.Shuffle()
 
 		for _, card := range cards {
 			r.deck.RemoveCard(card)

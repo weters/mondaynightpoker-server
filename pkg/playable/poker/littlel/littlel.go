@@ -28,9 +28,9 @@ const (
 	roundRevealWinner
 )
 
-// seed of 0 means truly random shuffle
+// seed of -1 means truly crypto-random shuffle
 // setting to a global so we can override in a test
-var seed int64 = 0
+var seed int64 = -1
 
 // Game represents an individual game of Little L
 type Game struct {
@@ -76,7 +76,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	}
 
 	d := deck.New()
-	d.Shuffle(seed)
+	d.SetSeed(seed)
 
 	idToParticipant := make(map[int64]*Participant)
 	for _, id := range playerIDs {

@@ -353,7 +353,7 @@ func TestRound_drawCard(t *testing.T) {
 	assertDrawCard(r, "2c")
 	assertDrawCard(r, "3c")
 	assert.Equal(t, 0, r.deck.CardsLeft())
-	seed = 1
+	r.deck.SetSeed(1)
 	assertDrawCard(r, "14c")
 	assert.Equal(t, 49, r.deck.CardsLeft())
 

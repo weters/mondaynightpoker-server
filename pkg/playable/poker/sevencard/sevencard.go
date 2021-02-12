@@ -13,8 +13,6 @@ import (
 
 const maxParticipants = 7
 
-var seed int64 = 0
-
 var errNotPlayersTurn = errors.New("it is not your turn")
 
 // Game is a single game of seven-card poker
@@ -60,7 +58,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	}
 
 	d := deck.New()
-	d.Shuffle(seed)
+	d.Shuffle()
 
 	options.Variant.Start()
 
