@@ -5,53 +5,85 @@
     <meta charset="UTF-8">
     <meta name="color-scheme" content="light only">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;700&display=swap&family=Sacramento');
+        @import url("https://use.typekit.net/ukr2lpr.css");
+
         * {
             padding: 0;
             margin: 0;
             outline: none;
             box-sizing: border-box;
         }
+
         html, body {
-            background-color: #f8f8f8;
-            font-family: 'Source Sans Pro', sans-serif;
+            background-color: #f2f2f2;
+            font-family: gesta, sans-serif;
+            color: #011F26
         }
+
         h1, h2, p {
             margin-bottom: 20px;
         }
-        h1 {
-            font-family: 'Sacramento', cursive;
+
+        header {
+            background-color: #011F26;
             text-align: right;
+            padding: 24px 0;
         }
-        div.container {
-            background-color: white;
-            padding: 20px;
-            max-width: 600px;
+
+        header div {
+            max-width: 800px;
             margin: 0 auto;
         }
-        footer {
-            border-top: 1px solid #ddd;
-            margin-top: 20px;
-            padding-top: 20px;
+
+        header img {
+            height: 32px;
         }
+
+        main {
+            background: linear-gradient(#011F26, #011F26 49px, #f2f2f2 50px);
+        }
+
+        main > div {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 24px;
+        }
+
+        a {
+            color: #F26E50;
+        }
+
+        footer {
+            margin-top: 24px;
+        }
+
         footer p {
+            max-width: 800px;
+            margin: 0 auto;
+            padding-left: 24px;
             font-size: 0.8em;
             color: #999;
-            margin: 0;
         }
     </style>
 </head>
 <body>
 <div class="container">
     <header>
-        <h1>Monday Night Poker</h1>
+        <div><img alt="Monday Night Poker"
+                  src="{{ .host }}/monday-night-poker@2x.png"
+                  srcset="{{ .host }}/monday-night-poker.png,
+                     {{ .host }}/monday-night-poker@2x.png 2x"/></div>
     </header>
     <main>
-        <h2>Verify Your Account</h2>
+        <div>
+            <h2>Verify Your Account</h2>
 
-        <p>You have registered {{ .email }} for an account on Monday Night Poker.</p>
+            <p>You have registered {{ .email }} for an account on Monday Night Poker.</p>
 
-        <p>To complete your sign-up, please verify your account by clicking the following URL: <a href="{{ .url }}">{{ .url }}</a></p>
+            <p>To complete your sign-up, please verify your account by clicking the following URL:
+                <a href="{{ .url }}">{{ .url }}</a></p>
+        </div>
     </main>
     <footer>
         <p>This email was intended for {{ .email }}</p>

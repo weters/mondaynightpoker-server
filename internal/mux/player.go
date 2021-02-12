@@ -398,6 +398,7 @@ func (m *Mux) postPlayerResetPasswordRequest() http.HandlerFunc {
 				data := map[string]string{
 					"url":   fmt.Sprintf("%s/reset-password/%s", config.Instance().Host, token),
 					"email": player.Email,
+					"host":  config.Instance().Host,
 				}
 
 				msg, err := m.emailTemplates.RenderTemplate("password_reset.html", data)
