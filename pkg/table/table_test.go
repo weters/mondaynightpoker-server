@@ -161,3 +161,22 @@ func TestTable_GetActivePlayersShifted_noActivePlayers(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []*PlayerTable{}, players)
 }
+
+func TestGetTables(t *testing.T) {
+	_, _ = playerAndTable()
+	p2, tbl2 := playerAndTable()
+	p3, tbl3 := playerAndTable()
+	_, _ = playerAndTable()
+
+	a := assert.New(t)
+	tables, err := GetTables(cbg, 1, 2)
+	a.NoError(err)
+	a.Equal(2, len(tables))
+	a.Equal(p3.Email, tables[0].Email)
+	a.Equal(tbl3.UUID, tables[0].UUID)
+	a.Equal(p2.Email, tables[1].Email)
+	a.Equal(tbl2.UUID, tables[1].UUID)
+
+	// sanity check
+	a.NotEqual(p2.Email, p3.Email)
+}

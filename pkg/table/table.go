@@ -29,6 +29,12 @@ type Table struct {
 	Created  time.Time `json:"created"`
 }
 
+// WithPlayerEmail is a table with the player email who created it
+type WithPlayerEmail struct {
+	*Table
+	Email string `json:"playerEmail"`
+}
+
 // ErrPlayerNotAtTable happens when user is not a member of the table
 var ErrPlayerNotAtTable = errors.New("player is not a member of the table")
 
@@ -132,6 +138,41 @@ WHERE uuid = $1`
 
 	row := db.Instance().QueryRowContext(ctx, query, uuid)
 	return getTableByRow(row)
+}
+
+// GetTables returns a list of tables
+func GetTables(ctx context.Context, offset int64, limit int) ([]*WithPlayerEmail, error) {
+	const query = `
+SELECT ` + tableColumns + `, players.email
+FROM tables
+INNER JOIN players ON tables.player_id = players.id
+ORDER BY tables.created DESC
+OFFSET $1
+LIMIT $2`
+
+	rows, err := db.Instance().QueryContext(ctx, query, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tables := make([]*WithPlayerEmail, 0)
+	for rows.Next() {
+		var email string
+		row, err := getTableByRow(rows, &email)
+		if err != nil {
+			return nil, err
+		}
+
+		t := &WithPlayerEmail{
+			Table: row,
+			Email: email,
+		}
+
+		tables = append(tables, t)
+	}
+
+	return tables, nil
 }
 
 // Reload will refresh the data from the database
