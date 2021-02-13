@@ -101,6 +101,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	s := State{
 		Participant: pJSON,
 		GameState: &GameState{
+			Name:         g.Name(),
 			Participants: make([]*participantJSON, 0),
 			DealerID:     g.idToParticipant[g.playerIDs[0]].PlayerID,
 			Round:        g.round,
@@ -183,7 +184,8 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 // Name returns the name of the game
 func (g *Game) Name() string {
-	return "Little L"
+	name, _ := NameFromOptions(g.options)
+	return name
 }
 
 // LogChan returns a channel that can receive log messages

@@ -16,6 +16,7 @@ type participantJSON struct {
 
 // GameState is the state of the game
 type GameState struct {
+	Name         string             `json:"name"`
 	Participants []*participantJSON `json:"participants"`
 	DealerID     int64              `json:"dealerId"`
 	Round        round              `json:"round"`

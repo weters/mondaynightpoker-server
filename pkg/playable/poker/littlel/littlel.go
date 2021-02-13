@@ -566,3 +566,13 @@ func (g *Game) sendEndOfGameLogMessages() {
 
 	g.logChan <- lms
 }
+
+// NameFromOptions return names for the given options
+func NameFromOptions(options Options) (string, error) {
+	tradeIns, err := NewTradeIns(options.TradeIns, options.InitialDeal)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%d-Card Little L (trade: %s)", options.InitialDeal, tradeIns), nil
+}

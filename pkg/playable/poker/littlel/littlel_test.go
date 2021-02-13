@@ -8,8 +8,8 @@ import (
 )
 
 func TestGame_Name(t *testing.T) {
-	g := &Game{}
-	assert.Equal(t, "Little L", g.Name())
+	g := &Game{options: DefaultOptions()}
+	assert.Equal(t, "4-Card Little L (trade: 0, 2)", g.Name())
 }
 
 func TestGame_CanTrade(t *testing.T) {
