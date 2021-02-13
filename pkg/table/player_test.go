@@ -63,7 +63,7 @@ func TestCreatePlayer(t *testing.T) {
 	// verify the account
 	{
 		p2, _ := GetPlayerByEmail(cbg, email)
-		p2.Verified = true
+		p2.Status = PlayerStatusVerified
 		assert.NoError(t, p2.Save(cbg))
 	}
 
@@ -200,7 +200,7 @@ func TestPlayer_GetTables(t *testing.T) {
 func verifiedPlayer() *Player {
 	p := player()
 
-	p.Verified = true
+	p.Status = PlayerStatusVerified
 	_ = p.Save(cbg)
 
 	return p
@@ -334,7 +334,7 @@ func TestPlayer_accountVerification(t *testing.T) {
 
 	p := player()
 	a.NoError(p.SetPassword("test"))
-	a.False(p.Verified)
+	a.NotEqual(PlayerStatusVerified, p.Status)
 
 	_, err := GetPlayerByEmailAndPassword(cbg, p.Email, "test")
 	a.Equal(ErrAccountNotVerified, err)
@@ -351,4 +351,22 @@ func TestPlayer_accountVerification(t *testing.T) {
 
 	// can't re-use token
 	a.EqualError(VerifyAccount(cbg, token), "token is expired")
+}
+
+func TestPlayer_Delete(t *testing.T) {
+	p := player()
+	email := p.Email
+	displayName := p.DisplayName
+
+	a := assert.New(t)
+	a.NoError(p.Delete(cbg))
+	a.NotEqual(email, p.Email)
+	a.NotEqual(displayName, p.DisplayName)
+
+	oldRecord, _ := GetPlayerByEmail(cbg, email)
+	a.Nil(oldRecord)
+
+	newRecord, _ := GetPlayerByEmail(cbg, p.Email)
+	a.NotEqual(email, newRecord.Email)
+	a.NotEqual(displayName, newRecord.DisplayName)
 }

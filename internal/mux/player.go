@@ -223,6 +223,30 @@ func (m *Mux) postPlayerID() http.HandlerFunc {
 	}
 }
 
+func (m *Mux) deletePlayerID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playerID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		// prevent a player from updating another player
+		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		if player.ID != playerID {
+			writeJSONError(w, http.StatusForbidden, err)
+			return
+		}
+
+		if err := player.Delete(r.Context()); err != nil {
+			writeJSON(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, statusOK)
+	}
+}
+
 type postPlayerAuthResponse struct {
 	JWT    string          `json:"jwt"`
 	Player playerWithEmail `json:"player"`

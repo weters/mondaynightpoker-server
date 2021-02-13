@@ -202,3 +202,21 @@ func assertPost(t *testing.T, ts *httptest.Server, path string, payload interfac
 	resp := assertPostWithResp(t, ts, path, payload, respObj, statusCode, signedJWT...)
 	resp.Body.Close()
 }
+
+func assertDeleteWithResp(t *testing.T, ts *httptest.Server, path string, respObj interface{}, statusCode int, signedJWT ...string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+path, nil)
+	if err != nil {
+		t.Error(err)
+		return nil
+	}
+
+	return assertDo(t, req, respObj, statusCode, signedJWT...)
+}
+
+func assertDelete(t *testing.T, ts *httptest.Server, path string, respObj interface{}, statusCode int, signedJWT ...string) {
+	t.Helper()
+	resp := assertDeleteWithResp(t, ts, path, respObj, statusCode, signedJWT...)
+	resp.Body.Close()
+}

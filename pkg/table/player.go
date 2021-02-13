@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/google/uuid"
+	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/token"
 	"strconv"
@@ -25,7 +27,7 @@ players.id,
 players.email,
 players.display_name,
 players.is_site_admin,
-players.verified,
+players.status,
 players.password_hash,
 players.created,
 players.updated`
@@ -44,13 +46,24 @@ var ErrTokenExpired = errors.New("token is expired")
 // ErrAccountNotVerified is an error if the user tries to log in without being verified
 var ErrAccountNotVerified = UserError("account not verified")
 
+// PlayerStatus is the status of a player
+type PlayerStatus string
+
+// PlayerStatus constants
+const (
+	PlayerStatusCreated  PlayerStatus = "created"
+	PlayerStatusVerified PlayerStatus = "verified"
+	PlayerStatusBlocked  PlayerStatus = "blocked"
+	PlayerStatusDeleted  PlayerStatus = "deleted"
+)
+
 // Player is a record in the `players` table
 type Player struct {
-	ID           int64  `json:"id"`
-	Email        string `json:"-"`
-	DisplayName  string `json:"displayName"`
-	IsSiteAdmin  bool   `json:"isSiteAdmin"`
-	Verified     bool   `json:"verified"`
+	ID           int64        `json:"id"`
+	Email        string       `json:"-"`
+	DisplayName  string       `json:"displayName"`
+	IsSiteAdmin  bool         `json:"isSiteAdmin"`
+	Status       PlayerStatus `json:"status"`
 	passwordHash string
 	Created      time.Time `json:"created"`
 	Updated      time.Time `json:"updated"`
@@ -64,7 +77,7 @@ type WithBalance struct {
 
 func getPlayerByRow(row db.Scanner) (*Player, error) {
 	var player Player
-	if err := row.Scan(&player.ID, &player.Email, &player.DisplayName, &player.IsSiteAdmin, &player.Verified, &player.passwordHash, &player.Created, &player.Updated); err != nil {
+	if err := row.Scan(&player.ID, &player.Email, &player.DisplayName, &player.IsSiteAdmin, &player.Status, &player.passwordHash, &player.Created, &player.Updated); err != nil {
 		return nil, err
 	}
 
@@ -89,11 +102,11 @@ UPDATE players
 SET email = $1,
     display_name = $2,
     is_site_admin = $3,
-    verified = $4,
+    status = $4,
     updated = (NOW() AT TIME ZONE 'utc')
 WHERE id = $5`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.DisplayName, p.IsSiteAdmin, p.Verified, p.ID)
+	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.DisplayName, p.IsSiteAdmin, p.Status, p.ID)
 	return err
 }
 
@@ -125,7 +138,7 @@ func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*
 		return nil, ErrInvalidEmailOrPassword
 	}
 
-	if !player.Verified {
+	if player.Status != PlayerStatusVerified {
 		return nil, ErrAccountNotVerified
 	}
 
@@ -419,6 +432,22 @@ FROM reset_password($1, $2, $3, $4)`
 	return nil
 }
 
+// Delete will mark a player as deleted
+// The player isn't actually deleted from the database, but their email is destroyed and their password is changed
+func (p *Player) Delete(ctx context.Context) error {
+	newDisplayName := util.GetRandomName()
+	newEmail := uuid.New().String() + "@deleted.monday-night.poker"
+
+	p.DisplayName = newDisplayName
+	p.Email = newEmail
+	p.Status = PlayerStatusDeleted
+	if err := p.Save(ctx); err != nil {
+		return err
+	}
+
+	return p.SetPassword(uuid.New().String())
+}
+
 // IsPasswordResetTokenValid will return an error if the token is not valid
 func IsPasswordResetTokenValid(ctx context.Context, t string) error {
 	_, err := isPlayerTokenValid(ctx, t, tokenTypePasswordReset, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
@@ -461,11 +490,14 @@ func VerifyAccount(ctx context.Context, verifyToken string) error {
 		return err
 	}
 
+	if player.Status != PlayerStatusCreated {
+		return errors.New("player cannot be verified")
+	}
 	if err := expireToken(ctx, verifyToken); err != nil {
 		return err
 	}
 
-	player.Verified = true
+	player.Status = PlayerStatusVerified
 	return player.Save(ctx)
 }
 

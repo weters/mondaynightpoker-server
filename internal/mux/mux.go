@@ -84,6 +84,7 @@ func NewMux(version string) *Mux {
 		r := this.authRouter
 
 		r.Methods(http.MethodPost).Path("/player/{id:[0-9]+}").Handler(this.postPlayerID())
+		r.Methods(http.MethodDelete).Path("/player/{id:[0-9]+}").Handler(this.deletePlayerID())
 
 		r.Methods(http.MethodGet).Path("/table").Handler(this.getTable())
 		r.Methods(http.MethodPost).Path("/table").Handler(this.postTable())

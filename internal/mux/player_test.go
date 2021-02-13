@@ -189,7 +189,7 @@ func Test_postPlayerAuth(t *testing.T) {
 		return
 	}
 
-	player.Verified = true
+	player.Status = table.PlayerStatusVerified
 	_ = player.Save(cbg)
 
 	var resp postPlayerAuthResponse
@@ -371,7 +371,7 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 	p, _ := player()
 	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{Email: p.Email}, nil, http.StatusOK)
 
-	p.Verified = true
+	p.Status = table.PlayerStatusVerified
 	_ = p.Save(cbg)
 
 	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
@@ -466,4 +466,23 @@ func TestMux_accountVerification(t *testing.T) {
 
 	// can't re-use
 	assertPost(t, ts, "/player/verify/"+verifyToken, nil, nil, http.StatusBadRequest)
+}
+
+func TestMux_deletePlayerID(t *testing.T) {
+	setupJWT()
+
+	p1, j1 := player()
+	_, j2 := player()
+
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	assertDelete(t, ts, fmt.Sprintf("/player/%d", p1.ID), nil, http.StatusForbidden, j2)
+	assertDelete(t, ts, fmt.Sprintf("/player/%d", p1.ID), nil, http.StatusOK, j1)
+
+	p, err := table.GetPlayerByID(cbg, p1.ID)
+	a := assert.New(t)
+	a.NoError(err)
+	a.NotEqual(p1.Email, p.Email)
+	a.NotEqual(p1.DisplayName, p.DisplayName)
 }
