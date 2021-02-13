@@ -40,6 +40,7 @@ func main() {
 
 	c := cors.New(cors.Options{
 		AllowedHeaders: []string{"Origin", "Accept", "Content-Type", "X-Requested-With", "Authorization"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete},
 	})
 
 	srv := &http.Server{

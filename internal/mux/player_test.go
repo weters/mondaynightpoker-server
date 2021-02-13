@@ -98,7 +98,7 @@ func Test_postPlayer(t *testing.T) {
 	}, &pObj, 201)
 	assert.Greater(t, pObj.ID, int64(0))
 	assert.Equal(t, email, pObj.Email)
-	assert.Equal(t, "Waiving Lion", pObj.DisplayName)
+	assert.Equal(t, 2, len(strings.Split(pObj.DisplayName, " ")))
 
 	obj = errorResponse{}
 	assertPost(t, ts, "/player", &postPlayerPayload{

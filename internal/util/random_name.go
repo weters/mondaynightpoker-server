@@ -2,8 +2,10 @@ package util
 
 import (
 	"fmt"
-	"math/rand"
+	"mondaynightpoker-server/internal/rng"
 )
+
+var random rng.Generator = rng.Crypto{}
 
 var adjectives = []string{
 	"Fast", "Slow", "Quick", "Speedy", "Trotting", "Weaving", "Waiving", "Gracious", "Healthy", "Happy", "Funny",
@@ -21,8 +23,8 @@ var animals = []string{
 
 // GetRandomName returns a random name by combining an adjective with an animal
 func GetRandomName() string {
-	adjectivesIndex := rand.Intn(len(adjectives))
-	animalsIndex := rand.Intn(len(animals))
+	adjectivesIndex := random.Intn(len(adjectives))
+	animalsIndex := random.Intn(len(animals))
 
 	return fmt.Sprintf("%s %s", adjectives[adjectivesIndex], animals[animalsIndex])
 }
