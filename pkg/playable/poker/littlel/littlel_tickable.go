@@ -23,7 +23,7 @@ func (g *Game) Tick() (bool, error) {
 	}
 
 	if g.IsGameOver() {
-		g.endGameAt = time.Now().Add(time.Second * 3)
+		g.endGameAt = time.Now().Add(time.Second * 5)
 		return false, nil
 	}
 
