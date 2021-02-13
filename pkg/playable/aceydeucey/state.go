@@ -16,6 +16,7 @@ type ParticipantState struct {
 
 // GameState is the current state of the game
 type GameState struct {
+	Name         string                 `json:"name"`
 	CurrentTurn  int64                  `json:"currentTurn"`
 	Round        *Round                 `json:"round"`
 	Participants []*Participant         `json:"participants"`
@@ -38,6 +39,7 @@ func (g *Game) getGameState() *GameState {
 
 	round := g.getCurrentRound()
 	return &GameState{
+		Name:         g.Name(),
 		CurrentTurn:  currentTurn,
 		Round:        round,
 		Participants: g.orderedParticipants,
