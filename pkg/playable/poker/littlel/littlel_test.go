@@ -96,6 +96,16 @@ func TestGame_DealCards(t *testing.T) {
 	assert.Equal(t, "10c,11c,12c", deck.CardsToString(game.community))
 }
 
+func TestGame_InitialShuffle(t *testing.T) {
+	a := assert.New(t)
+
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
+	a.NoError(err)
+
+	unshuffled := deck.New().HashCode()
+	a.NotEqual(unshuffled, game.deck.HashCode())
+}
+
 func TestGame_TradeCardsForParticipant(t *testing.T) {
 	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 	game.deck = deck.New()
@@ -197,14 +207,14 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantBets(p(2), 25))
 	assert.Equal(t, ErrNotPlayersTurn, game.ParticipantCalls(p(2)))
 
-	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+game.options.Ante), "your bet (100¢) must not exceed the pot limit (75¢)")
+	assert.EqualError(t, game.ParticipantBets(p(1), game.pot+game.options.Ante), "your bet (${100}) must not exceed the pot limit (${75})")
 	assert.NoError(t, game.ParticipantChecks(p(1)))
 	assert.EqualError(t, game.ParticipantCalls(p(2)), "you cannot call without an active bet")
-	assert.EqualError(t, game.ParticipantBets(p(2), 0), "your bet must at least match the ante (25¢)")
+	assert.EqualError(t, game.ParticipantBets(p(2), 0), "your bet must at least match the ante (${25})")
 	assert.NoError(t, game.ParticipantBets(p(2), 75)) // pot is now 150¢
 	assert.EqualError(t, game.ParticipantChecks(p(3)), "you cannot check with an active bet")
-	assert.EqualError(t, game.ParticipantBets(p(3), 125), "your raise (125¢) must be at least equal to double the previous bet (150¢)")
-	assert.EqualError(t, game.ParticipantBets(p(3), 250), "your raise (250¢) must not exceed the pot limit (225¢)")
+	assert.EqualError(t, game.ParticipantBets(p(3), 125), "your raise (${125}) must be at least equal to double the previous bet (${150})")
+	assert.EqualError(t, game.ParticipantBets(p(3), 250), "your raise (${250}) must not exceed the pot limit (${225})")
 	assert.NoError(t, game.ParticipantBets(p(3), 225)) // pot is now 375¢
 	assert.NoError(t, game.ParticipantFolds(p(1)))
 	assert.NoError(t, game.ParticipantCalls(p(2))) // pot is now 525¢
@@ -382,9 +392,9 @@ func TestGame_ParticipantBets(t *testing.T) {
 	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
 	_ = game.NextRound()
 
-	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of the ante (25¢)")
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of the ante (${25})")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[1], 25))
-	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your raise must be in multiples of the ante (25¢)")
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your raise must be in multiples of the ante (${25})")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 50))
 }
 

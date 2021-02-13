@@ -77,6 +77,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 
 	d := deck.New()
 	d.SetSeed(seed)
+	d.Shuffle()
 
 	idToParticipant := make(map[int64]*Participant)
 	for _, id := range playerIDs {
@@ -247,19 +248,19 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 	}
 
 	if bet%g.options.Ante > 0 {
-		return fmt.Errorf("your %s must be in multiples of the ante (%d¢)", term, g.options.Ante)
+		return fmt.Errorf("your %s must be in multiples of the ante (${%d})", term, g.options.Ante)
 	}
 
 	if bet > g.getPotLimit() {
-		return fmt.Errorf("your %s (%d¢) must not exceed the pot limit (%d¢)", term, bet, g.getPotLimit())
+		return fmt.Errorf("your %s (${%d}) must not exceed the pot limit (${%d})", term, bet, g.getPotLimit())
 	}
 
 	if bet < g.options.Ante {
-		return fmt.Errorf("your %s must at least match the ante (%d¢)", term, g.options.Ante)
+		return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
 	}
 
 	if g.currentBet > 0 && bet < g.currentBet*2 {
-		return fmt.Errorf("your raise (%d¢) must be at least equal to double the previous bet (%d¢)", bet, g.currentBet*2)
+		return fmt.Errorf("your raise (${%d}) must be at least equal to double the previous bet (${%d})", bet, g.currentBet*2)
 	}
 
 	diff := bet - p.currentBet

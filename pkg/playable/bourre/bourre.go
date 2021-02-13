@@ -173,17 +173,17 @@ func (g *Game) endGame() error {
 	messages := make([]*playable.LogMessage, 0)
 
 	if res.WinningAmount > 0 {
-		messages = append(messages, newLogMessage(res.Winners[0].PlayerID, nil, "{} won %d¢", res.WinningAmount))
+		messages = append(messages, newLogMessage(res.Winners[0].PlayerID, nil, "{} won ${%d}", res.WinningAmount))
 	} else {
 		messages = append(messages, newLogMessageWithPlayers(res.Winners, "{} tied for most tricks"))
 	}
 
 	if len(res.PaidPot) > 0 {
-		messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} pays the pot of %d¢", res.OldPot))
+		messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} pays the pot of ${%d}", res.OldPot))
 	}
 
 	if len(res.PaidAnte) > 0 {
-		messages = append(messages, newLogMessageWithPlayers(res.PaidAnte, "{} pays the ante of %d¢", res.Ante))
+		messages = append(messages, newLogMessageWithPlayers(res.PaidAnte, "{} pays the ante of ${%d}", res.Ante))
 	}
 
 	if len(res.Booted) > 0 {
@@ -286,7 +286,7 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 		// if initial pot is > 0, that means we are working off of a previous game. In that case,
 		// we already took care of the players who need to ante
 		if opts.InitialPot == 0 {
-			messages = append(messages, newLogMessage(player.PlayerID, nil, "{} paid the %d¢ ante", opts.Ante))
+			messages = append(messages, newLogMessage(player.PlayerID, nil, "{} paid the ${%d} ante", opts.Ante))
 			pot += opts.Ante
 			player.balance -= opts.Ante
 		}
@@ -313,7 +313,7 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 		logger:         logger,
 	}
 
-	messages = append(messages, newLogMessage(0, nil, "New game of Bourré started with a pot of %d¢", pot))
+	messages = append(messages, newLogMessage(0, nil, "New game of Bourré started with a pot of ${%d}", pot))
 	g.sendLogMessages(messages...)
 
 	return g, nil
