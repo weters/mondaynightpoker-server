@@ -330,3 +330,19 @@ func TestGame_newRound(t *testing.T) {
 		a.NotEqual(hc, game.getCurrentRound().deck.HashCode())
 	}
 }
+
+func TestGame_Name(t *testing.T) {
+	game := &Game{}
+
+	a := assert.New(t)
+	a.Equal("Acey Deucey", game.Name())
+
+	game.options.ContinuousShoe = true
+	a.Equal("Acey Deucey (Continuous Shoe)", game.Name())
+
+	game.options.AllowPass = true
+	a.Equal("Acey Deucey (Continuous Shoe and With Passing)", game.Name())
+
+	game.options.ContinuousShoe = false
+	a.Equal("Acey Deucey (With Passing)", game.Name())
+}

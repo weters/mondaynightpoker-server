@@ -25,6 +25,16 @@ func Test_aceyDeuceyFactory_Details(t *testing.T) {
 	a.Equal("Acey Deucey", name)
 	a.Equal(50, ante)
 	a.NoError(err)
+
+	name, ante, err = aceyDeuceyFactory{}.Details(playable.AdditionalData{
+		"ante":           float64(100),
+		"continuousShoe": true,
+		"allowPass":      true,
+	})
+
+	a.Equal("Acey Deucey (Continuous Shoe and With Passing)", name)
+	a.Equal(100, ante)
+	a.NoError(err)
 }
 
 func Test_getAceyDeuceyOptions(t *testing.T) {

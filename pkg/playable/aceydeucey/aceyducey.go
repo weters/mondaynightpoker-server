@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"strings"
 	"time"
 )
 
@@ -74,7 +75,21 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 
 // Name returns the name of the game
 func (g *Game) Name() string {
-	return "Acey Deucey"
+	options := make([]string, 0, 2)
+	if g.options.ContinuousShoe {
+		options = append(options, "Continuous Shoe")
+	}
+
+	if g.options.AllowPass {
+		options = append(options, "With Passing")
+	}
+
+	const name = "Acey Deucey"
+	if len(options) > 0 {
+		return fmt.Sprintf("%s (%s)", name, strings.Join(options, " and "))
+	}
+
+	return name
 }
 
 // Key returns a unique key
