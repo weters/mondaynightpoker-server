@@ -73,14 +73,14 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	return a, nil
 }
 
-// Name returns the name of the game
-func (g *Game) Name() string {
+// NameFromOptions returns the name for the options
+func NameFromOptions(opts Options) string {
 	options := make([]string, 0, 2)
-	if g.options.ContinuousShoe {
+	if opts.ContinuousShoe {
 		options = append(options, "Continuous Shoe")
 	}
 
-	if g.options.AllowPass {
+	if opts.AllowPass {
 		options = append(options, "With Passing")
 	}
 
@@ -90,6 +90,11 @@ func (g *Game) Name() string {
 	}
 
 	return name
+}
+
+// Name returns the name of the game
+func (g *Game) Name() string {
+	return NameFromOptions(g.options)
 }
 
 // Key returns a unique key

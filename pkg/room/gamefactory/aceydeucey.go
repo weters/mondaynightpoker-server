@@ -14,12 +14,7 @@ func (a aceyDeuceyFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int
 
 func (a aceyDeuceyFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {
 	opts := getAceyDeuceyOptions(additionalData)
-	game, err := aceydeucey.NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
-	if err != nil {
-		return "", 0, err
-	}
-
-	return game.Name(), opts.Ante, nil
+	return aceydeucey.NameFromOptions(opts), opts.Ante, nil
 }
 
 func getAceyDeuceyOptions(data playable.AdditionalData) aceydeucey.Options {
