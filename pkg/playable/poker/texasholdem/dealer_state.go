@@ -1,0 +1,36 @@
+package texasholdem
+
+import "time"
+
+// DealerState represents the state of the game
+type DealerState int
+
+// constants for DealerState
+const (
+	DealerStateStart DealerState = iota
+	DealerStatePreFlopBettingRound
+	DealerStateDealtFlop
+	DealerStateFlopBettingRound
+	DealerStateDealtRiver
+	DealerStateRiverBettingRound
+	DealerStateDealtTurn
+	DealerStateFinalBettingRound
+	DealerStateGameOver
+	DealerStateWaiting
+)
+
+type pendingDealerState struct {
+	NextState DealerState
+	After     time.Time
+}
+
+func (g *Game) setPendingDealerState(nextState DealerState, after time.Duration) {
+	if g.pendingDealerState != nil {
+		panic("cannot set pending dealer state if one is already present")
+	}
+
+	g.pendingDealerState = &pendingDealerState{
+		NextState: nextState,
+		After:     time.Now().Add(after),
+	}
+}
