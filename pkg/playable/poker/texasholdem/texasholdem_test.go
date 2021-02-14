@@ -126,7 +126,7 @@ func TestGame_GetBetAmount(t *testing.T) {
 	assert.False(t, game.CanBet())
 }
 
-func TestGame_game1(t *testing.T) {
+func TestGame_basicGameWithWinner(t *testing.T) {
 	a := assert.New(t)
 
 	// player 1 will have 3C, 4C
@@ -321,12 +321,89 @@ func TestGame_game1(t *testing.T) {
 	}
 }
 
+func TestGame_playersFolded(t *testing.T) {
+	opts := Options{
+		Ante:       25,
+		LowerLimit: 50,
+		UpperLimit: 100,
+	}
+
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+
+	a := assert.New(t)
+	a.NoError(err)
+	a.NotNil(game)
+
+	// pre-flop
+	{
+		a.Equal(DealerStateStart, game.dealerState, "at start")
+		assertTick(t, game, "game progresses to waiting")
+		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
+
+		assertAction(t, game, 3, callKey)
+		assertAction(t, game, 1, callKey)
+		assertAction(t, game, 2, checkKey)
+
+		assertTickFromWaiting(t, game, DealerStateDealFlop)
+	}
+
+	// flop
+	{
+		assertTick(t, game, "move to flop betting round")
+		a.Equal(DealerStateFlopBettingRound, game.dealerState)
+
+		assertAction(t, game, 1, betKey)
+		assertAction(t, game, 2, foldKey)
+		assertAction(t, game, 3, raiseKey)
+		assertAction(t, game, 1, callKey)
+
+		assertActionFailed(t, game, 2, callKey, "you cannot perform Call", "player folded and thus cannot call")
+
+		assertTickFromWaiting(t, game, DealerStateDealTurn)
+	}
+
+	// turn
+	{
+		assertTick(t, game, "move to turn betting round")
+		a.Equal(DealerStateTurnBettingRound, game.dealerState)
+
+		assertAction(t, game, 1, checkKey)
+		assertAction(t, game, 3, betKey)
+		assertAction(t, game, 1, foldKey)
+
+		assertTickFromWaiting(t, game, DealerStateRevealWinner, "game should be over")
+	}
+
+	// end game
+	{
+		assertTick(t, game, "advance to state end")
+		assertTickFromWaiting(t, game, DealerStateEnd, "game should be over")
+		assertTick(t, game, "finish state")
+		a.True(game.finished)
+
+		details, _ := game.GetEndOfGameDetails()
+		a.Equal(map[int64]int{
+			1: -175,
+			2: -75,
+			3: 250,
+		}, details.BalanceAdjustments)
+	}
+}
+
 func assertAction(t *testing.T, game *Game, playerID int64, action string, msgAndArgs ...interface{}) {
 	t.Helper()
 	resp, update, err := game.Action(playerID, payload(action))
 	assert.NoError(t, err, msgAndArgs...)
 	assert.Equal(t, playable.OK(), resp, msgAndArgs...)
 	assert.True(t, update, msgAndArgs...)
+}
+
+func assertActionFailed(t *testing.T, game *Game, playerID int64, action, expectedErr string, msgAndArgs ...interface{}) {
+	t.Helper()
+	resp, update, err := game.Action(playerID, payload(action))
+	assert.EqualError(t, err, expectedErr, msgAndArgs...)
+	assert.Nil(t, resp, msgAndArgs...)
+	assert.False(t, update, msgAndArgs...)
 }
 
 func payload(action string) *playable.PayloadIn {
@@ -351,4 +428,42 @@ func assertTick(t *testing.T, game *Game, msgAndArgs ...interface{}) {
 	update, err := game.Tick()
 	assert.NoError(t, err, msgAndArgs...)
 	assert.True(t, update, msgAndArgs...)
+}
+
+func TestGame_nextDecision(t *testing.T) {
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, DefaultOptions())
+	a := assert.New(t)
+
+	a.NoError(err)
+	a.NotNil(game)
+
+	assertDecision := func(t *testing.T, game *Game, start, index int) {
+		t.Helper()
+		a.Equal(start, game.decisionStart, "decision start is correct")
+		a.Equal(index, game.decisionIndex, "decision index is correct")
+	}
+
+	game.dealerState = DealerStateFlopBettingRound
+	game.newRoundSetup()
+	assertDecision(t, game, 0, 0)
+
+	game.nextDecision()
+	assertDecision(t, game, 0, 1)
+
+	game.participants[3].folded = true
+	game.participants[4].folded = true
+
+	game.nextDecision()
+	assertDecision(t, game, 0, 4)
+
+	// test again
+	game.participants[1].folded = true
+	game.participants[2].folded = true
+	game.participants[3].folded = true
+	game.participants[4].folded = false
+	game.participants[5].folded = false
+	game.decisionStart = 4
+	game.decisionIndex = 0
+	game.nextDecision()
+	assertDecision(t, game, 4, 4)
 }

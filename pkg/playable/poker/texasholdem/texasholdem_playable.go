@@ -55,11 +55,35 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.setDecisionStartToCurrentTurn()
 		g.nextDecision()
 	case foldKey:
-		p.folded = true
-		g.nextDecision()
+		// this method handles nextDecision()
+		g.participantFolded(p)
 	}
 
 	return playable.OK(), true, nil
+}
+
+func (g *Game) participantFolded(p *Participant) {
+	p.folded = true
+
+	stillLive := 0
+	for _, par := range g.participants {
+		if !par.folded {
+			stillLive++
+		}
+
+		if stillLive >= 2 {
+			break
+		}
+	}
+
+	// game is still going on
+	if stillLive >= 2 {
+		g.nextDecision()
+		return
+	}
+
+	// not enough players left. end the game early
+	g.setPendingDealerState(DealerStateRevealWinner, time.Second*2)
 }
 
 // GetPlayerState returns the current state for the player

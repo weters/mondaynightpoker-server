@@ -201,12 +201,11 @@ func (g *Game) CanBet() bool {
 
 func (g *Game) nextDecision() {
 	g.decisionIndex++
+	g.advanceToActiveParticipant()
 	if g.decisionIndex == len(g.participantOrder) {
 		g.setPendingDealerState(DealerState(int(g.dealerState)+1), time.Second*1)
 		return
 	}
-
-	g.advanceToActiveParticipant()
 }
 
 func (g *Game) newRoundSetup() {
@@ -220,12 +219,17 @@ func (g *Game) newRoundSetup() {
 
 func (g *Game) advanceToActiveParticipant() {
 	n := len(g.participantOrder)
-	for i := g.decisionIndex; i < n; i++ {
-		index := (g.decisionStart + i) % n
+	for {
+		index := (g.decisionStart + g.decisionIndex) % n
 		if !g.participants[g.participantOrder[index]].folded {
 			return
 		}
+
+		g.decisionIndex++
+		if g.decisionIndex >= n {
+			break
+		}
 	}
 
-	panic("all players folded")
+	// if we get here, it's because all players folded at the end of the round
 }
