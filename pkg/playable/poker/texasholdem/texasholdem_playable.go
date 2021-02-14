@@ -59,6 +59,11 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.participantFolded(p)
 	}
 
+	g.lastAction = &lastAction{
+		Action:   action,
+		PlayerID: p.PlayerID,
+	}
+
 	return playable.OK(), true, nil
 }
 
@@ -104,7 +109,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	balanceAdjustments := make(map[int64]int)
 	for id, player := range g.participants {
-		balanceAdjustments[id] = player.Balance
+		balanceAdjustments[id] = player.balance
 	}
 
 	return &playable.GameOverDetails{
@@ -168,9 +173,7 @@ func (g *Game) endGame() error {
 
 	n := len(winners)
 	for pos, winner := range winners {
-		winner.result = resultWon
-
-		winner.Balance += g.getShareOfWinnings(n, pos)
+		winner.won(g.getShareOfWinnings(n, pos))
 	}
 
 	g.setPendingDealerState(DealerStateEnd, time.Second*5)

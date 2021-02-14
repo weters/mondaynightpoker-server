@@ -18,6 +18,7 @@ type GameState struct {
 	CurrentBet   int                `json:"currentBet"`
 	Participants []*participantJSON `json:"participants"`
 	CurrentTurn  int64              `json:"currentTurn"`
+	LastAction   *lastAction        `json:"lastAction"`
 }
 
 func (g *Game) getGameState() *GameState {
@@ -36,12 +37,13 @@ func (g *Game) getGameState() *GameState {
 
 		p[i] = &participantJSON{
 			PlayerID: par.PlayerID,
-			Balance:  par.Balance,
+			Balance:  par.balance,
 			Cards:    cards,
 			Folded:   par.folded,
 			Bet:      par.bet,
 			Hand:     hand,
 			Result:   par.result,
+			Winnings: par.winnings,
 		}
 	}
 
@@ -58,6 +60,7 @@ func (g *Game) getGameState() *GameState {
 		Participants: p,
 		CurrentTurn:  currentTurn,
 		Community:    g.community,
+		LastAction:   g.lastAction,
 	}
 }
 
@@ -73,12 +76,13 @@ func (g *Game) getParticipantStateByPlayerID(id int64) *ParticipantState {
 		Actions: g.ActionsForParticipant(id),
 		Participant: &participantJSON{
 			PlayerID: p.PlayerID,
-			Balance:  p.Balance,
+			Balance:  p.balance,
 			Cards:    p.cards,
 			Folded:   p.folded,
 			Bet:      p.bet,
 			Hand:     hand,
 			Result:   p.result,
+			Winnings: p.winnings,
 		},
 		GameState: g.getGameState(),
 	}

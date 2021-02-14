@@ -17,14 +17,16 @@ const (
 // Participant represents an individual player in Texas Hold'em
 type Participant struct {
 	PlayerID int64
-	Balance  int
-	cards    deck.Hand
+
+	balance int
+	cards   deck.Hand
 
 	folded bool
 	reveal bool
 	bet    int
 
-	result result
+	result   result
+	winnings int
 
 	handAnalyzer         *handanalyzer.HandAnalyzer
 	handAnalyzerCacheKey string
@@ -38,12 +40,13 @@ type participantJSON struct {
 	Bet      int       `json:"bet"`
 	Hand     string    `json:"hand"`
 	Result   result    `json:"result"`
+	Winnings int       `json:"winnings"`
 }
 
 func newParticipant(id int64) *Participant {
 	return &Participant{
 		PlayerID: id,
-		Balance:  0,
+		balance:  0,
 		cards:    make(deck.Hand, 0),
 		result:   resultPending,
 	}
@@ -51,7 +54,7 @@ func newParticipant(id int64) *Participant {
 
 // SubtractBalance subtracts from the player's balance
 func (p *Participant) SubtractBalance(amount int) {
-	p.Balance -= amount
+	p.balance -= amount
 }
 
 // ActionsForParticipant return the actions the current participant can take
@@ -101,7 +104,7 @@ func (g *Game) ActionsForParticipant(id int64) []Action {
 func (p *Participant) Bet(amount int) int {
 	diff := amount - p.bet
 	p.bet = amount
-	p.Balance -= diff
+	p.balance -= diff
 
 	return diff
 }
@@ -124,4 +127,10 @@ func (p *Participant) getHandAnalyzer(community []*deck.Card) *handanalyzer.Hand
 	}
 
 	return p.handAnalyzer
+}
+
+func (p *Participant) won(amount int) {
+	p.result = resultWon
+	p.balance += amount
+	p.winnings = amount
 }

@@ -27,11 +27,11 @@ func TestNewGame(t *testing.T) {
 
 		// validate small blind and big blind
 		a.Equal(lower, game.currentBet, "current bet")
-		a.Equal(p1Bal, game.participants[1].Balance, "player 1 balance")
-		a.Equal(-1*game.participants[1].Balance-ante, game.participants[1].bet, "player 1 bet")
-		a.Equal(p2Bal, game.participants[2].Balance, "player 2 balance")
-		a.Equal(-1*game.participants[2].Balance-ante, game.participants[2].bet, "player 2 bet")
-		a.Equal(p3Bal, game.participants[3].Balance, "player 3 balance")
+		a.Equal(p1Bal, game.participants[1].balance, "player 1 balance")
+		a.Equal(-1*game.participants[1].balance-ante, game.participants[1].bet, "player 1 bet")
+		a.Equal(p2Bal, game.participants[2].balance, "player 2 balance")
+		a.Equal(-1*game.participants[2].balance-ante, game.participants[2].bet, "player 2 bet")
+		a.Equal(p3Bal, game.participants[3].balance, "player 3 balance")
 		a.Equal(0, game.participants[3].bet, "player 3 bet")
 		a.Equal(pot, game.pot, "pot")
 
@@ -181,6 +181,10 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		a.EqualError(err, "you cannot perform Call")
 
 		assertAction(t, game, 3, callKey, "third player can call")
+		a.Equal(lastAction{
+			Action:   Action{"Call", 0},
+			PlayerID: 3,
+		}, *game.lastAction, "last action is correct")
 
 		a.Equal([]Action{
 			{"Call", 50},
@@ -192,6 +196,10 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 
 		assertActionFailed(t, game, 1, "bad-action", "bad-action is not a valid action", "verify bad action is rejected")
 		assertAction(t, game, 1, callKey, "first player can call")
+		a.Equal(lastAction{
+			Action:   Action{"Call", 0},
+			PlayerID: 1,
+		}, *game.lastAction, "last action is correct")
 
 		a.Equal([]Action{
 			actionCheck,
@@ -213,11 +221,11 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 	{
 		// verify pot and player balances
 		a.Equal(375, game.pot)
-		a.Equal(-125, game.participants[1].Balance)
+		a.Equal(-125, game.participants[1].balance)
 		a.Equal(0, game.participants[1].bet)
-		a.Equal(-125, game.participants[2].Balance)
+		a.Equal(-125, game.participants[2].balance)
 		a.Equal(0, game.participants[2].bet)
-		a.Equal(-125, game.participants[3].Balance)
+		a.Equal(-125, game.participants[3].balance)
 		a.Equal(0, game.participants[3].bet)
 
 		assertTick(t, game, "advance state to flop betting round")
@@ -231,6 +239,10 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		assertAction(t, game, 1, checkKey, "player 1 can check")
 		assertAction(t, game, 2, checkKey, "player 2 can check")
 		assertAction(t, game, 3, betKey, "player 3 can bet") // currentBet = 100
+		a.Equal(lastAction{
+			Action:   Action{"Bet", 0},
+			PlayerID: 3,
+		}, *game.lastAction, "last action is correct")
 		a.Equal(2, game.decisionStart, "decision start is now on player 3")
 		a.Equal(1, game.decisionIndex, "decision index is at 1 since player 3 went")
 
@@ -249,13 +261,14 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		assertAction(t, game, 3, callKey, "player 3 can call")
 
 		assertTickFromWaiting(t, game, DealerStateDealTurn, "state advanced to deal the turn card")
+		a.Nil(game.lastAction, "lastAction is reset")
 
 		a.Equal(1575, game.pot, "pot is correct")
-		a.Equal(-525, game.participants[1].Balance)
+		a.Equal(-525, game.participants[1].balance)
 		a.Equal(0, game.participants[1].bet)
-		a.Equal(-525, game.participants[2].Balance)
+		a.Equal(-525, game.participants[2].balance)
 		a.Equal(0, game.participants[2].bet)
-		a.Equal(-525, game.participants[3].Balance)
+		a.Equal(-525, game.participants[3].balance)
 		a.Equal(0, game.participants[3].bet)
 	}
 
@@ -291,12 +304,16 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		assertTick(t, game, "advance")
 
 		a.Equal(resultLost, game.participants[1].result)
-		a.Equal(resultLost, game.participants[2].result)
-		a.Equal(resultWon, game.participants[3].result)
+		a.Equal(0, game.participants[1].winnings)
+		a.Equal(-525, game.participants[1].balance)
 
-		a.Equal(-525, game.participants[1].Balance)
-		a.Equal(-525, game.participants[2].Balance)
-		a.Equal(1050, game.participants[3].Balance)
+		a.Equal(resultLost, game.participants[2].result)
+		a.Equal(0, game.participants[2].winnings)
+		a.Equal(-525, game.participants[2].balance)
+
+		a.Equal(resultWon, game.participants[3].result)
+		a.Equal(1575, game.participants[3].winnings)
+		a.Equal(1050, game.participants[3].balance)
 
 		details, over := game.GetEndOfGameDetails()
 		a.Nil(details)
@@ -466,9 +483,25 @@ func TestGame_endsInTie(t *testing.T) {
 		}, details.BalanceAdjustments)
 
 		a.Equal(resultLost, game.participants[1].result)
+		a.Equal(0, game.participants[1].winnings)
+
 		a.Equal(resultWon, game.participants[2].result)
+		a.Equal(200, game.participants[2].winnings)
+
 		a.Equal(resultWon, game.participants[3].result)
+		a.Equal(175, game.participants[3].winnings)
 	}
+}
+
+func TestGame_foldCallCheck(t *testing.T) {
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+
+	assertTick(t, game)
+	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
+	assertAction(t, game, 3, foldKey)
+	assertAction(t, game, 1, callKey)
+	assertAction(t, game, 2, checkKey)
+	assertTickFromWaiting(t, game, DealerStateDealFlop)
 }
 
 func assertAction(t *testing.T, game *Game, playerID int64, action string, msgAndArgs ...interface{}) {

@@ -11,6 +11,11 @@ import (
 
 var errBettingRoundIsOver = errors.New("betting round is over")
 
+type lastAction struct {
+	Action   Action `json:"action"`
+	PlayerID int64  `json:"playerId"`
+}
+
 // Game is a game of Limit Texas Hold'em
 type Game struct {
 	options            Options
@@ -23,6 +28,7 @@ type Game struct {
 	decisionStart      int
 	pot                int
 	currentBet         int
+	lastAction         *lastAction
 	community          deck.Hand
 	logChan            chan []*playable.LogMessage
 
@@ -212,6 +218,7 @@ func (g *Game) newRoundSetup() {
 	g.currentBet = 0
 	g.decisionStart = 0
 	g.decisionIndex = 0
+	g.lastAction = nil
 	for _, p := range g.participants {
 		p.NewRound()
 	}
@@ -219,6 +226,12 @@ func (g *Game) newRoundSetup() {
 
 func (g *Game) advanceToActiveParticipant() {
 	n := len(g.participantOrder)
+
+	// do not advance if we are already at the end
+	if g.decisionIndex == n {
+		return
+	}
+
 	for {
 		index := (g.decisionStart + g.decisionIndex) % n
 		if !g.participants[g.participantOrder[index]].folded {
