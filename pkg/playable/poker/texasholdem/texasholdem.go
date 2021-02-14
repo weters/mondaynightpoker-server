@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+const anteMin = 0
+const anteMax = 50
+const lowerLimitMax = 100
+
 var errBettingRoundIsOver = errors.New("betting round is over")
 
 type lastAction struct {
@@ -145,12 +149,16 @@ func (g *Game) dealTwoCardsToEachParticipant() error {
 }
 
 func validateOptions(opts Options) error {
-	if opts.Ante < 0 {
-		return errors.New("ante must be >= 0")
+	if opts.Ante < anteMin {
+		return fmt.Errorf("ante must be >= ${%d}", anteMin)
 	}
 
 	if opts.Ante > opts.LowerLimit {
 		return errors.New("ante must be less than the lower limit")
+	}
+
+	if opts.Ante > anteMax {
+		return fmt.Errorf("ante must not exceed ${%d}", anteMax)
 	}
 
 	if opts.Ante%25 > 0 {
@@ -159,6 +167,10 @@ func validateOptions(opts Options) error {
 
 	if opts.LowerLimit%25 > 0 {
 		return errors.New("lower limit must be divisible by ${25}")
+	}
+
+	if opts.LowerLimit > lowerLimitMax {
+		return fmt.Errorf("lower limit must not exceed ${%d}", lowerLimitMax)
 	}
 
 	return nil

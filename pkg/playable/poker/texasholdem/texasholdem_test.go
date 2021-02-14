@@ -632,10 +632,12 @@ func TestGame_dealTwoCardsToEachParticipant_errorStates(t *testing.T) {
 
 func Test_validateOptions(t *testing.T) {
 	a := assert.New(t)
-	a.EqualError(validateOptions(Options{Ante: -1}), "ante must be >= 0")
+	a.EqualError(validateOptions(Options{Ante: -1}), "ante must be >= ${0}")
 	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 25}), "ante must be less than the lower limit")
-	a.EqualError(validateOptions(Options{Ante: 51, LowerLimit: 100}), "ante must be divisible by ${25}")
+	a.EqualError(validateOptions(Options{Ante: 75, LowerLimit: 100}), "ante must not exceed ${50}")
+	a.EqualError(validateOptions(Options{Ante: 26, LowerLimit: 100}), "ante must be divisible by ${25}")
 	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 101}), "lower limit must be divisible by ${25}")
+	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 125}), "lower limit must not exceed ${100}")
 }
 
 func assertSnapshots(t *testing.T, game *Game, msgAndArgs ...interface{}) {

@@ -9,20 +9,20 @@ import (
 type texasHoldEmFactory struct{}
 
 func (t texasHoldEmFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	return texasholdem.NewGame(logger, playerIDs, texasholdemOptions(additionalData))
+	return texasholdem.NewGame(logger, playerIDs, texasHoldEmOptions(additionalData))
 }
 
 func (t texasHoldEmFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {
-	opts := texasholdemOptions(additionalData)
+	opts := texasHoldEmOptions(additionalData)
 	name = texasholdem.NameFromOptions(opts)
 
 	return name, opts.Ante, nil
 }
 
-func texasholdemOptions(additionData playable.AdditionalData) texasholdem.Options {
+func texasHoldEmOptions(additionData playable.AdditionalData) texasholdem.Options {
 	opts := texasholdem.DefaultOptions()
 
-	if ante, _ := additionData.GetInt("ante"); ante > 0 {
+	if ante, ok := additionData.GetInt("ante"); ok && ante >= 0 {
 		opts.Ante = ante
 	}
 
