@@ -156,7 +156,9 @@ func (g *Game) endGame() error {
 	var bestHand int
 	var winners []*Participant
 
-	for _, p := range g.participants {
+	for _, id := range g.participantOrder {
+		p := g.participants[id]
+
 		if p.folded {
 			p.result = resultFolded
 			continue

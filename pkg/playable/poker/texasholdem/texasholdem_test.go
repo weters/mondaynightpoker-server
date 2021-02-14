@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/snapshot"
 	"testing"
 	"time"
 )
@@ -420,16 +421,35 @@ func TestGame_endsInTie(t *testing.T) {
 	a := assert.New(t)
 	a.NoError(err)
 
+	// community = 2c 4d 6h 8s 10c
+	// p1        = 2d 4h
+	// p2        = 8c 10c
+	// p3        = 8d 10d
+
+	game.deck.Cards = deck.CardsFromString("2d,8c,8d," + "4h,10c,10d," + "2c,4d,6h,8s,10c")
+
+	// setup winners
+	{
+		game.community = deck.CardsFromString("2c,4d,6h,8s,10c")
+		game.participants[1].cards = deck.CardsFromString("2d,4h")
+		game.participants[2].cards = deck.CardsFromString("8c,10c")
+		game.participants[3].cards = deck.CardsFromString("8d,10d")
+	}
+
+	assertSnapshots(t, game)
+
 	// pre-flop
 	{
 		assertTick(t, game, "start game")
 		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
+		assertSnapshots(t, game, "ensure currentTurn is set")
 		assertAction(t, game, 3, callKey)
 		assertAction(t, game, 1, callKey)
 		assertAction(t, game, 2, checkKey)
-
 		assertTickFromWaiting(t, game, DealerStateDealFlop)
 	}
+
+	assertSnapshots(t, game)
 
 	// flop
 	{
@@ -441,6 +461,8 @@ func TestGame_endsInTie(t *testing.T) {
 		assertTickFromWaiting(t, game, DealerStateDealTurn)
 	}
 
+	assertSnapshots(t, game)
+
 	// turn
 	{
 		assertTick(t, game)
@@ -450,6 +472,8 @@ func TestGame_endsInTie(t *testing.T) {
 		assertAction(t, game, 3, checkKey)
 		assertTickFromWaiting(t, game, DealerStateDealRiver)
 	}
+
+	assertSnapshots(t, game)
 
 	// river
 	{
@@ -461,13 +485,7 @@ func TestGame_endsInTie(t *testing.T) {
 		assertTickFromWaiting(t, game, DealerStateRevealWinner)
 	}
 
-	// setup winners
-	{
-		game.community = deck.CardsFromString("2c,4d,6h,8s,10c")
-		game.participants[1].cards = deck.CardsFromString("2d,4h")
-		game.participants[2].cards = deck.CardsFromString("8c,10c")
-		game.participants[3].cards = deck.CardsFromString("8d,10d")
-	}
+	assertSnapshots(t, game)
 
 	// end game
 	{
@@ -491,6 +509,8 @@ func TestGame_endsInTie(t *testing.T) {
 		a.Equal(resultWon, game.participants[3].result)
 		a.Equal(175, game.participants[3].winnings)
 	}
+
+	assertSnapshots(t, game)
 }
 
 func TestGame_foldCallCheck(t *testing.T) {
@@ -616,4 +636,14 @@ func Test_validateOptions(t *testing.T) {
 	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 25}), "ante must be less than the lower limit")
 	a.EqualError(validateOptions(Options{Ante: 51, LowerLimit: 100}), "ante must be divisible by ${25}")
 	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 101}), "lower limit must be divisible by ${25}")
+}
+
+func assertSnapshots(t *testing.T, game *Game, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	for _, id := range game.participantOrder {
+		ps, err := game.GetPlayerState(id)
+		assert.NoError(t, err, msgAndArgs...)
+		snapshot.ValidateSnapshot(t, ps, 1, msgAndArgs...)
+	}
 }

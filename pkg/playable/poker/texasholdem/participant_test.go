@@ -90,3 +90,21 @@ func TestParticipant_getHandAnalyzer(t *testing.T) {
 
 	a.Equal("Four of a kind", p.getHandAnalyzer(deck.CardsFromString("9d")).GetHand().String(), "cache is busted")
 }
+
+func TestParticipant_participantJSON(t *testing.T) {
+	game := &Game{community: make(deck.Hand, 0)}
+	p := &Participant{
+		cards:  deck.CardsFromString("2c,3c"),
+		reveal: false,
+	}
+
+	record := p.participantJSON(game, true)
+	assert.NotNil(t, record.Cards)
+
+	record = p.participantJSON(game, false)
+	assert.Nil(t, record.Cards)
+
+	p.reveal = true
+	record = p.participantJSON(game, false)
+	assert.NotNil(t, record.Cards)
+}

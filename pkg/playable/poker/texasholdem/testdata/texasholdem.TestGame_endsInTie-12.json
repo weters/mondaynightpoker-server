@@ -1,0 +1,139 @@
+{
+  "key": "game",
+  "value": "texas-hold-em",
+  "data": {
+    "actions": null,
+    "participant": {
+      "playerId": 1,
+      "balance": -125,
+      "cards": [
+        {
+          "rank": 2,
+          "suit": "diamonds",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 4,
+          "suit": "hearts",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 2,
+          "suit": "diamonds",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 4,
+          "suit": "hearts",
+          "isWild": false,
+          "bitField": 0
+        }
+      ],
+      "folded": false,
+      "bet": 0,
+      "hand": "Four of a kind",
+      "result": "",
+      "winnings": 0
+    },
+    "gameState": {
+      "name": "Limit Texas Hold'em (${100}/${200})",
+      "dealerState": 6,
+      "community": [
+        {
+          "rank": 2,
+          "suit": "clubs",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 4,
+          "suit": "diamonds",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 6,
+          "suit": "hearts",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 8,
+          "suit": "spades",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 10,
+          "suit": "clubs",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 2,
+          "suit": "clubs",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 4,
+          "suit": "diamonds",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 6,
+          "suit": "hearts",
+          "isWild": false,
+          "bitField": 0
+        },
+        {
+          "rank": 8,
+          "suit": "spades",
+          "isWild": false,
+          "bitField": 0
+        }
+      ],
+      "pot": 375,
+      "currentBet": 0,
+      "participants": [
+        {
+          "playerId": 1,
+          "balance": -125,
+          "cards": null,
+          "folded": false,
+          "bet": 0,
+          "hand": "",
+          "result": "",
+          "winnings": 0
+        },
+        {
+          "playerId": 2,
+          "balance": -125,
+          "cards": null,
+          "folded": false,
+          "bet": 0,
+          "hand": "",
+          "result": "",
+          "winnings": 0
+        },
+        {
+          "playerId": 3,
+          "balance": -125,
+          "cards": null,
+          "folded": false,
+          "bet": 0,
+          "hand": "",
+          "result": "",
+          "winnings": 0
+        }
+      ],
+      "currentTurn": 0,
+      "lastAction": null
+    }
+  },
+  "context": ""
+}
