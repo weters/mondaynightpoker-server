@@ -167,17 +167,25 @@ func (g *Game) endGame() error {
 	}
 
 	n := len(winners)
-	for i, winner := range winners {
+	for pos, winner := range winners {
 		winner.result = resultWon
 
-		roundedWinnings := (g.pot / 25 / n) * 25
-		if i < (g.pot/25)%n {
-			roundedWinnings += 25
-		}
-
-		winner.Balance += roundedWinnings
+		winner.Balance += g.getShareOfWinnings(n, pos)
 	}
 
 	g.setPendingDealerState(DealerStateEnd, time.Second*5)
 	return nil
+}
+
+func (g *Game) getShareOfWinnings(winners, position int) int {
+	if position >= winners {
+		panic("position is out of range")
+	}
+
+	roundedWinnings := (g.pot / 25 / winners) * 25
+	if position < (g.pot/25)%winners {
+		roundedWinnings += 25
+	}
+
+	return roundedWinnings
 }

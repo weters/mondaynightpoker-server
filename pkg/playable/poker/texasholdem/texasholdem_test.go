@@ -190,6 +190,7 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		a.Nil(game.ActionsForParticipant(2), "nothing to do for 2")
 		a.Nil(game.ActionsForParticipant(3), "nothing to do for 3")
 
+		assertActionFailed(t, game, 1, "bad-action", "bad-action is not a valid action", "verify bad action is rejected")
 		assertAction(t, game, 1, callKey, "first player can call")
 
 		a.Equal([]Action{
@@ -202,6 +203,9 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		a.EqualError(err, "you cannot perform Call")
 
 		assertAction(t, game, 2, checkKey, "second player checks to end round")
+
+		a.Nil(game.ActionsForParticipant(3), "end of round, no actions")
+
 		assertTickFromWaiting(t, game, DealerStateDealFlop, "state advanced to the flop")
 	}
 
@@ -390,6 +394,83 @@ func TestGame_playersFolded(t *testing.T) {
 	}
 }
 
+func TestGame_endsInTie(t *testing.T) {
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, Options{
+		Ante:       25,
+		LowerLimit: 100,
+	})
+
+	a := assert.New(t)
+	a.NoError(err)
+
+	// pre-flop
+	{
+		assertTick(t, game, "start game")
+		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
+		assertAction(t, game, 3, callKey)
+		assertAction(t, game, 1, callKey)
+		assertAction(t, game, 2, checkKey)
+
+		assertTickFromWaiting(t, game, DealerStateDealFlop)
+	}
+
+	// flop
+	{
+		assertTick(t, game)
+		a.Equal(DealerStateFlopBettingRound, game.dealerState)
+		assertAction(t, game, 1, checkKey)
+		assertAction(t, game, 2, checkKey)
+		assertAction(t, game, 3, checkKey)
+		assertTickFromWaiting(t, game, DealerStateDealTurn)
+	}
+
+	// turn
+	{
+		assertTick(t, game)
+		a.Equal(DealerStateTurnBettingRound, game.dealerState)
+		assertAction(t, game, 1, checkKey)
+		assertAction(t, game, 2, checkKey)
+		assertAction(t, game, 3, checkKey)
+		assertTickFromWaiting(t, game, DealerStateDealRiver)
+	}
+
+	// river
+	{
+		assertTick(t, game)
+		a.Equal(DealerStateFinalBettingRound, game.dealerState)
+		assertAction(t, game, 1, checkKey)
+		assertAction(t, game, 2, checkKey)
+		assertAction(t, game, 3, checkKey)
+		assertTickFromWaiting(t, game, DealerStateRevealWinner)
+	}
+
+	// setup winners
+	{
+		game.community = deck.CardsFromString("2c,4d,6h,8s,10c")
+		game.participants[1].cards = deck.CardsFromString("2d,4h")
+		game.participants[2].cards = deck.CardsFromString("8c,10c")
+		game.participants[3].cards = deck.CardsFromString("8d,10d")
+	}
+
+	// end game
+	{
+		assertTick(t, game)
+		assertTickFromWaiting(t, game, DealerStateEnd)
+		assertTick(t, game)
+
+		details, _ := game.GetEndOfGameDetails()
+		a.Equal(map[int64]int{
+			1: -125,
+			2: 75,
+			3: 50,
+		}, details.BalanceAdjustments)
+
+		a.Equal(resultLost, game.participants[1].result)
+		a.Equal(resultWon, game.participants[2].result)
+		a.Equal(resultWon, game.participants[3].result)
+	}
+}
+
 func assertAction(t *testing.T, game *Game, playerID int64, action string, msgAndArgs ...interface{}) {
 	t.Helper()
 	resp, update, err := game.Action(playerID, payload(action))
@@ -466,4 +547,40 @@ func TestGame_nextDecision(t *testing.T) {
 	game.decisionIndex = 0
 	game.nextDecision()
 	assertDecision(t, game, 4, 4)
+}
+
+func TestNewGame_withFailures(t *testing.T) {
+	a := assert.New(t)
+
+	opts := Options{
+		Ante:       50,
+		LowerLimit: 25,
+	}
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+	a.EqualError(err, "ante must be less than the lower limit")
+	a.Nil(game)
+
+	game, err = NewGame(logrus.StandardLogger(), []int64{1}, DefaultOptions())
+	a.EqualError(err, "there must be at least two players")
+	a.Nil(game)
+}
+
+func TestGame_dealTwoCardsToEachParticipant_errorStates(t *testing.T) {
+	// these errors shouldn't happen
+	a := assert.New(t)
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+	game.dealerState = DealerStatePreFlopBettingRound
+	a.EqualError(game.dealTwoCardsToEachParticipant(), "cannot deal cards from state 1")
+
+	game.dealerState = DealerStateStart
+	game.deck.Cards = deck.CardsFromString("")
+	a.EqualError(game.dealTwoCardsToEachParticipant(), "end of deck reached")
+}
+
+func Test_validateOptions(t *testing.T) {
+	a := assert.New(t)
+	a.EqualError(validateOptions(Options{Ante: -1}), "ante must be >= 0")
+	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 25}), "ante must be less than the lower limit")
+	a.EqualError(validateOptions(Options{Ante: 51, LowerLimit: 100}), "ante must be divisible by ${25}")
+	a.EqualError(validateOptions(Options{Ante: 50, LowerLimit: 101}), "lower limit must be divisible by ${25}")
 }

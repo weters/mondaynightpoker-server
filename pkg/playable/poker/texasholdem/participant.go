@@ -62,12 +62,7 @@ func (g *Game) ActionsForParticipant(id int64) []Action {
 
 	turn, err := g.GetCurrentTurn()
 	if err != nil {
-		if err != errBettingRoundIsOver {
-			panic(err)
-		}
-
-		// round is over
-		return nil
+		panic(err)
 	}
 
 	if turn.PlayerID != id {
