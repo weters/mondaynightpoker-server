@@ -16,7 +16,7 @@ type GameState struct {
 	Community    deck.Hand          `json:"community"`
 	Pot          int                `json:"pot"`
 	CurrentBet   int                `json:"currentBet"`
-	Participants []*participantJSON `json:"participant"`
+	Participants []*participantJSON `json:"participants"`
 	CurrentTurn  int64              `json:"currentTurn"`
 }
 
