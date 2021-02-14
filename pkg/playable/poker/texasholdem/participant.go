@@ -1,8 +1,17 @@
 package texasholdem
 
 import (
-	"encoding/json"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
+)
+
+type result string
+
+const (
+	resultPending result = ""
+	resultFolded  result = "folded"
+	resultLost    result = "lost"
+	resultWon     result = "won"
 )
 
 // Participant represents an individual player in Texas Hold'em
@@ -14,22 +23,11 @@ type Participant struct {
 	folded bool
 	reveal bool
 	bet    int
-}
 
-// MarshalJSON handles custom marshalling of the JSON
-func (p *Participant) MarshalJSON() ([]byte, error) {
-	var cards deck.Hand
-	if p.reveal && !p.folded {
-		cards = p.cards
-	}
+	result result
 
-	return json.Marshal(participantJSON{
-		PlayerID: p.PlayerID,
-		Balance:  p.Balance,
-		Cards:    cards,
-		Folded:   p.folded,
-		Bet:      p.bet,
-	})
+	handAnalyzer         *handanalyzer.HandAnalyzer
+	handAnalyzerCacheKey string
 }
 
 type participantJSON struct {
@@ -38,6 +36,8 @@ type participantJSON struct {
 	Cards    deck.Hand `json:"cards"`
 	Folded   bool      `json:"folded"`
 	Bet      int       `json:"bet"`
+	Hand     string    `json:"hand"`
+	Result   result    `json:"result"`
 }
 
 func newParticipant(id int64) *Participant {
@@ -45,6 +45,7 @@ func newParticipant(id int64) *Participant {
 		PlayerID: id,
 		Balance:  0,
 		cards:    make(deck.Hand, 0),
+		result:   resultPending,
 	}
 }
 
@@ -61,7 +62,12 @@ func (g *Game) ActionsForParticipant(id int64) []Action {
 
 	turn, err := g.GetCurrentTurn()
 	if err != nil {
-		panic("expected to have a participant")
+		if err != errBettingRoundIsOver {
+			panic(err)
+		}
+
+		// round is over
+		return nil
 	}
 
 	if turn.PlayerID != id {
@@ -70,23 +76,57 @@ func (g *Game) ActionsForParticipant(id int64) []Action {
 
 	actions := make([]Action, 0)
 	if g.currentBet == turn.bet {
-		actions = append(actions, ActionCheck)
+		actions = append(actions, actionCheck)
 	} else if turn.bet < g.currentBet {
-		actions = append(actions, ActionCall)
+		call, _ := newAction(callKey, g.currentBet-turn.bet)
+		actions = append(actions, call)
 	}
 
 	if g.CanBet() {
+		amt, err := g.GetBetAmount()
+		if err != nil {
+			panic("could not get the bet amount")
+		}
+
 		if g.currentBet == 0 {
-			actions = append(actions, ActionBet)
+			bet, _ := newAction(betKey, amt)
+			actions = append(actions, bet)
 		} else {
-			actions = append(actions, ActionRaise)
+			raise, _ := newAction(raiseKey, g.currentBet+amt)
+			actions = append(actions, raise)
 		}
 	}
 
-	return append(actions, ActionFold)
+	return append(actions, actionFold)
+}
+
+// Bet ensures the participant throws to the specified amount
+// The value return is the amount added to the pot. For example, if a player already bet 100, and then calls
+// for another 50, this method will return 50
+func (p *Participant) Bet(amount int) int {
+	diff := amount - p.bet
+	p.bet = amount
+	p.Balance -= diff
+
+	return diff
 }
 
 // NewRound will reset the participant for a new round
-func (g *Game) NewRound() {
-	g.currentBet = 0
+func (p *Participant) NewRound() {
+	p.bet = 0
+}
+
+func (p *Participant) getHandAnalyzer(community []*deck.Card) *handanalyzer.HandAnalyzer {
+	if len(p.cards) == 0 {
+		return nil
+	}
+
+	hand := append(p.cards, community...)
+	key := hand.String()
+	if p.handAnalyzerCacheKey != key {
+		p.handAnalyzer = handanalyzer.New(5, hand)
+		p.handAnalyzerCacheKey = key
+	}
+
+	return p.handAnalyzer
 }

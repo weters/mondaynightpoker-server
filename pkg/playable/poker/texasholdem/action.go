@@ -1,57 +1,41 @@
 package texasholdem
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
 // Action is an action a player can take
-type Action int
-
-type actionJSON struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+type Action struct {
+	Name   string `json:"name"`
+	Amount int    `json:"amount"`
 }
 
-// MarshalJSON marshals the actio JSON
-func (a Action) MarshalJSON() ([]byte, error) {
-	return json.Marshal(actionJSON{
-		ID:   int(a),
-		Name: a.String(),
-	})
-}
-
-// constants for Action
 const (
-	ActionCheck Action = iota
-	ActionCall
-	ActionBet
-	ActionRaise
-	ActionFold
+	checkKey = "Check"
+	callKey  = "Call"
+	betKey   = "Bet"
+	raiseKey = "Raise"
+	foldKey  = "Fold"
 )
 
-func (a Action) String() string {
-	switch a {
-	case ActionCheck:
-		return "Check"
-	case ActionCall:
-		return "Call"
-	case ActionBet:
-		return "Bet"
-	case ActionRaise:
-		return "Raise"
-	case ActionFold:
-		return "Fold"
-	}
-
-	return ""
+var validActions = map[string]bool{
+	checkKey: true,
+	callKey:  true,
+	betKey:   true,
+	raiseKey: true,
+	foldKey:  true,
 }
 
-// ActionFromInt returns an action for the given id
-func ActionFromInt(a int) (Action, error) {
-	if a < 0 || a > int(ActionFold) {
-		return 0, fmt.Errorf("no action with id %d", a)
+var actionCheck = Action{Name: checkKey}
+var actionFold = Action{Name: foldKey}
+
+func newAction(name string, amount int) (Action, error) {
+	if _, ok := validActions[name]; !ok {
+		return Action{}, fmt.Errorf("%s is not a valid action", name)
 	}
 
-	return Action(a), nil
+	return Action{
+		Name:   name,
+		Amount: amount,
+	}, nil
 }

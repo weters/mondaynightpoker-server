@@ -9,13 +9,14 @@ type DealerState int
 const (
 	DealerStateStart DealerState = iota
 	DealerStatePreFlopBettingRound
-	DealerStateDealtFlop
+	DealerStateDealFlop
 	DealerStateFlopBettingRound
-	DealerStateDealtRiver
-	DealerStateRiverBettingRound
-	DealerStateDealtTurn
+	DealerStateDealTurn
+	DealerStateTurnBettingRound
+	DealerStateDealRiver
 	DealerStateFinalBettingRound
-	DealerStateGameOver
+	DealerStateRevealWinner
+	DealerStateEnd
 	DealerStateWaiting
 )
 
@@ -29,6 +30,7 @@ func (g *Game) setPendingDealerState(nextState DealerState, after time.Duration)
 		panic("cannot set pending dealer state if one is already present")
 	}
 
+	g.dealerState = DealerStateWaiting
 	g.pendingDealerState = &pendingDealerState{
 		NextState: nextState,
 		After:     time.Now().Add(after),
