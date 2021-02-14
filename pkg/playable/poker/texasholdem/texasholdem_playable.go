@@ -14,17 +14,17 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, err
 	}
 
-	validAction := false
+	var foundAction Action
 	for _, a := range actions {
 		if a.Name == action.Name {
-			validAction = true
+			foundAction = a
 			break
 		}
 	}
 
 	p := g.participants[playerID]
 
-	if !validAction {
+	if foundAction.IsZero() {
 		return nil, false, fmt.Errorf("you cannot perform %s", message.Action)
 	}
 
@@ -64,6 +64,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		PlayerID: p.PlayerID,
 	}
 
+	g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} %s", foundAction.LogString())
 	return playable.OK(), true, nil
 }
 
@@ -114,7 +115,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: balanceAdjustments,
-		Log:                g,
+		Log:                g.gameLog(),
 	}, true
 }
 
@@ -176,6 +177,21 @@ func (g *Game) endGame() error {
 		winner.won(g.getShareOfWinnings(n, pos))
 	}
 
+	logs := make([]*playable.LogMessage, 0, len(g.participantOrder))
+	for _, pid := range g.participantOrder {
+		p := g.participants[pid]
+
+		hand := p.getHandAnalyzer(g.community).GetHand().String()
+		if p.result == resultWon {
+			logs = append(logs, playable.SimpleLogMessage(pid, "{} won ${%d} (${%d}) with a %s", p.winnings, p.balance, hand))
+		} else if p.folded {
+			logs = append(logs, playable.SimpleLogMessage(pid, "{} folded and lost ${%d}", -1*p.balance))
+		} else {
+			logs = append(logs, playable.SimpleLogMessage(pid, "{} lost ${%d} with a %s", -1*p.balance, hand))
+		}
+	}
+
+	g.logChan <- logs
 	g.setPendingDealerState(DealerStateEnd, time.Second*5)
 	return nil
 }

@@ -1,6 +1,11 @@
 package texasholdem
 
-import "time"
+import (
+	"github.com/google/uuid"
+	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
+	"time"
+)
 
 // Interval returns how often Tick() should be called
 func (g *Game) Interval() time.Duration {
@@ -34,26 +39,41 @@ func (g *Game) Tick() (bool, error) {
 
 		return true, nil
 	case DealerStateDealFlop:
+		flop := make([]*deck.Card, 3)
 		for i := 0; i < 3; i++ {
-			if err := g.drawCommunityCard(); err != nil {
+			card, err := g.drawCommunityCard()
+			if err != nil {
 				return false, err
 			}
+
+			flop[i] = card
 		}
 
+		g.logChan <- []*playable.LogMessage{{
+			UUID:      uuid.New().String(),
+			PlayerIDs: nil,
+			Cards:     flop,
+			Message:   "dealer dealt the flop",
+			Time:      time.Now(),
+		}}
 		g.dealerState = DealerStateFlopBettingRound
 		return true, nil
 	case DealerStateDealTurn:
-		if err := g.drawCommunityCard(); err != nil {
+		card, err := g.drawCommunityCard()
+		if err != nil {
 			return false, err
 		}
 
+		g.logChan <- []*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the turn")}
 		g.dealerState = DealerStateTurnBettingRound
 		return true, nil
 	case DealerStateDealRiver:
-		if err := g.drawCommunityCard(); err != nil {
+		card, err := g.drawCommunityCard()
+		if err != nil {
 			return false, err
 		}
 
+		g.logChan <- []*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the river")}
 		g.dealerState = DealerStateFinalBettingRound
 		return true, nil
 	case DealerStateRevealWinner:
@@ -72,12 +92,12 @@ func (g *Game) Tick() (bool, error) {
 	return false, nil
 }
 
-func (g *Game) drawCommunityCard() error {
+func (g *Game) drawCommunityCard() (*deck.Card, error) {
 	card, err := g.deck.Draw()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	g.community.AddCard(card)
-	return nil
+	return card, nil
 }

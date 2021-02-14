@@ -146,6 +146,22 @@ func SimpleLogMessage(playerID int64, format string, a ...interface{}) *LogMessa
 	}
 }
 
+// SimpleLogMessageWithCard returns a new LogMessage with a card
+func SimpleLogMessageWithCard(playerID int64, card *deck.Card, format string, a ...interface{}) *LogMessage {
+	var playerIDs []int64
+	if playerID > 0 {
+		playerIDs = []int64{playerID}
+	}
+
+	return &LogMessage{
+		UUID:      uuid.New().String(),
+		PlayerIDs: playerIDs,
+		Cards:     []*deck.Card{card},
+		Message:   fmt.Sprintf(format, a...),
+		Time:      time.Now(),
+	}
+}
+
 // SimpleLogMessageSlice returns a single log message
 func SimpleLogMessageSlice(playerID int64, format string, a ...interface{}) []*LogMessage {
 	return []*LogMessage{SimpleLogMessage(playerID, format, a...)}

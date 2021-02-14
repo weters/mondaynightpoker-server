@@ -39,3 +39,20 @@ func newAction(name string, amount int) (Action, error) {
 		Amount: amount,
 	}, nil
 }
+
+// LogString returns the string representation destined for the client log
+func (a Action) LogString() string {
+	switch a.Name {
+	case checkKey:
+		fallthrough
+	case foldKey:
+		return a.Name
+	default:
+		return fmt.Sprintf("%s ${%d}", a.Name, a.Amount)
+	}
+}
+
+// IsZero will return true if it's valid
+func (a Action) IsZero() bool {
+	return a.Name == ""
+}

@@ -76,18 +76,25 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 	participantOrder := make([]int64, len(playerIDs))
 	copy(participantOrder, playerIDs)
 
+	logs := make([]*playable.LogMessage, 0)
+	logs = append(logs, playable.SimpleLogMessage(0, "started a new game of %s", NameFromOptions(opts)))
+	blindLogs := make([]*playable.LogMessage, 2)
+
 	pot := 0
 	for i, id := range playerIDs {
 		p := newParticipant(id)
+		logs = append(logs, playable.SimpleLogMessage(id, "{} paid the ante of ${%d}", opts.Ante))
 		p.SubtractBalance(opts.Ante)
 		pot += opts.Ante
 
 		if i == 0 {
 			// small blind
 			pot += p.Bet(smallBlind)
+			blindLogs[0] = playable.SimpleLogMessage(id, "{} paid the small blind of ${%d}", smallBlind)
 		} else if i == 1 {
 			// big blind
 			pot += p.Bet(opts.LowerLimit)
+			blindLogs[1] = playable.SimpleLogMessage(id, "{} paid the big blind of ${%d}", opts.LowerLimit)
 		}
 
 		participants[id] = p
@@ -97,6 +104,9 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 	if len(playerIDs) > 2 {
 		startIndex = 2 // start with the third player
 	}
+
+	lc := make(chan []*playable.LogMessage, 256)
+	lc <- append(logs, blindLogs...)
 
 	return &Game{
 		options:            opts,
@@ -110,7 +120,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 		pot:                pot,
 		currentBet:         opts.LowerLimit,
 		community:          make(deck.Hand, 0, 5),
-		logChan:            make(chan []*playable.LogMessage, 256),
+		logChan:            lc,
 	}, nil
 }
 

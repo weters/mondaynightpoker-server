@@ -134,3 +134,26 @@ func (p *Participant) won(amount int) {
 	p.balance += amount
 	p.winnings = amount
 }
+
+func (p *Participant) participantJSON(game *Game, forceReveal bool) *participantJSON {
+	var cards deck.Hand
+	var hand string
+	if forceReveal || (p.reveal && !p.folded) {
+		cards = p.cards
+
+		if ha := p.getHandAnalyzer(game.community); ha != nil {
+			hand = ha.GetHand().String()
+		}
+	}
+
+	return &participantJSON{
+		PlayerID: p.PlayerID,
+		Balance:  p.balance,
+		Cards:    cards,
+		Folded:   p.folded,
+		Bet:      p.bet,
+		Hand:     hand,
+		Result:   p.result,
+		Winnings: p.winnings,
+	}
+}

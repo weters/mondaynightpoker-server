@@ -24,27 +24,7 @@ type GameState struct {
 func (g *Game) getGameState() *GameState {
 	p := make([]*participantJSON, len(g.participants))
 	for i, id := range g.participantOrder {
-		par := g.participants[id]
-		var cards deck.Hand
-		var hand string
-		if par.reveal && !par.folded {
-			cards = par.cards
-
-			if ha := par.getHandAnalyzer(g.community); ha != nil {
-				hand = ha.GetHand().String()
-			}
-		}
-
-		p[i] = &participantJSON{
-			PlayerID: par.PlayerID,
-			Balance:  par.balance,
-			Cards:    cards,
-			Folded:   par.folded,
-			Bet:      par.bet,
-			Hand:     hand,
-			Result:   par.result,
-			Winnings: par.winnings,
-		}
+		p[i] = g.participants[id].participantJSON(g, false)
 	}
 
 	var currentTurn int64 = 0
@@ -67,23 +47,9 @@ func (g *Game) getGameState() *GameState {
 func (g *Game) getParticipantStateByPlayerID(id int64) *ParticipantState {
 	p := g.participants[id]
 
-	var hand string
-	if ha := p.getHandAnalyzer(g.community); ha != nil {
-		hand = ha.GetHand().String()
-	}
-
 	return &ParticipantState{
-		Actions: g.ActionsForParticipant(id),
-		Participant: &participantJSON{
-			PlayerID: p.PlayerID,
-			Balance:  p.balance,
-			Cards:    p.cards,
-			Folded:   p.folded,
-			Bet:      p.bet,
-			Hand:     hand,
-			Result:   p.result,
-			Winnings: p.winnings,
-		},
-		GameState: g.getGameState(),
+		Actions:     g.ActionsForParticipant(id),
+		Participant: p.participantJSON(g, true),
+		GameState:   g.getGameState(),
 	}
 }
