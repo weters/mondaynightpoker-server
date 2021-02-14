@@ -8,16 +8,17 @@ For more information about the architecture of this open-source project, see the
 
 ## Supported Card Games
 
+* Acey Deucey
 * Bourré
 * Pass the Poop
 * Poker
+  * Limit Texas Hold'em
+  * Little L
   * Seven-card games
     * Follow the Queen
     * Baseball
     * Seven-card Stud
     * Low Card Wild
-  * Little L
-* Acey Deucey
 
 ## Getting Started
 
