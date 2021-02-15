@@ -59,6 +59,9 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 	a.Nil(game.ActionsForParticipant(1))
 	a.Equal([]Action{actionCheck, actionFold}, game.ActionsForParticipant(2))
 	a.Nil(game.ActionsForParticipant(3))
+
+	game.participants[2].folded = true
+	a.Nil(game.ActionsForParticipant(2))
 }
 
 func TestGame_ActionsForParticipant_panicsInInvalidState(t *testing.T) {
@@ -109,7 +112,7 @@ func TestParticipant_participantJSON(t *testing.T) {
 	assert.NotNil(t, record.Cards)
 }
 
-func TestGame_participantIsPendingTurn(t *testing.T) {
+func TestGame_isParticipantPendingTurn(t *testing.T) {
 	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, DefaultOptions())
 	game.newRoundSetup()
 
@@ -137,6 +140,9 @@ func TestGame_participantIsPendingTurn(t *testing.T) {
 	a.True(game.isParticipantPendingTurn(3))
 	a.False(game.isParticipantPendingTurn(4))
 	a.False(game.isParticipantPendingTurn(5))
+
+	game.participants[1].folded = true
+	a.False(game.isParticipantPendingTurn(1))
 }
 
 func TestGame_FutureActionsForParticipant(t *testing.T) {

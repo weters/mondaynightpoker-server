@@ -524,6 +524,30 @@ func TestGame_foldCallCheck(t *testing.T) {
 	assertTickFromWaiting(t, game, DealerStateDealFlop)
 }
 
+func TestGame_firstPlayerFolds(t *testing.T) {
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+
+	assertTick(t, game)
+	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
+	assertAction(t, game, 3, callKey)
+	assertAction(t, game, 1, foldKey)
+	assertAction(t, game, 2, checkKey)
+	assertTickFromWaiting(t, game, DealerStateDealFlop)
+	assertTick(t, game)
+	assert.Equal(t, DealerStateFlopBettingRound, game.dealerState)
+
+	turn, err := game.GetCurrentTurn()
+	assert.NoError(t, err)
+	// fixes a bug previously found
+	assert.Equal(t, int64(2), turn.PlayerID, "ensure the first player is skipped")
+
+	// this should NEVER happen, but ensure that a folded player has no actions
+	game.decisionIndex = 0
+	assert.Nil(t, game.ActionsForParticipant(1), "ensure this player has no valid actions")
+	assert.Nil(t, game.ActionsForParticipant(2))
+	assert.Nil(t, game.ActionsForParticipant(3))
+}
+
 func assertAction(t *testing.T, game *Game, playerID int64, action string, msgAndArgs ...interface{}) {
 	t.Helper()
 	resp, update, err := game.Action(playerID, payload(action))

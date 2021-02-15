@@ -98,6 +98,10 @@ func (g *Game) isParticipantPendingTurn(id int64) bool {
 		return false
 	}
 
+	if g.participants[id].folded {
+		return false
+	}
+
 	var index = -1
 	for i, pid := range g.participantOrder {
 		if pid == id {
@@ -127,6 +131,10 @@ func (g *Game) ActionsForParticipant(id int64) []Action {
 	turn, err := g.GetCurrentTurn()
 	if err != nil {
 		panic(err)
+	}
+
+	if turn.folded {
+		return nil
 	}
 
 	if turn.PlayerID != id {

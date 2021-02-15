@@ -241,6 +241,7 @@ func (g *Game) newRoundSetup() {
 	g.decisionStart = 0
 	g.decisionIndex = 0
 	g.lastAction = nil
+	g.advanceToActiveParticipant()
 	for _, p := range g.participants {
 		p.NewRound()
 	}
