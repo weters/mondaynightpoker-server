@@ -46,12 +46,19 @@ func (g *Game) getGameState() *GameState {
 }
 
 func (g *Game) getParticipantStateByPlayerID(id int64) *ParticipantState {
-	p := g.participants[id]
+	var pjson *participantJSON
+	var actions, futureActions []Action
+	if p, ok := g.participants[id]; ok {
+		// force reveal because it's for the current player
+		pjson = p.participantJSON(g, true)
+		actions = g.ActionsForParticipant(id)
+		futureActions = g.FutureActionsForParticipant(id)
+	}
 
 	return &ParticipantState{
-		Actions:       g.ActionsForParticipant(id),
-		FutureActions: g.FutureActionsForParticipant(id),
-		Participant:   p.participantJSON(g, true),
+		Actions:       actions,
+		FutureActions: futureActions,
+		Participant:   pjson,
 		GameState:     g.getGameState(),
 	}
 }

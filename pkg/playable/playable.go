@@ -15,6 +15,9 @@ type Playable interface {
 	Action(playerID int64, message *PayloadIn) (playerResponse *Response, updateState bool, err error)
 
 	// GetPlayerState returns the current state of the game for the player
+	// This method will be called for every client connected to the current table, even if that client is not
+	// actively playing in the game. This method should return a valid response in that case so the game can render
+	// in a view-only state for that player.
 	GetPlayerState(playerID int64) (*Response, error)
 
 	// GetEndOfGameDetails returns the details after a game is over

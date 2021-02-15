@@ -3,6 +3,8 @@ package texasholdem
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/snapshot"
 	"testing"
 )
 
@@ -57,4 +59,23 @@ func TestGame_Key(t *testing.T) {
 
 func TestNameFromOptions(t *testing.T) {
 	assert.Equal(t, "", NameFromOptions(Options{Ante: -1}))
+}
+
+func TestGame_GetPlayerState_nonParticipantID(t *testing.T) {
+	a := assert.New(t)
+
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+	a.NotNil(game)
+
+	game.deck = deck.New() // provide a consistent deck for testing purposes
+
+	assertTick(t, game)
+	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
+
+	a.Equal(2, len(game.participants[1].cards), "ensure cards have been dealt to players")
+
+	ps, err := game.GetPlayerState(4)
+	a.NoError(err)
+	a.NotNil(ps)
+	snapshot.ValidateSnapshot(t, ps, 0, "ensure game state returned for player not in game")
 }

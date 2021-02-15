@@ -1,0 +1,51 @@
+{
+  "key": "game",
+  "value": "texas-hold-em",
+  "data": {
+    "actions": null,
+    "futureActions": null,
+    "participant": null,
+    "gameState": {
+      "name": "Limit Texas Hold'em (${100}/${200})",
+      "dealerState": 1,
+      "community": [],
+      "pot": 225,
+      "currentBet": 100,
+      "participants": [
+        {
+          "playerId": 1,
+          "balance": -75,
+          "cards": null,
+          "folded": false,
+          "bet": 50,
+          "hand": "",
+          "result": "",
+          "winnings": 0
+        },
+        {
+          "playerId": 2,
+          "balance": -125,
+          "cards": null,
+          "folded": false,
+          "bet": 100,
+          "hand": "",
+          "result": "",
+          "winnings": 0
+        },
+        {
+          "playerId": 3,
+          "balance": -25,
+          "cards": null,
+          "folded": false,
+          "bet": 0,
+          "hand": "",
+          "result": "",
+          "winnings": 0
+        }
+      ],
+      "currentTurn": 3,
+      "lastAction": null
+    }
+  },
+  "context": ""
+}
