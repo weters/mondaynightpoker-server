@@ -57,6 +57,67 @@ func (p *Participant) SubtractBalance(amount int) {
 	p.balance -= amount
 }
 
+// FutureActionsForParticipant are actions the participant can perform when they are on the clock
+func (g *Game) FutureActionsForParticipant(id int64) []Action {
+	if !g.isParticipantPendingTurn(id) {
+		return nil
+	}
+
+	p := g.participants[id]
+
+	bet, err := g.GetBetAmount()
+	if err != nil {
+		panic(err)
+	}
+
+	futureActions := make([]Action, 0)
+	if g.currentBet == 0 {
+		return append(futureActions, actionCheck, mustAction(newAction(betKey, bet)), actionFold)
+	}
+
+	if g.currentBet > p.bet {
+		// must call
+		futureActions = append(futureActions, mustAction(newAction(callKey, g.currentBet-p.bet)))
+	} else {
+		// this should _only_ happen in opening round
+		futureActions = append(futureActions, actionCheck)
+	}
+
+	if g.CanBet() {
+		futureActions = append(futureActions, mustAction(newAction(raiseKey, g.currentBet+bet)))
+	}
+
+	futureActions = append(futureActions, actionFold)
+
+	return futureActions
+}
+
+// isParticipantPendingTurn returns true if they still have to make a decision this turn
+func (g *Game) isParticipantPendingTurn(id int64) bool {
+	if !g.InBettingRound() {
+		return false
+	}
+
+	var index = -1
+	for i, pid := range g.participantOrder {
+		if pid == id {
+			index = i
+			break
+		}
+	}
+
+	if index < 0 {
+		panic("could not find participant")
+	}
+
+	index -= g.decisionStart
+	if index < 0 {
+		index += len(g.participantOrder)
+	}
+
+	return index > g.decisionIndex
+}
+
 // ActionsForParticipant return the actions the current participant can take
 func (g *Game) ActionsForParticipant(id int64) []Action {
 	if !g.InBettingRound() {

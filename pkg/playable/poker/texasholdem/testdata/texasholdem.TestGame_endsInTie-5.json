@@ -16,6 +16,7 @@
         "amount": 0
       }
     ],
+    "futureActions": null,
     "participant": {
       "playerId": 3,
       "balance": -25,

@@ -4,9 +4,10 @@ import "mondaynightpoker-server/pkg/deck"
 
 // ParticipantState represents the state of an individual participant
 type ParticipantState struct {
-	Actions     []Action         `json:"actions"`
-	Participant *participantJSON `json:"participant"`
-	GameState   *GameState       `json:"gameState"`
+	Actions       []Action         `json:"actions"`
+	FutureActions []Action         `json:"futureActions"`
+	Participant   *participantJSON `json:"participant"`
+	GameState     *GameState       `json:"gameState"`
 }
 
 // GameState represents the state of the game
@@ -48,8 +49,9 @@ func (g *Game) getParticipantStateByPlayerID(id int64) *ParticipantState {
 	p := g.participants[id]
 
 	return &ParticipantState{
-		Actions:     g.ActionsForParticipant(id),
-		Participant: p.participantJSON(g, true),
-		GameState:   g.getGameState(),
+		Actions:       g.ActionsForParticipant(id),
+		FutureActions: g.FutureActionsForParticipant(id),
+		Participant:   p.participantJSON(g, true),
+		GameState:     g.getGameState(),
 	}
 }

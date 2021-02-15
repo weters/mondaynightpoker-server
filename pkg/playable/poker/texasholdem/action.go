@@ -40,6 +40,14 @@ func newAction(name string, amount int) (Action, error) {
 	}, nil
 }
 
+func mustAction(action Action, err error) Action {
+	if err != nil {
+		panic(err)
+	}
+
+	return action
+}
+
 // LogString returns the string representation destined for the client log
 func (a Action) LogString() string {
 	switch a.Name {

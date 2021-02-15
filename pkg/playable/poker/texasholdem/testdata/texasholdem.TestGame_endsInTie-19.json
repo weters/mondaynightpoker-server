@@ -3,6 +3,7 @@
   "value": "texas-hold-em",
   "data": {
     "actions": null,
+    "futureActions": null,
     "participant": {
       "playerId": 2,
       "balance": 75,

@@ -108,3 +108,75 @@ func TestParticipant_participantJSON(t *testing.T) {
 	record = p.participantJSON(game, false)
 	assert.NotNil(t, record.Cards)
 }
+
+func TestGame_participantIsPendingTurn(t *testing.T) {
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, DefaultOptions())
+	game.newRoundSetup()
+
+	a := assert.New(t)
+	a.False(game.isParticipantPendingTurn(3), "not in betting round")
+
+	game.dealerState = DealerStateFinalBettingRound
+	a.False(game.isParticipantPendingTurn(1))
+	a.True(game.isParticipantPendingTurn(2))
+	a.True(game.isParticipantPendingTurn(3))
+	a.True(game.isParticipantPendingTurn(4))
+	a.True(game.isParticipantPendingTurn(5))
+
+	game.decisionIndex = 4
+	a.False(game.isParticipantPendingTurn(1))
+	a.False(game.isParticipantPendingTurn(2))
+	a.False(game.isParticipantPendingTurn(3))
+	a.False(game.isParticipantPendingTurn(4))
+	a.False(game.isParticipantPendingTurn(5))
+
+	game.decisionIndex = 1
+	game.decisionStart = 3
+	a.True(game.isParticipantPendingTurn(1))
+	a.True(game.isParticipantPendingTurn(2))
+	a.True(game.isParticipantPendingTurn(3))
+	a.False(game.isParticipantPendingTurn(4))
+	a.False(game.isParticipantPendingTurn(5))
+}
+
+func TestGame_FutureActionsForParticipant(t *testing.T) {
+	a := assert.New(t)
+
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
+	a.NotNil(game)
+
+	assertTick(t, game, "move into dealing cards")
+	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "put in betting round")
+	a.Equal(DealerStatePreFlopBettingRound, game.dealerState)
+
+	a.Equal([]Action{{"Call", 50}, {"Raise", 200}, actionFold}, game.FutureActionsForParticipant(1))
+	a.Equal([]Action{actionCheck, {"Raise", 200}, actionFold}, game.FutureActionsForParticipant(2))
+	a.Nil(game.FutureActionsForParticipant(3), "player three has current actions")
+
+	game.newRoundSetup()
+	game.dealerState = DealerStateTurnBettingRound
+
+	a.Nil(game.FutureActionsForParticipant(1), "player one has current actions")
+	a.Equal([]Action{actionCheck, {"Bet", 200}, actionFold}, game.FutureActionsForParticipant(2))
+	a.Equal([]Action{actionCheck, {"Bet", 200}, actionFold}, game.FutureActionsForParticipant(3))
+
+	game.decisionIndex = 1
+	game.currentBet = 600
+	a.Nil(game.FutureActionsForParticipant(1), "player one already went")
+	a.Nil(game.FutureActionsForParticipant(2), "player two has current actions")
+	game.participants[3].bet = 200
+	a.Equal([]Action{{"Call", 400}, {"Raise", 800}, actionFold}, game.FutureActionsForParticipant(3))
+
+	game.decisionStart = 2
+	game.decisionIndex = 1
+	game.currentBet = 800
+	a.Nil(game.FutureActionsForParticipant(1), "player one has current actions")
+	game.participants[2].bet = 600
+	a.Equal([]Action{{"Call", 200}, actionFold}, game.FutureActionsForParticipant(2))
+	a.Nil(game.FutureActionsForParticipant(3), "player three already went")
+
+	game.decisionStart = 0
+	game.decisionIndex = 0
+	game.currentBet = 200
+	game.participants[2].bet = 200
+}

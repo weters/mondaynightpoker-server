@@ -3,6 +3,20 @@
   "value": "texas-hold-em",
   "data": {
     "actions": null,
+    "futureActions": [
+      {
+        "name": "Call",
+        "amount": 50
+      },
+      {
+        "name": "Raise",
+        "amount": 200
+      },
+      {
+        "name": "Fold",
+        "amount": 0
+      }
+    ],
     "participant": {
       "playerId": 1,
       "balance": -75,
