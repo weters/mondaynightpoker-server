@@ -29,8 +29,8 @@ type Table struct {
 	Created  time.Time `json:"created"`
 }
 
-// WithPlayerEmail is a table with the player email who created it
-type WithPlayerEmail struct {
+// TableWithPlayerEmail is a table with the player email who created it
+type TableWithPlayerEmail struct {
 	*Table
 	Email string `json:"playerEmail"`
 }
@@ -141,7 +141,7 @@ WHERE uuid = $1`
 }
 
 // GetTables returns a list of tables
-func GetTables(ctx context.Context, offset int64, limit int) ([]*WithPlayerEmail, error) {
+func GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
 	const query = `
 SELECT ` + tableColumns + `, players.email
 FROM tables
@@ -156,7 +156,7 @@ LIMIT $2`
 	}
 	defer rows.Close()
 
-	tables := make([]*WithPlayerEmail, 0)
+	tables := make([]*TableWithPlayerEmail, 0)
 	for rows.Next() {
 		var email string
 		row, err := getTableByRow(rows, &email)
@@ -164,7 +164,7 @@ LIMIT $2`
 			return nil, err
 		}
 
-		t := &WithPlayerEmail{
+		t := &TableWithPlayerEmail{
 			Table: row,
 			Email: email,
 		}

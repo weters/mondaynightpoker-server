@@ -32,7 +32,7 @@ func TestMux_getAdminTable(t *testing.T) {
 		a.NoError(err)
 	}
 
-	var tables []*model.WithPlayerEmail
+	var tables []*model.TableWithPlayerEmail
 	assertGet(t, ts, "/admin/table?rows=3", &tables, http.StatusOK, j1)
 	a.Equal(3, len(tables))
 	a.Equal(p1.Email, tables[0].Email)

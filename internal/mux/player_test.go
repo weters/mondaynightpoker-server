@@ -315,7 +315,7 @@ func TestMux_getPlayerIDTable(t *testing.T) {
 	j, _ := jwt.Sign(p.ID)
 
 	path := fmt.Sprintf("/player/%d/table", p.ID)
-	var respObj []*model.WithBalance
+	var respObj []*model.TableWithBalance
 	assertGet(t, ts, path, &respObj, http.StatusOK, j)
 
 	a.Equal(3, len(respObj))

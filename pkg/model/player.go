@@ -69,8 +69,8 @@ type Player struct {
 	Updated      time.Time `json:"updated"`
 }
 
-// WithBalance extends the Table object to include the player's balance
-type WithBalance struct {
+// TableWithBalance extends the Table object to include the player's balance
+type TableWithBalance struct {
 	*Table
 	Balance int `json:"balance"`
 }
@@ -278,7 +278,7 @@ RETURNING updated`
 }
 
 // GetTables returns a list of tables the player belongs to
-func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*WithBalance, error) {
+func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithBalance, error) {
 	const query = `
 SELECT ` + tableColumns + `, players_tables.balance
 FROM tables
@@ -294,7 +294,7 @@ LIMIT $3`
 	}
 	defer rows.Close()
 
-	records := make([]*WithBalance, 0)
+	records := make([]*TableWithBalance, 0)
 	for rows.Next() {
 		var balance int
 		tbl, err := getTableByRow(rows, &balance)
@@ -302,7 +302,7 @@ LIMIT $3`
 			return nil, err
 		}
 
-		records = append(records, &WithBalance{
+		records = append(records, &TableWithBalance{
 			Table:   tbl,
 			Balance: balance,
 		})
