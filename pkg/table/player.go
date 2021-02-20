@@ -135,8 +135,8 @@ func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*
 		return nil, err
 	}
 
-	if err := argon2id.Compare(player.passwordHash, password); err != nil {
-		return nil, ErrInvalidEmailOrPassword
+	if err := player.ValidatePassword(password); err != nil {
+		return nil, err
 	}
 
 	if player.Status != PlayerStatusVerified {
@@ -144,6 +144,16 @@ func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*
 	}
 
 	return player, nil
+}
+
+// ValidatePassword will validate a user's password
+// Returns nil if the password is valid
+func (p *Player) ValidatePassword(password string) error {
+	if err := argon2id.Compare(p.passwordHash, password); err != nil {
+		return ErrInvalidEmailOrPassword
+	}
+
+	return nil
 }
 
 // LastPlayerCreatedAt returns the last time a player was created by the remote address

@@ -168,7 +168,8 @@ func (m *Mux) getPlayerIDTable() http.HandlerFunc {
 type postPlayerIDPayload struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
-	Password    string `json:"password"`
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
 }
 
 func (m *Mux) postPlayerID() http.HandlerFunc {
@@ -213,13 +214,18 @@ func (m *Mux) postPlayerID() http.HandlerFunc {
 			update = true
 		}
 
-		if password := pp.Password; password != "" {
-			if err := validatePassword(password); err != nil {
+		if newPassword := pp.NewPassword; newPassword != "" {
+			if err := validatePassword(newPassword); err != nil {
 				writeJSONError(w, http.StatusBadRequest, err)
 				return
 			}
 
-			if err := player.SetPassword(password); err != nil {
+			if err := player.ValidatePassword(pp.OldPassword); err != nil {
+				writeJSONError(w, http.StatusBadRequest, errors.New("old password does not match"))
+				return
+			}
+
+			if err := player.SetPassword(newPassword); err != nil {
 				writeJSONError(w, http.StatusInternalServerError, err)
 				return
 			}

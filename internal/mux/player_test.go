@@ -174,10 +174,13 @@ func Test_postPlayerID(t *testing.T) {
 	assert.Equal(t, "display name must only contain letters, numbers, and spaces", errResp.Message)
 
 	// bad password
-	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{Password: "bad"}, &errResp, http.StatusBadRequest, j)
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{NewPassword: "bad"}, &errResp, http.StatusBadRequest, j)
 	assert.Equal(t, "password must be at least six characters", errResp.Message)
 
-	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{Password: "good-password"}, nil, http.StatusOK, j)
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{NewPassword: "good-password"}, &errResp, http.StatusBadRequest, j)
+	assert.Equal(t, "old password does not match", errResp.Message)
+
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{NewPassword: "good-password", OldPassword: "password"}, nil, http.StatusOK, j)
 	newPlayer, err := table.GetPlayerByEmailAndPassword(context.Background(), newEmail, "good-password")
 	assert.NoError(t, err)
 	assert.NotNil(t, newPlayer)
