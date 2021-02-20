@@ -87,7 +87,7 @@ func Test_postPlayer(t *testing.T) {
 		Email:    email,
 		Password: "",
 	}, &obj, 400)
-	assert.Equal(t, "password must be 6 or more characters", obj.Message)
+	assert.Equal(t, "password must be at least six characters", obj.Message)
 
 	// test random name
 	var pObj *playerWithEmail
@@ -137,6 +137,8 @@ func Test_postPlayerID(t *testing.T) {
 	defer ts.Close()
 
 	player, j := player()
+	player.Status = table.PlayerStatusVerified
+	assert.NoError(t, player.Save(cbg))
 
 	// playerID must match
 	var errResp errorResponse
@@ -170,6 +172,15 @@ func Test_postPlayerID(t *testing.T) {
 	errResp = errorResponse{}
 	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{DisplayName: "!"}, &errResp, http.StatusBadRequest, j)
 	assert.Equal(t, "display name must only contain letters, numbers, and spaces", errResp.Message)
+
+	// bad password
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{Password: "bad"}, &errResp, http.StatusBadRequest, j)
+	assert.Equal(t, "password must be at least six characters", errResp.Message)
+
+	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{Password: "good-password"}, nil, http.StatusOK, j)
+	newPlayer, err := table.GetPlayerByEmailAndPassword(context.Background(), newEmail, "good-password")
+	assert.NoError(t, err)
+	assert.NotNil(t, newPlayer)
 }
 
 func Test_postPlayerAuth(t *testing.T) {
@@ -394,7 +405,7 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 		Email:    p.Email,
 		Password: "12345",
 	}, &er, http.StatusBadRequest)
-	a.Equal("password must be at least 6 characters", er.Message)
+	a.Equal("password must be at least six characters", er.Message)
 
 	diffPlayer, _ := player()
 	assertPost(t, ts, "/player/reset-password/"+resetToken, postPlayerResetPasswordPayload{

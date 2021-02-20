@@ -60,8 +60,8 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
-		if len(pp.Password) < 6 {
-			writeJSONError(w, http.StatusBadRequest, errors.New("password must be 6 or more characters"))
+		if err := validatePassword(pp.Password); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -168,6 +168,7 @@ func (m *Mux) getPlayerIDTable() http.HandlerFunc {
 type postPlayerIDPayload struct {
 	DisplayName string `json:"displayName"`
 	Email       string `json:"email"`
+	Password    string `json:"password"`
 }
 
 func (m *Mux) postPlayerID() http.HandlerFunc {
@@ -209,6 +210,20 @@ func (m *Mux) postPlayerID() http.HandlerFunc {
 			}
 
 			player.Email = email
+			update = true
+		}
+
+		if password := pp.Password; password != "" {
+			if err := validatePassword(password); err != nil {
+				writeJSONError(w, http.StatusBadRequest, err)
+				return
+			}
+
+			if err := player.SetPassword(password); err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err)
+				return
+			}
+
 			update = true
 		}
 
@@ -480,8 +495,8 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 			return
 		}
 
-		if len(payload.Password) < 6 {
-			writeJSONError(w, http.StatusBadRequest, errors.New("password must be at least 6 characters"))
+		if err := validatePassword(payload.Password); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -519,4 +534,12 @@ func (m *Mux) postPlayerVerifyAccountToken() http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, statusOK)
 	}
+}
+
+func validatePassword(password string) error {
+	if len(password) < 6 {
+		return errors.New("password must be at least six characters")
+	}
+
+	return nil
 }

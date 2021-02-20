@@ -273,6 +273,14 @@ func TestPlayer_SetPassword(t *testing.T) {
 
 	a.NoError(p.SetPassword(newPassword))
 
+	// still doesn't work because we didn't call save
+	player, err = GetPlayerByEmailAndPassword(context.Background(), p.Email, newPassword)
+	a.Nil(player)
+	a.EqualError(err, "invalid email address and/or password")
+
+	a.NoError(p.Save(context.Background()))
+
+	// now the new password works
 	player, err = GetPlayerByEmailAndPassword(context.Background(), p.Email, newPassword)
 	a.NotNil(player)
 	a.NoError(err)
@@ -334,6 +342,7 @@ func TestPlayer_accountVerification(t *testing.T) {
 
 	p := player()
 	a.NoError(p.SetPassword("test"))
+	a.NoError(p.Save(context.Background()))
 	a.NotEqual(PlayerStatusVerified, p.Status)
 
 	_, err := GetPlayerByEmailAndPassword(cbg, p.Email, "test")

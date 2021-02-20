@@ -100,13 +100,14 @@ func (p *Player) Save(ctx context.Context) error {
 	const query = `
 UPDATE players
 SET email = $1,
-    display_name = $2,
-    is_site_admin = $3,
-    status = $4,
+    password_hash = $2,
+    display_name = $3,
+    is_site_admin = $4,
+    status = $5,
     updated = (NOW() AT TIME ZONE 'utc')
-WHERE id = $5`
+WHERE id = $6`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.DisplayName, p.IsSiteAdmin, p.Status, p.ID)
+	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.passwordHash, p.DisplayName, p.IsSiteAdmin, p.Status, p.ID)
 	return err
 }
 
@@ -186,20 +187,16 @@ RETURNING ` + playerColumns
 	return player, nil
 }
 
-// SetPassword will set a new password
+// SetPassword will set a new password on the player instance
+// Important: you must call Save() to persist this change
 func (p *Player) SetPassword(password string) error {
 	newHash, err := argon2id.DefaultHashPassword(password)
 	if err != nil {
 		return err
 	}
 
-	const query = `
-UPDATE players
-SET password_hash = $1, updated = (NOW() AT TIME ZONE 'UTC')
-WHERE id = $2`
-
-	_, err = db.Instance().Exec(query, newHash, p.ID)
-	return err
+	p.passwordHash = newHash
+	return nil
 }
 
 // GetPlayerTable gets the PlayerTable record from for the associated table
