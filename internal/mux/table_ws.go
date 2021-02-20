@@ -2,9 +2,9 @@ package mux
 
 import (
 	"encoding/json"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room"
-	"mondaynightpoker-server/pkg/table"
 	"net/http"
 	"time"
 
@@ -36,8 +36,8 @@ func (m *Mux) getTableUUIDWS() http.HandlerFunc {
 			return nil
 		})
 
-		tbl := r.Context().Value(ctxTableKey).(*table.Table)
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		tbl := r.Context().Value(ctxTableKey).(*model.Table)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		client := room.NewClient(conn, player, tbl)
 
 		m.pitBoss.ClientConnected(client)

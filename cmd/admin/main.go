@@ -8,7 +8,7 @@ import (
 	"github.com/badoux/checkmail"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh/terminal"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"os"
 	"strings"
 )
@@ -30,7 +30,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		player, err := table.CreatePlayer(context.Background(), email, "Admin", password, "127.0.0.1")
+		player, err := model.CreatePlayer(context.Background(), email, "Admin", password, "127.0.0.1")
 		if err != nil {
 			logrus.WithError(err).Fatal("could not create player")
 		}
@@ -42,7 +42,7 @@ func main() {
 			logrus.WithError(err).Fatal("could not get answer")
 		}
 		player.DisplayName = name
-		player.Status = table.PlayerStatusVerified
+		player.Status = model.PlayerStatusVerified
 		if err := player.Save(context.Background()); err != nil {
 			logrus.WithError(err).Fatal("could not save player")
 		}

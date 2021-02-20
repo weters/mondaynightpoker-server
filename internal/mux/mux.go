@@ -6,8 +6,8 @@ import (
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/email"
 	"mondaynightpoker-server/internal/jwt"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/room"
-	"mondaynightpoker-server/pkg/table"
 	"net/http"
 	"strconv"
 	"strings"
@@ -130,7 +130,7 @@ func (m *Mux) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		player, err := table.GetPlayerByID(r.Context(), id)
+		player, err := model.GetPlayerByID(r.Context(), id)
 		if err != nil {
 			writeJSONError(w, http.StatusUnauthorized, nil)
 			return
@@ -145,7 +145,7 @@ func (m *Mux) authMiddleware(next http.Handler) http.Handler {
 // adminMiddleware requires authMiddleware to execute first
 func (m *Mux) adminMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		if !player.IsSiteAdmin {
 			writeJSONError(w, http.StatusForbidden, nil)
 			return

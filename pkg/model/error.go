@@ -1,4 +1,4 @@
-package table
+package model
 
 // UserError is an error that is safe to return in a response
 type UserError string

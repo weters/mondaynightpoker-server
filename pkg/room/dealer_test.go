@@ -2,12 +2,12 @@ package room
 
 import (
 	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"testing"
 )
 
 func TestDealer_AddClient(t *testing.T) {
-	d := NewDealer(&PitBoss{}, &table.Table{})
+	d := NewDealer(&PitBoss{}, &model.Table{})
 	c := NewClient(nil, nil, nil)
 	c2 := NewClient(nil, nil, nil)
 

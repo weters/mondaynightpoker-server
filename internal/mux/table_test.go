@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -26,7 +26,7 @@ func Test_getTable(t *testing.T) {
 	tbl4, _ := p2.CreateTable(cbg, "Table 4")
 	_, _ = p2.Join(cbg, tbl2)
 
-	var tables []*table.Table
+	var tables []*model.Table
 	assertGet(t, ts, "/table", &tables, 200, j)
 	assert.Equal(t, 3, len(tables))
 	assert.Equal(t, tbl3.UUID, tables[0].UUID)
@@ -60,7 +60,7 @@ func Test_postTable(t *testing.T) {
 
 	// actually test it
 	_ = p.SetIsSiteAdmin(context.Background(), true)
-	var tbl *table.Table
+	var tbl *model.Table
 	assertPost(t, ts, "/table", postTablePayload{Name: "Test"}, &tbl, 201, j)
 	assert.Equal(t, "Test", tbl.Name)
 	assert.NotEmpty(t, tbl.UUID)
@@ -90,7 +90,7 @@ func Test_postTableUUIDJoin(t *testing.T) {
 	assert.Equal(t, "player is already at the table", errObj.Message)
 
 	_, j2 := player()
-	var respObj *table.PlayerTable
+	var respObj *model.PlayerTable
 	assertPost(t, ts, path, nil, &respObj, 201, j2)
 	assert.Equal(t, 0, respObj.Balance)
 	assert.True(t, respObj.Active)

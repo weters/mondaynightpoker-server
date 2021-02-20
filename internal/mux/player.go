@@ -10,7 +10,7 @@ import (
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -29,7 +29,7 @@ type postPlayerPayload struct {
 
 // playerWithEmail should only be return in an admin context, or for the requesting player
 type playerWithEmail struct {
-	*table.Player
+	*model.Player
 	Email string `json:"email"`
 }
 
@@ -66,7 +66,7 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 		}
 
 		addr := remoteAddr(r)
-		at, err := table.LastPlayerCreatedAt(r.Context(), addr)
+		at, err := model.LastPlayerCreatedAt(r.Context(), addr)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -85,9 +85,9 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			displayName = util.GetRandomName()
 		}
 
-		player, err := table.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, addr)
+		player, err := model.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, addr)
 		if err != nil {
-			if err == table.ErrDuplicateKey {
+			if err == model.ErrDuplicateKey {
 				writeJSONError(w, http.StatusBadRequest, errors.New("email address is already taken"))
 				return
 			}
@@ -111,7 +111,7 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 	}
 }
 
-func (m *Mux) sendAccountVerificationEmail(player *table.Player, verifyToken string) {
+func (m *Mux) sendAccountVerificationEmail(player *model.Player, verifyToken string) {
 	if config.Instance().Email.Disable {
 		return
 	}
@@ -139,7 +139,7 @@ func (m *Mux) getPlayerIDTable() http.HandlerFunc {
 		// ParseInt will always succeed
 		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 
-		player, err := table.GetPlayerByID(r.Context(), playerID)
+		player, err := model.GetPlayerByID(r.Context(), playerID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				writeJSONError(w, http.StatusNotFound, nil)
@@ -181,7 +181,7 @@ func (m *Mux) postPlayerID() http.HandlerFunc {
 		}
 
 		// prevent a player from updating another player
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		if player.ID != playerID {
 			writeJSONError(w, http.StatusForbidden, err)
 			return
@@ -253,7 +253,7 @@ func (m *Mux) deletePlayerID() http.HandlerFunc {
 		}
 
 		// prevent a player from updating another player
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		if player.ID != playerID {
 			writeJSONError(w, http.StatusForbidden, err)
 			return
@@ -280,9 +280,9 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 			return
 		}
 
-		player, err := table.GetPlayerByEmailAndPassword(r.Context(), pp.Email, pp.Password)
+		player, err := model.GetPlayerByEmailAndPassword(r.Context(), pp.Email, pp.Password)
 		if err != nil {
-			var ue table.UserError
+			var ue model.UserError
 			if errors.As(err, &ue) {
 				writeJSONError(w, http.StatusUnauthorized, err)
 				return
@@ -317,7 +317,7 @@ func (m *Mux) getPlayerAuthJWT() http.HandlerFunc {
 			return
 		}
 
-		player, err := table.GetPlayerByID(r.Context(), userID)
+		player, err := model.GetPlayerByID(r.Context(), userID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				writeJSONError(w, http.StatusNotFound, errors.New("player does not exist"))
@@ -343,7 +343,7 @@ func (m *Mux) getPlayer() http.HandlerFunc {
 			return
 		}
 
-		players, err := table.GetPlayersWithSearch(r.Context(), r.FormValue("search"), offset, limit)
+		players, err := model.GetPlayersWithSearch(r.Context(), r.FormValue("search"), offset, limit)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -369,7 +369,7 @@ type adminPostPlayerIDRequest struct {
 func (m *Mux) postAdminPlayerID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-		player, err := table.GetPlayerByID(r.Context(), playerID)
+		player, err := model.GetPlayerByID(r.Context(), playerID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				writeJSONError(w, http.StatusNotFound, nil)
@@ -428,7 +428,7 @@ func (m *Mux) postPlayerResetPasswordRequest() http.HandlerFunc {
 			return
 		}
 
-		if player, _ := table.GetPlayerByEmail(r.Context(), payload.Email); player != nil {
+		if player, _ := model.GetPlayerByEmail(r.Context(), payload.Email); player != nil {
 			token, err := player.CreatePasswordResetRequest(r.Context())
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, err)
@@ -468,7 +468,7 @@ func (m *Mux) postPlayerResetPasswordRequest() http.HandlerFunc {
 func (m *Mux) getPlayerResetPasswordToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := mux.Vars(r)["token"]
-		if err := table.IsPasswordResetTokenValid(r.Context(), token); err != nil {
+		if err := model.IsPasswordResetTokenValid(r.Context(), token); err != nil {
 			writeJSONError(w, http.StatusNotFound, nil)
 			return
 		}
@@ -491,7 +491,7 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 			return
 		}
 
-		if err := table.IsPasswordResetTokenValid(r.Context(), token); err != nil {
+		if err := model.IsPasswordResetTokenValid(r.Context(), token); err != nil {
 			writeJSONError(w, http.StatusNotFound, nil)
 			return
 		}
@@ -506,7 +506,7 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 			return
 		}
 
-		player, err := table.GetPlayerByEmail(r.Context(), payload.Email)
+		player, err := model.GetPlayerByEmail(r.Context(), payload.Email)
 		if err != nil {
 			if err != sql.ErrNoRows {
 				writeJSONError(w, http.StatusInternalServerError, err)
@@ -528,8 +528,8 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 func (m *Mux) postPlayerVerifyAccountToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := mux.Vars(r)["token"]
-		if err := table.VerifyAccount(r.Context(), token); err != nil {
-			if errors.Is(err, table.ErrTokenExpired) {
+		if err := model.VerifyAccount(r.Context(), token); err != nil {
+			if errors.Is(err, model.ErrTokenExpired) {
 				writeJSONError(w, http.StatusBadRequest, err)
 			} else {
 				writeJSONError(w, http.StatusInternalServerError, err)

@@ -7,7 +7,7 @@ import (
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"os"
 	"testing"
@@ -55,8 +55,8 @@ func Test_parsePaginationOptions(t *testing.T) {
 	assert.Equal(t, 0, rows)
 }
 
-func player() (*table.Player, string) {
-	player, _ := table.CreatePlayer(context.Background(), util.RandomEmail(), "Player", "password", "")
+func player() (*model.Player, string) {
+	player, _ := model.CreatePlayer(context.Background(), util.RandomEmail(), "Player", "password", "")
 	j, _ := jwt.Sign(player.ID)
 	return player, j
 }

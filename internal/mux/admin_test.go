@@ -3,7 +3,7 @@ package mux
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +32,7 @@ func TestMux_getAdminTable(t *testing.T) {
 		a.NoError(err)
 	}
 
-	var tables []*table.WithPlayerEmail
+	var tables []*model.WithPlayerEmail
 	assertGet(t, ts, "/admin/table?rows=3", &tables, http.StatusOK, j1)
 	a.Equal(3, len(tables))
 	a.Equal(p1.Email, tables[0].Email)

@@ -1,12 +1,12 @@
 package room
 
 import (
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
-	"mondaynightpoker-server/pkg/table"
 )
 
 type clientStatePlayers struct {
-	*table.PlayerTable
+	*model.PlayerTable
 	IsConnected bool `json:"isConnected"`
 	IsSeated    bool `json:"isSeated"`
 }

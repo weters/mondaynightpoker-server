@@ -4,7 +4,7 @@ import (
 	"context"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -41,7 +41,7 @@ func Test_authRouter(t *testing.T) {
 	assert.Equal(t, "Unauthorized", errObj.Message)
 
 	// test using auth header
-	player, _ := table.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
+	player, _ := model.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
 	token, _ = jwt.Sign(player.ID)
 	var str string
 	resp := assertGetWithResp(t, ts, "/test", &str, 200, token)
@@ -67,7 +67,7 @@ func Test_adminRouter(t *testing.T) {
 	ts := httptest.NewServer(m)
 	defer ts.Close()
 
-	player, _ := table.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
+	player, _ := model.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
 	token, _ := jwt.Sign(player.ID)
 
 	var errObj errorResponse

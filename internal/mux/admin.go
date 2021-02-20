@@ -1,7 +1,7 @@
 package mux
 
 import (
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http"
 )
 
@@ -13,7 +13,7 @@ func (m *Mux) getAdminTable() http.HandlerFunc {
 			return
 		}
 
-		tables, err := table.GetTables(r.Context(), start, rows)
+		tables, err := model.GetTables(r.Context(), start, rows)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return

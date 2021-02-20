@@ -3,7 +3,7 @@ package mux
 import (
 	"context"
 	"errors"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"regexp"
 
@@ -18,7 +18,7 @@ func (m *Mux) getTable() http.HandlerFunc {
 			return
 		}
 
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		tables, err := player.GetTables(r.Context(), offset, limit)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
@@ -46,10 +46,10 @@ func (m *Mux) postTable() http.HandlerFunc {
 			return
 		}
 
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		tbl, err := player.CreateTable(r.Context(), pp.Name)
 		if err != nil {
-			var ue table.UserError
+			var ue model.UserError
 			if errors.As(err, &ue) {
 				writeJSONError(w, http.StatusBadRequest, err)
 			} else {
@@ -63,13 +63,13 @@ func (m *Mux) postTable() http.HandlerFunc {
 }
 
 type getTableUUIDResponse struct {
-	*table.Table
-	Players []*table.PlayerTable `json:"players"`
+	*model.Table
+	Players []*model.PlayerTable `json:"players"`
 }
 
 func (m *Mux) getTableUUID() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tbl := r.Context().Value(ctxTableKey).(*table.Table)
+		tbl := r.Context().Value(ctxTableKey).(*model.Table)
 		players, err := tbl.GetPlayers(r.Context())
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
@@ -85,12 +85,12 @@ func (m *Mux) getTableUUID() http.Handler {
 
 func (m *Mux) postTableUUIDSeat() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		player := r.Context().Value(ctxPlayerKey).(*table.Player)
-		tbl := r.Context().Value(ctxTableKey).(*table.Table)
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
+		tbl := r.Context().Value(ctxTableKey).(*model.Table)
 
 		playerTable, err := player.Join(r.Context(), tbl)
 		if err != nil {
-			if err == table.ErrDuplicateKey {
+			if err == model.ErrDuplicateKey {
 				writeJSONError(w, http.StatusBadRequest, errors.New("player is already at the table"))
 			} else {
 				writeJSONError(w, http.StatusInternalServerError, err)
@@ -106,7 +106,7 @@ func (m *Mux) postTableUUIDSeat() http.Handler {
 func (m *Mux) tableMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uuid := mux.Vars(r)["uuid"]
-		tbl, err := table.GetTableByUUID(r.Context(), uuid)
+		tbl, err := model.GetTableByUUID(r.Context(), uuid)
 		if err != nil {
 			writeMaybeNotFoundError(w, err)
 			return

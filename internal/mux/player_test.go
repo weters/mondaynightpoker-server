@@ -10,7 +10,7 @@ import (
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/db"
-	"mondaynightpoker-server/pkg/table"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/token"
 	"net/http"
 	"net/http/httptest"
@@ -137,7 +137,7 @@ func Test_postPlayerID(t *testing.T) {
 	defer ts.Close()
 
 	player, j := player()
-	player.Status = table.PlayerStatusVerified
+	player.Status = model.PlayerStatusVerified
 	assert.NoError(t, player.Save(cbg))
 
 	// playerID must match
@@ -154,7 +154,7 @@ func Test_postPlayerID(t *testing.T) {
 	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), payload, &resp, http.StatusOK, j)
 	assert.Equal(t, "OK", resp["status"])
 
-	p, _ := table.GetPlayerByID(context.Background(), player.ID)
+	p, _ := model.GetPlayerByID(context.Background(), player.ID)
 	assert.Equal(t, "TEST", p.DisplayName)
 	assert.Equal(t, newEmail, p.Email)
 
@@ -181,7 +181,7 @@ func Test_postPlayerID(t *testing.T) {
 	assert.Equal(t, "old password does not match", errResp.Message)
 
 	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{NewPassword: "good-password", OldPassword: "password"}, nil, http.StatusOK, j)
-	newPlayer, err := table.GetPlayerByEmailAndPassword(context.Background(), newEmail, "good-password")
+	newPlayer, err := model.GetPlayerByEmailAndPassword(context.Background(), newEmail, "good-password")
 	assert.NoError(t, err)
 	assert.NotNil(t, newPlayer)
 }
@@ -197,13 +197,13 @@ func Test_postPlayerAuth(t *testing.T) {
 	email := util.RandomEmail()
 	pw := "my-password"
 
-	player, err := table.CreatePlayer(context.Background(), email, email, pw, "")
+	player, err := model.CreatePlayer(context.Background(), email, email, pw, "")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	player.Status = table.PlayerStatusVerified
+	player.Status = model.PlayerStatusVerified
 	_ = player.Save(cbg)
 
 	var resp postPlayerAuthResponse
@@ -244,7 +244,7 @@ func Test_postPlayerAuth_BadCreds(t *testing.T) {
 	ts := httptest.NewServer(NewMux(""))
 
 	email := util.RandomEmail()
-	_, err := table.CreatePlayer(context.Background(), email, email, "my-password", "")
+	_, err := model.CreatePlayer(context.Background(), email, email, "my-password", "")
 	if err != nil {
 		t.Error(err)
 		return
@@ -315,7 +315,7 @@ func TestMux_getPlayerIDTable(t *testing.T) {
 	j, _ := jwt.Sign(p.ID)
 
 	path := fmt.Sprintf("/player/%d/table", p.ID)
-	var respObj []*table.WithBalance
+	var respObj []*model.WithBalance
 	assertGet(t, ts, path, &respObj, http.StatusOK, j)
 
 	a.Equal(3, len(respObj))
@@ -385,7 +385,7 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 	p, _ := player()
 	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{Email: p.Email}, nil, http.StatusOK)
 
-	p.Status = table.PlayerStatusVerified
+	p.Status = model.PlayerStatusVerified
 	_ = p.Save(cbg)
 
 	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
@@ -462,7 +462,7 @@ func TestMux_accountVerification(t *testing.T) {
 	}, &er, http.StatusUnauthorized)
 	a.Equal("account not verified", er.Message)
 
-	player, err := table.GetPlayerByEmail(context.Background(), email)
+	player, err := model.GetPlayerByEmail(context.Background(), email)
 	a.NoError(err)
 
 	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 AND type = 'account_verification'", player.ID)
@@ -494,7 +494,7 @@ func TestMux_deletePlayerID(t *testing.T) {
 	assertDelete(t, ts, fmt.Sprintf("/player/%d", p1.ID), nil, http.StatusForbidden, j2)
 	assertDelete(t, ts, fmt.Sprintf("/player/%d", p1.ID), nil, http.StatusOK, j1)
 
-	p, err := table.GetPlayerByID(cbg, p1.ID)
+	p, err := model.GetPlayerByID(cbg, p1.ID)
 	a := assert.New(t)
 	a.NoError(err)
 	a.NotEqual(p1.Email, p.Email)

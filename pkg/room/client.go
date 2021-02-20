@@ -2,8 +2,8 @@ package room
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
-	"mondaynightpoker-server/pkg/table"
 
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -25,12 +25,12 @@ type Client struct {
 
 	dealer *Dealer
 
-	player *table.Player
-	table  *table.Table
+	player *model.Player
+	table  *model.Table
 }
 
 // NewClient returns a new client object
-func NewClient(conn *websocket.Conn, player *table.Player, table *table.Table) *Client {
+func NewClient(conn *websocket.Conn, player *model.Player, table *model.Table) *Client {
 	return &Client{
 		send:   make(chan interface{}, 256),
 		Close:  make(chan string),

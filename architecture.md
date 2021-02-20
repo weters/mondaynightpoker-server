@@ -59,7 +59,7 @@ Dir | Description
 [pkg/deck](pkg/deck) | Has the deck and card logic
 [pkg/playable](pkg/playable) | Contains all the game logic and rules.
 [pkg/room](pkg/room) | Responsibly for managing the live game state.
-[pkg/table](pkg/table) | This is essentially the database model. All queries to the PostgreSQL database are written here.
+[pkg/model](pkg/model) | This is essentially the database model. All queries to the PostgreSQL database are written here.
 [pkg/token](pkg/token) | A small package for generate a crypto-secure token.
 [sql](sql) | Contains the database migration files
 [templates](templates) | Email templates

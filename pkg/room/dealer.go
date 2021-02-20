@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room/gamefactory"
-	"mondaynightpoker-server/pkg/table"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,7 +35,7 @@ const (
 // Dealer is responsible for controller the game
 type Dealer struct {
 	pitBoss *PitBoss
-	table   *table.Table
+	table   *model.Table
 	clients map[*Client]bool
 	game    playable.Playable
 	ticker  *time.Ticker
@@ -52,7 +52,7 @@ type Dealer struct {
 
 // NewDealer creates a new dealer object
 // This is called from a blocking state, so it needs to return quickly
-func NewDealer(pitBoss *PitBoss, table *table.Table) *Dealer {
+func NewDealer(pitBoss *PitBoss, table *model.Table) *Dealer {
 	d := &Dealer{
 		pitBoss:       pitBoss,
 		table:         table,
@@ -267,7 +267,7 @@ func (d *Dealer) sendPlayerData() {
 		return
 	}
 
-	connectedClients := make(map[int64]*table.Player)
+	connectedClients := make(map[int64]*model.Player)
 	for client := range d.clients {
 		connectedClients[client.player.ID] = client.player
 	}
@@ -285,7 +285,7 @@ func (d *Dealer) sendPlayerData() {
 
 	for _, player := range connectedClients {
 		csPlayers[player.ID] = &clientStatePlayers{
-			PlayerTable: &table.PlayerTable{
+			PlayerTable: &model.PlayerTable{
 				Player:    player,
 				PlayerID:  player.ID,
 				TableUUID: d.table.UUID,
@@ -421,7 +421,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				return
 			}
 
-			player, err := table.GetPlayerByID(context.Background(), int64(playerID))
+			player, err := model.GetPlayerByID(context.Background(), int64(playerID))
 			if err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
@@ -467,7 +467,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		}
 	case "playerStatus":
 		d.execInRunLoop <- func() {
-			var pt *table.PlayerTable
+			var pt *model.PlayerTable
 			var err error
 
 			// set status for other player, requires table admin
@@ -477,8 +477,8 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 					return
 				}
 
-				var player *table.Player
-				player, err = table.GetPlayerByID(context.Background(), int64(playerID))
+				var player *model.Player
+				player, err = model.GetPlayerByID(context.Background(), int64(playerID))
 				if err != nil {
 					c.Send(newErrorResponse(msg.Context, err))
 					return
