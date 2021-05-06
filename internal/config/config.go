@@ -8,7 +8,7 @@ import (
 
 var defaultConfig = Config{
 	loaded: false,
-	Host:   "https://monday-night.poker",
+	Host:   "https://mondaynight.bid",
 	Log: Log{
 		DisableAccessLogs: false,
 		Level:             "info",
@@ -25,9 +25,9 @@ var defaultConfig = Config{
 	StartGameDelay:    10,
 	PlayerCreateDelay: 60,
 	Email: Email{
-		From:         "Monday Night Poker <no-reply@monday-night.poker>",
-		Sender:       "no-reply@monday-night.poker",
-		Username:     "dealer@monday-night.poker",
+		From:         "Monday Night Poker <no-reply@mondaynight.bid>",
+		Sender:       "no-reply@mondaynight.bid",
+		Username:     "dealer@mondaynight.bid",
 		Password:     "",
 		Host:         "mail.privateemail.com:587",
 		TemplatesDir: "templates",

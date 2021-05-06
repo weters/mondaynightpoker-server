@@ -7,10 +7,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - api.monday-night.poker
+        - api.mondaynight.bid
       secretName: tls-mondaynightpoker
   rules:
-    - host: api.monday-night.poker
+    - host: api.mondaynight.bid
       http:
         paths:
           - backend:

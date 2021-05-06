@@ -2,7 +2,7 @@
 
 [![.github/workflows/ci.yaml](https://github.com/weters/mondaynightpoker-server/workflows/.github/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/weters/mondaynightpoker-server/actions?query=workflow%3A.github%2Fworkflows%2Fci.yaml+branch%3Amaster)
 
-mondaynightpoker-server is the backend application for the Monday Night Poker site (see: [monday-night.poker](https://monday-night.poker)). The front-end code can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue).
+mondaynightpoker-server is the backend application for the Monday Night Poker site (see: [mondaynight.bid](https://mondaynight.bid)). The front-end code can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue).
 
 For more information about the architecture of this open-source project, see the [architecture](architecture.md) document.
 
@@ -73,7 +73,7 @@ The service can be configured through two methods:
 Any environment variables take precedence over values defined in YAML. The default configuration values are defined below.
 
 ```yaml
-host: https://monday-night.poker
+host: https://mondaynight.bid
 log:
   level: info
   disableAccessLogs: false
@@ -87,9 +87,9 @@ recaptchaSecret: '-'
 startGameDelay: 10
 playerCreateDelay: 60
 email:
-  from: Monday Night Poker <no-reply@monday-night.poker>
-  sender: no-reply@monday-night.poker
-  username: dealer@monday-night.poker
+  from: Monday Night Poker <no-reply@mondaynight.bid>
+  sender: no-reply@mondaynight.bid
+  username: dealer@mondaynight.bid
   password: ""
   host: mail.privateemail.com:587
   templatesDir: templates

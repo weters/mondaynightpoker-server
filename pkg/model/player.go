@@ -443,7 +443,7 @@ FROM reset_password($1, $2, $3, $4)`
 // The player isn't actually deleted from the database, but their email is destroyed and their password is changed
 func (p *Player) Delete(ctx context.Context) error {
 	newDisplayName := util.GetRandomName()
-	newEmail := uuid.New().String() + "@deleted.monday-night.poker"
+	newEmail := uuid.New().String() + "@deleted.mondaynight.bid"
 
 	p.DisplayName = newDisplayName
 	p.Email = newEmail

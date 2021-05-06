@@ -1,5 +1,5 @@
 email:
-  username: user@monday-night.poker
+  username: user@mondaynight.bid
 jwt:
   publicKey: public.pem
   privateKey: private.key
