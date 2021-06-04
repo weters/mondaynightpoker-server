@@ -342,7 +342,13 @@ func TestMux_postAdminPlayerID(t *testing.T) {
 	p1, j1 := player()
 	p2, j2 := player()
 
+	p1.Status = model.PlayerStatusVerified
+	a.NoError(p1.Save(cbg))
+
 	_ = p1.SetIsSiteAdmin(context.Background(), true)
+
+	_, err := model.GetPlayerByEmailAndPassword(cbg, p1.Email, "new-pw")
+	a.EqualError(err, "invalid email address and/or password")
 
 	var respObj map[string]string
 	assertPost(t, ts, fmt.Sprintf("/admin/player/%d", p1.ID), adminPostPlayerIDRequest{
@@ -350,6 +356,10 @@ func TestMux_postAdminPlayerID(t *testing.T) {
 		Value: "new-pw",
 	}, &respObj, http.StatusOK, j1)
 	a.Equal("OK", respObj["status"])
+
+	// verify password is changed
+	_, err = model.GetPlayerByEmailAndPassword(cbg, p1.Email, "new-pw")
+	a.NoError(err)
 
 	respObj = map[string]string{}
 	assertPost(t, ts, fmt.Sprintf("/admin/player/%d", p2.ID), adminPostPlayerIDRequest{

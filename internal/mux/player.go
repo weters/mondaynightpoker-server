@@ -403,6 +403,11 @@ func (m *Mux) postAdminPlayerID() http.HandlerFunc {
 				writeJSONError(w, http.StatusInternalServerError, err)
 				return
 			}
+
+			if err := player.Save(r.Context()); err != nil {
+				writeJSONError(w, http.StatusInternalServerError, err)
+				return
+			}
 		default:
 			writeJSONError(w, http.StatusBadRequest, errors.New("bad payload"))
 			return
