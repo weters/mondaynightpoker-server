@@ -10,7 +10,7 @@ import (
 func TestNewRound(t *testing.T) {
 	a := assert.New(t)
 	d := deck.New()
-	r := NewRound(1, d, 50)
+	r := NewRound(DefaultOptions(), 1, d, 50)
 
 	a.Equal(50, r.Pot)
 	a.Equal(RoundStateStart, r.State)
@@ -373,6 +373,31 @@ func TestRound_drawCard(t *testing.T) {
 	assert.False(t, foundCard["14c"])
 }
 
+func TestRound_drawCardWithChaos(t *testing.T) {
+	opts := DefaultOptions()
+	opts.GameType = GameTypeStandard
+	d := deck.New()
+
+	assertDrawCard := func(card *deck.Card, err error) {
+		t.Helper()
+		assert.NoError(t, err)
+		assert.NotNil(t, card)
+	}
+
+	r := NewRound(opts, 0, d, 100)
+	assertDrawCard(r.drawCard())
+	assertDrawCard(r.drawCard())
+	assertDrawCard(r.drawCard())
+	assert.Equal(t, 49, d.CardsLeft())
+
+	opts.GameType = GameTypeChaos
+	r = NewRound(opts, 0, d, 100)
+	assertDrawCard(r.drawCard())
+	assertDrawCard(r.drawCard())
+	assertDrawCard(r.drawCard())
+	assert.Equal(t, 51, d.CardsLeft())
+}
+
 func TestRound_getActiveCardsInGame(t *testing.T) {
 	a := assert.New(t)
 	r := createTestRound(125, "")
@@ -473,7 +498,7 @@ func createTestRound(pot int, cards string) *Round {
 		d.Cards[i] = card
 	}
 
-	return NewRound(1, d, pot)
+	return NewRound(DefaultOptions(), 1, d, pot)
 }
 
 func cardsFromArray(c []*deck.Card, indexes ...int) string {

@@ -27,12 +27,21 @@ func Test_aceyDeuceyFactory_Details(t *testing.T) {
 	a.NoError(err)
 
 	name, ante, err = aceyDeuceyFactory{}.Details(playable.AdditionalData{
-		"ante":           float64(100),
-		"continuousShoe": true,
-		"allowPass":      true,
+		"ante":      float64(100),
+		"gameType":  "Continuous Shoe",
+		"allowPass": true,
 	})
 
 	a.Equal("Acey Deucey (Continuous Shoe and With Passing)", name)
+	a.Equal(100, ante)
+	a.NoError(err)
+
+	name, ante, err = aceyDeuceyFactory{}.Details(playable.AdditionalData{
+		"ante":     float64(100),
+		"gameType": "Chaos",
+	})
+
+	a.Equal("Acey Deucey (Chaos)", name)
 	a.Equal(100, ante)
 	a.NoError(err)
 }
@@ -46,9 +55,9 @@ func Test_getAceyDeuceyOptions(t *testing.T) {
 	a.False(opts.AllowPass)
 
 	opts = getAceyDeuceyOptions(playable.AdditionalData{
-		"ante":           float64(100),
-		"continuousShoe": true,
-		"allowPass":      true,
+		"ante":      float64(100),
+		"gameType":  "Continuous Shoe",
+		"allowPass": true,
 	})
 	a.Equal(100, opts.Ante)
 	a.Equal(aceydeucey.GameTypeContinuousShoe, opts.GameType)

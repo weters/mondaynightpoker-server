@@ -21,6 +21,7 @@ const (
 
 // Round is a collection of one or more SingleGame
 type Round struct {
+	options  Options
 	PlayerID int64
 	Games    []*SingleGame
 	State    RoundState
@@ -95,8 +96,9 @@ const (
 )
 
 // NewRound returns a new Round object
-func NewRound(playerID int64, d *deck.Deck, startingPot int) *Round {
+func NewRound(opts Options, playerID int64, d *deck.Deck, startingPot int) *Round {
 	return &Round{
+		options:  opts,
 		PlayerID: playerID,
 		Games:    []*SingleGame{newSingleGame()},
 		State:    RoundStateStart,
@@ -322,6 +324,10 @@ func (r *Round) getHalfPot() int {
 
 // drawCard will draw a card and it should always succeed
 func (r *Round) drawCard() (*deck.Card, error) {
+	if r.options.GameType == GameTypeChaos {
+		r.deck.Shuffle()
+	}
+
 	if !r.deck.CanDraw(1) {
 		cards := r.getCardsInActiveGame()
 		r.deck.Shuffle()

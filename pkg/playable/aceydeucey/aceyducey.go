@@ -227,7 +227,7 @@ func (g *Game) newRound() {
 	}
 
 	turn := g.getCurrentTurn()
-	r := NewRound(turn.PlayerID, g.deck, g.pot)
+	r := NewRound(g.options, turn.PlayerID, g.deck, g.pot)
 	r.logChan = g.logChan
 	g.rounds = append(g.rounds, r)
 

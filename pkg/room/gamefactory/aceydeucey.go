@@ -27,8 +27,10 @@ func getAceyDeuceyOptions(data playable.AdditionalData) aceydeucey.Options {
 		opts.AllowPass = allowPass
 	}
 
-	if continuousShoe, _ := data.GetBool("continuousShoe"); continuousShoe {
-		opts.GameType = aceydeucey.GameTypeContinuousShoe
+	if g, _ := data.GetString("gameType"); g != "" {
+		if gameType, err := aceydeucey.GetGameType(g); err == nil {
+			opts.GameType = gameType
+		}
 	}
 
 	return opts
