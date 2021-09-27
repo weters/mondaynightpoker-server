@@ -42,7 +42,7 @@ func Test_getAceyDeuceyOptions(t *testing.T) {
 	opts := getAceyDeuceyOptions(playable.AdditionalData{})
 
 	a.Equal(25, opts.Ante)
-	a.False(opts.ContinuousShoe)
+	a.Equal(aceydeucey.GameTypeStandard, opts.GameType)
 	a.False(opts.AllowPass)
 
 	opts = getAceyDeuceyOptions(playable.AdditionalData{
@@ -51,6 +51,6 @@ func Test_getAceyDeuceyOptions(t *testing.T) {
 		"allowPass":      true,
 	})
 	a.Equal(100, opts.Ante)
-	a.True(opts.ContinuousShoe)
+	a.Equal(aceydeucey.GameTypeContinuousShoe, opts.GameType)
 	a.True(opts.AllowPass)
 }

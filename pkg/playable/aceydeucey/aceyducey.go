@@ -76,8 +76,11 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 // NameFromOptions returns the name for the options
 func NameFromOptions(opts Options) string {
 	options := make([]string, 0, 2)
-	if opts.ContinuousShoe {
+	switch opts.GameType {
+	case GameTypeContinuousShoe:
 		options = append(options, "Continuous Shoe")
+	case GameTypeChaos:
+		options = append(options, "Chaos")
 	}
 
 	if opts.AllowPass {
@@ -219,7 +222,7 @@ func (g *Game) isGameOver() bool {
 // newRound starts a new round
 // NOTE: do not call this method until the correct participant is lined up
 func (g *Game) newRound() {
-	if g.options.ContinuousShoe {
+	if g.options.GameType == GameTypeContinuousShoe {
 		g.deck.Shuffle()
 	}
 

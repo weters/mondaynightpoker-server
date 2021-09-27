@@ -184,9 +184,9 @@ func TestGame_allowPass(t *testing.T) {
 	a := assert.New(t)
 
 	opts := Options{
-		Ante:           100,
-		AllowPass:      true,
-		ContinuousShoe: false,
+		Ante:      100,
+		AllowPass: true,
+		GameType:  GameTypeStandard,
 	}
 	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	a.NoError(err)
@@ -319,7 +319,7 @@ func TestGame_newRound(t *testing.T) {
 
 	// test continuous shoe
 	{
-		opts.ContinuousShoe = true
+		opts.GameType = GameTypeContinuousShoe
 		game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 		a.NoError(err)
 		a.NotNil(game)
@@ -337,12 +337,12 @@ func TestGame_Name(t *testing.T) {
 	a := assert.New(t)
 	a.Equal("Acey Deucey", game.Name())
 
-	game.options.ContinuousShoe = true
+	game.options.GameType = GameTypeContinuousShoe
 	a.Equal("Acey Deucey (Continuous Shoe)", game.Name())
 
 	game.options.AllowPass = true
 	a.Equal("Acey Deucey (Continuous Shoe and With Passing)", game.Name())
 
-	game.options.ContinuousShoe = false
+	game.options.GameType = GameTypeStandard
 	a.Equal("Acey Deucey (With Passing)", game.Name())
 }
