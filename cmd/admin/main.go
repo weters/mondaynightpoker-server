@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/badoux/checkmail"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	"mondaynightpoker-server/pkg/model"
 	"os"
 	"strings"
@@ -68,7 +68,7 @@ func main() {
 func getPassword() string {
 	for {
 		fmt.Print("Password: ")
-		pwBytes, err := terminal.ReadPassword(0)
+		pwBytes, err := term.ReadPassword(0)
 		if err != nil {
 			continue
 		}

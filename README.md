@@ -24,7 +24,7 @@ For more information about the architecture of this open-source project, see the
 
 ### Prerequisites
 
-1. [Go 1.13+](https://golang.org/dl/)
+1. [Go 1.17+](https://golang.org/dl/)
 2. [golangci-lint](https://golangci-lint.run/usage/install/)
 3. [Docker](https://www.docker.com/products/docker-desktop)
 4. Google [reCAPTCHA v3](https://www.google.com/u/1/recaptcha/admin/create) Secret
