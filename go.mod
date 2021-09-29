@@ -5,8 +5,8 @@ go 1.13
 require (
 	github.com/badoux/checkmail v0.0.0-20181210160741-9661bd69e9ad
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/ezzarghili/recaptcha-go v4.1.0+incompatible
+	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-migrate/migrate/v4 v4.11.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/handlers v1.4.2
