@@ -294,7 +294,13 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 		playerOrder[player] = order
 	}
 
-	d := deck.New()
+	var d *deck.Deck
+	if opts.FiveSuit {
+		d = deck.NewFiveSuit()
+	} else {
+		d = deck.New()
+	}
+
 	d.Shuffle()
 
 	foldedPlayersMap := make(map[*Player]bool)
@@ -820,4 +826,14 @@ func newLogMessageWithPlayers(players []*Player, format string, a ...interface{}
 		Message:   fmt.Sprintf(format, a...),
 		Time:      time.Now(),
 	}
+}
+
+// NameFromOptions returns the name of the game based on the options
+func NameFromOptions(opts Options) string {
+	name := "Bourré"
+	if opts.FiveSuit {
+		name += " (Five Suit)"
+	}
+
+	return name
 }

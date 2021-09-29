@@ -49,6 +49,22 @@ func TestCard_String(t *testing.T) {
 	}
 
 	assert.Equal(t, "A♠", card.String())
+
+	card = Card{
+		Rank: 2,
+		Suit: Stars,
+	}
+
+	assert.Equal(t, "2☆", card.String())
+
+	card = Card{
+		Rank: 3,
+		Suit: "Bad",
+	}
+
+	assert.PanicsWithValue(t, "unknown suit", func() {
+		_ = card.String()
+	})
 }
 
 func TestCard_AceLowRank(t *testing.T) {
@@ -81,6 +97,10 @@ func TestCardFromString(t *testing.T) {
 	assert.Equal(t, 14, c.Rank)
 	assert.Equal(t, Spades, c.Suit)
 
+	c = CardFromString("14T")
+	assert.Equal(t, 14, c.Rank)
+	assert.Equal(t, Stars, c.Suit)
+
 	assert.PanicsWithValue(t, "could not parse card: 15d", func() {
 		CardFromString("15d")
 	})
@@ -111,6 +131,11 @@ func TestCardToString(t *testing.T) {
 		Rank:   Ace,
 		Suit:   Clubs,
 		IsWild: true,
+	}))
+
+	assert.Equal(t, "3t", CardToString(&Card{
+		Rank: 3,
+		Suit: Stars,
 	}))
 
 	assert.Equal(t, "", CardToString(nil))

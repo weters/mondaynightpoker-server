@@ -9,13 +9,13 @@ import (
 type bourreFactory struct{}
 
 func (b bourreFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
-	ante, _ := additionalData.GetInt("ante")
-	return "Bourré", ante, nil
+	opts := getBourreOptions(additionalData)
+	return bourre.NameFromOptions(opts), opts.Ante, nil
 }
 
 func (b bourreFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	ante, _ := additionalData.GetInt("ante")
-	game, err := bourre.NewGame(logger, playerIDs, bourre.Options{Ante: ante})
+	opts := getBourreOptions(additionalData)
+	game, err := bourre.NewGame(logger, playerIDs, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -25,4 +25,17 @@ func (b bourreFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, 
 	}
 
 	return game, nil
+}
+
+func getBourreOptions(additionalData playable.AdditionalData) bourre.Options {
+	opts := bourre.DefaultOptions()
+	if ante, _ := additionalData.GetInt("ante"); ante > 0 {
+		opts.Ante = ante
+	}
+
+	if fiveSuit, _ := additionalData.GetBool("fiveSuit"); fiveSuit {
+		opts.FiveSuit = true
+	}
+
+	return opts
 }

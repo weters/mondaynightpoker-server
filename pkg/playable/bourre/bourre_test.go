@@ -20,6 +20,18 @@ func TestNewGame(t *testing.T) {
 	assert.Equal(t, int64(20), g.idToPlayer[20].PlayerID)
 	assert.Equal(t, 0, g.playerOrder[g.idToPlayer[10]])
 	assert.Equal(t, 1, g.playerOrder[g.idToPlayer[20]])
+
+	assert.Equal(t, 52, g.deck.CardsLeft())
+}
+
+func TestNewGameWithFiveSuitDeck(t *testing.T) {
+	a := assert.New(t)
+	g, err := NewGame(logrus.StandardLogger(), []int64{10, 20}, Options{
+		FiveSuit: true,
+	})
+	a.NoError(err)
+	a.NotNil(g)
+	a.Equal(65, g.deck.CardsLeft())
 }
 
 func Test_newGame(t *testing.T) {
@@ -600,4 +612,10 @@ func TestGame_NextRound(t *testing.T) {
 	game := &Game{}
 	game.roundNo = 6
 	assert.Equal(t, ErrRoundNotOver, game.nextRound())
+}
+
+func TestNameFromOptions(t *testing.T) {
+	a := assert.New(t)
+	a.Equal("Bourré", NameFromOptions(Options{}))
+	a.Equal("Bourré (Five Suit)", NameFromOptions(Options{FiveSuit: true}))
 }

@@ -20,6 +20,7 @@ const (
 	Clubs    Suit = "clubs"
 	Diamonds Suit = "diamonds"
 	Spades   Suit = "spades"
+	Stars    Suit = "stars"
 )
 
 // Card is an individual playing card
@@ -71,6 +72,8 @@ func (c *Card) String() string {
 		suit = "♡"
 	case Spades:
 		suit = "♠"
+	case Stars:
+		suit = "☆"
 	default:
 		panic("unknown suit")
 	}
@@ -112,7 +115,7 @@ func (c *Card) UnsetAllBits() {
 	c.BitField = 0
 }
 
-var cardRx = regexp.MustCompile(`(?i)^(!)?([0-9]|1[0-4])([cdhs])\z`)
+var cardRx = regexp.MustCompile(`(?i)^(!)?([0-9]|1[0-4])([cdhst])\z`)
 
 // CardFromString returns a Card from the string.
 // The string must be in the format of <rank><suit> where rank >= 2 and <= 14 and suit in [cdhs]
@@ -143,6 +146,8 @@ func CardFromString(s string) *Card {
 		suit = Hearts
 	case "s":
 		suit = Spades
+	case "t":
+		suit = Stars
 	default:
 		// should never be hit due to the regexp
 		panic("unknown suit")
@@ -231,6 +236,8 @@ func CardToString(card *Card) string {
 		suit = "d"
 	case Spades:
 		suit = "s"
+	case Stars:
+		suit = "t"
 	}
 
 	isWild := ""

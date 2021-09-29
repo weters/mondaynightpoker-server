@@ -13,4 +13,11 @@ func Test_bourreFactory_Details(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Bourré", name)
 	assert.Equal(t, 25, ante)
+
+	name, ante, err = factories["bourre"].Details(playable.AdditionalData{
+		"fiveSuit": true,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "Bourré (Five Suit)", name)
+	assert.Equal(t, 50, ante)
 }

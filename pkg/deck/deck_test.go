@@ -31,6 +31,12 @@ func TestNewDeck(t *testing.T) {
 	assert.NotEqual(t, expected, deck.HashCode())
 }
 
+func TestNewFiveSuit(t *testing.T) {
+	deck := NewFiveSuit()
+
+	assert.Equal(t, 65, deck.CardsLeft())
+}
+
 func TestDeck_Draw(t *testing.T) {
 	deck := New()
 

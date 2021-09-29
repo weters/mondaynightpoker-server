@@ -11,20 +11,38 @@ import (
 	"runtime/debug"
 )
 
+type deckType int
+
+const (
+	deckTypeStandard deckType = iota
+	deckTypeFiveSuit
+)
+
 // ErrEndOfDeck is an error when Draw() is attempted and there are no more cards
 var ErrEndOfDeck = errors.New("end of deck reached")
 
 // Deck represents a playing deck
 type Deck struct {
-	Cards []*Card `json:"cards"`
-	rng   rng.Generator
+	Cards    []*Card `json:"cards"`
+	rng      rng.Generator
+	deckType deckType
 }
 
 // New returns a new deck of cards.
 // Important! this deck is unshuffled. You must call the Shuffle() method to shuffle the cards
 func New() *Deck {
+	return newOfDeckType(deckTypeStandard)
+}
+
+// NewFiveSuit returns a deck with a fifth suit
+func NewFiveSuit() *Deck {
+	return newOfDeckType(deckTypeFiveSuit)
+}
+
+func newOfDeckType(deckType deckType) *Deck {
 	d := &Deck{
-		rng: rng.Crypto{},
+		rng:      rng.Crypto{},
+		deckType: deckType,
 	}
 
 	d.buildDeck()
@@ -32,8 +50,13 @@ func New() *Deck {
 }
 
 func (d *Deck) buildDeck() {
+	suits := []Suit{Clubs, Diamonds, Hearts, Spades}
+	if d.deckType != deckTypeStandard {
+		suits = []Suit{Clubs, Diamonds, Hearts, Spades, Stars}
+	}
+
 	cards := make([]*Card, 0, 52)
-	for _, suit := range []Suit{Clubs, Diamonds, Hearts, Spades} {
+	for _, suit := range suits {
 		for rank := 2; rank <= 14; rank++ {
 			cards = append(cards, &Card{
 				Rank: rank,
