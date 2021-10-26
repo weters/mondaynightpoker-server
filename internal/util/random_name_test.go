@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetRandomName(t *testing.T) {
-	random = rand.New(rand.NewSource(0))
+	random = rand.New(rand.NewSource(0)) // nolint:gosec
 	assert.Equal(t, "Waiving Lion", GetRandomName())
 	assert.Equal(t, "Jumping Bear", GetRandomName())
 }

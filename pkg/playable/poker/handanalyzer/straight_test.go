@@ -45,7 +45,7 @@ func Test_randomStraights(t *testing.T) {
 			a.NoError(err)
 			h.AddCard(card)
 
-			nWild := rand.Intn(5)
+			nWild := rand.Intn(5) // nolint:gosec
 
 			if i < nWild {
 				card.IsWild = true

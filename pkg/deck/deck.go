@@ -171,5 +171,5 @@ func (d *Deck) SetSeed(seed int64) {
 		return
 	}
 
-	d.rng = rand.New(rand.NewSource(seed))
+	d.rng = rand.New(rand.NewSource(seed)) // nolint:gosec
 }
