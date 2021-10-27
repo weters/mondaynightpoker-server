@@ -22,7 +22,7 @@ const writeTimeout = time.Second * 10
 // Version is the server version
 var Version = "v0.0.0-dev"
 
-var addr = flag.String("addr", ":5000", "the listen address")
+var addr = flag.String("addr", ":5080", "the listen address")
 
 func main() {
 	flag.Parse()

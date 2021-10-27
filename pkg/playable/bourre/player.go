@@ -47,6 +47,18 @@ func (p *Player) HasCard(card *deck.Card) bool {
 	return false
 }
 
+// GetValidMoves returns a list of valid cards the player can play
+func (p *Player) GetValidMoves(game *Game) deck.Hand {
+	validMoves := make(deck.Hand, 0, len(p.hand))
+	for _, card := range p.hand {
+		if game.canPlayerPlayCard(p, card) == nil {
+			validMoves.AddCard(card)
+		}
+	}
+
+	return validMoves
+}
+
 // playerDidPlayCard removes the card from the player's hand
 func (p *Player) playerDidPlayCard(card *deck.Card) error {
 	hand := make([]*deck.Card, 0)

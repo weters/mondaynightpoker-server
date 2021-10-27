@@ -628,8 +628,41 @@ func (g *Game) playerDidPlayCard(player *Player, card *deck.Card) error {
 		return ErrCardNotInPlayersHand
 	}
 
-	tcSuit := g.trumpCard.Suit
+	if err := g.canPlayerPlayCard(player, card); err != nil {
+		return err
+	}
 
+	// this should not happen as we already checked these cases.
+	// just one more safeguard just in case
+	if err := player.playerDidPlayCard(card); err != nil {
+		panic(err)
+	}
+
+	if g.winningCardPlayed == nil {
+		g.winningCardPlayed = playedCard
+	} else {
+		wcRank := g.winningCardPlayed.card.Rank
+		wcSuit := g.winningCardPlayed.card.Suit
+		tcSuit := g.trumpCard.Suit
+		if (card.Rank > wcRank && card.Suit == wcSuit) ||
+			(card.Suit == tcSuit && wcSuit != tcSuit) {
+			g.winningCardPlayed = playedCard
+		}
+	}
+
+	g.cardsPlayed = append(g.cardsPlayed, playedCard)
+
+	if g.shouldCalculateRoundWinner() {
+		return g.calculateRoundWinner()
+	}
+
+	return nil
+}
+
+// canPlayerPlayCard returns nil if the player can play the specified card
+// This method does not check if it's actually the player's turn or not
+func (g *Game) canPlayerPlayCard(player *Player, card *deck.Card) error {
+	tcSuit := g.trumpCard.Suit
 	if len(g.cardsPlayed) != 0 {
 		wcSuit := g.winningCardPlayed.card.Suit
 		wcRank := g.winningCardPlayed.card.Rank
@@ -671,30 +704,6 @@ func (g *Game) playerDidPlayCard(player *Player, card *deck.Card) error {
 			}
 		}
 	}
-
-	// this should not happen as we already checked these cases.
-	// just one more safeguard just in case
-	if err := player.playerDidPlayCard(card); err != nil {
-		panic(err)
-	}
-
-	if g.winningCardPlayed == nil {
-		g.winningCardPlayed = playedCard
-	} else {
-		wcRank := g.winningCardPlayed.card.Rank
-		wcSuit := g.winningCardPlayed.card.Suit
-		if (card.Rank > wcRank && card.Suit == wcSuit) ||
-			(card.Suit == tcSuit && wcSuit != tcSuit) {
-			g.winningCardPlayed = playedCard
-		}
-	}
-
-	g.cardsPlayed = append(g.cardsPlayed, playedCard)
-
-	if g.shouldCalculateRoundWinner() {
-		return g.calculateRoundWinner()
-	}
-
 	return nil
 }
 

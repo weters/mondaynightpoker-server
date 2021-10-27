@@ -2,6 +2,7 @@ package bourre
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"strings"
@@ -37,4 +38,31 @@ func cardsToString(cards []*deck.Card) string {
 	}
 
 	return strings.Join(sArray, ",")
+}
+
+func TestPlayer_GetValidMoves(t *testing.T) {
+	a := assert.New(t)
+
+	player1 := NewPlayer(1)
+	player2 := NewPlayer(2)
+
+	g, err := newGame(logrus.StandardLogger(), []*Player{player1, player2}, nil, Options{})
+	a.NoError(err)
+	a.NotNil(g)
+
+	player1.hand = deck.CardsFromString("3s,7s,4h,5h,6h")
+	g.trumpCard = deck.CardFromString("8h")
+
+	hand := player1.GetValidMoves(g)
+	a.Equal(deck.Hand(deck.CardsFromString("3s,7s,4h,5h,6h")), hand)
+
+	g.winningCardPlayed = &playedCard{card: deck.CardFromString("4s")}
+	g.cardsPlayed = []*playedCard{g.winningCardPlayed}
+	hand = player1.GetValidMoves(g)
+	a.Equal(deck.Hand(deck.CardsFromString("7s")), hand)
+
+	g.winningCardPlayed = &playedCard{card: deck.CardFromString("13d")}
+	g.cardsPlayed = []*playedCard{g.winningCardPlayed}
+	hand = player1.GetValidMoves(g)
+	a.Equal(deck.Hand(deck.CardsFromString("4h,5h,6h")), hand)
 }

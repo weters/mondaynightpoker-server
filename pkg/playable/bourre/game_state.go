@@ -38,11 +38,13 @@ type GameStatePlayer struct {
 type Response struct {
 	GameState *GameState `json:"gameState"`
 	// Data below is player specific, and must only be shown to the intended player
-	Balance  int          `json:"balance"`
-	Hand     []*deck.Card `json:"hand"`
-	Discards []*deck.Card `json:"discards"`
-	MaxDraw  int          `json:"maxDraw"`
-	Folded   bool         `json:"folded"`
+	Balance  int       `json:"balance"`
+	Hand     deck.Hand `json:"hand"`
+	Discards deck.Hand `json:"discards"`
+	// ValidMoves contains a list of cards that are valid for the player's turn
+	ValidMoves deck.Hand `json:"validMoves"`
+	MaxDraw    int       `json:"maxDraw"`
+	Folded     bool      `json:"folded"`
 }
 
 func (g *Game) getGameState() *GameState {
@@ -117,16 +119,24 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		maxDraw = g.maxDraw(player)
 	}
 
+	validMoves := make(deck.Hand, 0)
+	for _, card := range player.hand {
+		if err := g.canPlayerPlayCard(player, card); err == nil {
+			validMoves.AddCard(card)
+		}
+	}
+
 	return &playable.Response{
 		Key:   "game",
 		Value: "bourre",
 		Data: &Response{
-			GameState: gameState,
-			Balance:   player.balance,
-			Hand:      player.hand,
-			Discards:  g.playerDiscards[player],
-			MaxDraw:   maxDraw,
-			Folded:    player.folded,
+			GameState:  gameState,
+			Balance:    player.balance,
+			Hand:       player.hand,
+			ValidMoves: validMoves,
+			Discards:   g.playerDiscards[player],
+			MaxDraw:    maxDraw,
+			Folded:     player.folded,
 		},
 	}, nil
 }
