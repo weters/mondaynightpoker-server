@@ -20,11 +20,11 @@ spec:
           image: docker.pkg.github.com/weters/mondaynightpoker-server/mondaynightpoker-server:latest
           readinessProbe:
             httpGet:
-              port: 5000
+              port: 5080
               path: /health
           livenessProbe:
             httpGet:
-              port: 5000
+              port: 5080
               path: /health
           volumeMounts:
             - mountPath: /app/.keys
