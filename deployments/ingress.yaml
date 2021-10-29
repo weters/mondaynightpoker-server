@@ -15,4 +15,4 @@ spec:
         paths:
           - backend:
               serviceName: mondaynightpoker-server
-              servicePort: 5000
+              servicePort: 5080
