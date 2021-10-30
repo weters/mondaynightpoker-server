@@ -106,6 +106,7 @@ func NewMux(version string) *Mux {
 
 		r.Methods(http.MethodPost).Path("/admin/player/{id:[0-9]+}").Handler(this.postAdminPlayerID())
 		r.Methods(http.MethodGet).Path("/admin/table").Handler(this.getAdminTable())
+		r.Methods(http.MethodPost).Path("/admin/table/{uuid:[a-z0-9]{8}(?:-[a-z0-9]{4}){3}-[a-z0-9]{12}}").Handler(this.postAdminTableUUID())
 	}
 
 	return this

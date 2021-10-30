@@ -283,7 +283,8 @@ func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*Tab
 SELECT ` + tableColumns + `, players_tables.balance
 FROM tables
 INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
-WHERE players_tables.player_id = $1
+WHERE NOT tables.deleted
+  AND players_tables.player_id = $1
 ORDER BY players_tables.id DESC
 OFFSET $2
 LIMIT $3`

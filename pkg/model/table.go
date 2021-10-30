@@ -17,7 +17,9 @@ const tableColumns = `
 tables.uuid,
 tables.name,
 tables.player_id,
-tables.created`
+tables.created,
+tables.modified,
+tables.deleted`
 
 // Table represents a poker table
 // A table has many players and can have many games
@@ -27,6 +29,8 @@ type Table struct {
 	// PlayerID is who created the table
 	PlayerID int64     `json:"playerId"`
 	Created  time.Time `json:"created"`
+	Modified time.Time `json:"modified"`
+	Deleted  bool      `json:"deleted"`
 }
 
 // TableWithPlayerEmail is a table with the player email who created it
@@ -53,11 +57,12 @@ func (p *Player) CreateTable(ctx context.Context, name string) (*Table, error) {
 	const query = `
 INSERT INTO tables (uuid, name, player_id)
 VALUES ($1, $2, $3)
-RETURNING created
+RETURNING created, modified, deleted
 `
-	var created time.Time
+	var created, modified time.Time
+	var deleted bool
 	row := tx.QueryRowContext(ctx, query, u, name, p.ID)
-	if err := row.Scan(&created); err != nil {
+	if err := row.Scan(&created, &modified, &deleted); err != nil {
 		rollback(tx)
 		return nil, err
 	}
@@ -77,8 +82,10 @@ VALUES ($1, $2, true)`
 	return &Table{
 		UUID:     u,
 		Name:     name,
-		Created:  created,
 		PlayerID: p.ID,
+		Created:  created,
+		Modified: modified,
+		Deleted:  deleted,
 	}, nil
 }
 
@@ -116,6 +123,8 @@ func getTableByRow(row db.Scanner, additionalColumns ...interface{}) (*Table, er
 		&t.Name,
 		&t.PlayerID,
 		&t.Created,
+		&t.Modified,
+		&t.Deleted,
 	}
 
 	if len(additionalColumns) > 0 {
@@ -271,6 +280,19 @@ WHERE table_uuid = $1`
 	}
 
 	return count, nil
+}
+
+// Save saves any changes
+func (t *Table) Save(ctx context.Context) error {
+	const query = `
+UPDATE tables
+SET name = $1,
+    deleted = $2,
+    modified = (NOW() AT TIME ZONE 'UTC')
+WHERE uuid = $3`
+
+	_, err := db.Instance().ExecContext(ctx, query, t.Name, t.Deleted, t.UUID)
+	return err
 }
 
 func rollback(tx *sql.Tx) {

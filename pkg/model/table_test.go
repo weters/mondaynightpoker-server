@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -179,4 +180,25 @@ func TestGetTables(t *testing.T) {
 
 	// sanity check
 	a.NotEqual(p2.Email, p3.Email)
+}
+
+func TestTable_Save(t *testing.T) {
+	a := assert.New(t)
+
+	_, table := playerAndTable()
+	a.False(table.Deleted)
+
+	now := time.Now()
+	assert.True(t, table.Modified.Before(now))
+
+	origName := table.Name
+	table.Name = origName + "-updated"
+	table.Deleted = true
+	a.NoError(table.Save(cbg))
+
+	table, err := GetTableByUUID(cbg, table.UUID)
+	a.NoError(err)
+	a.NotEqual(origName, table.Name)
+	a.True(table.Deleted)
+	a.True(table.Modified.After(now))
 }

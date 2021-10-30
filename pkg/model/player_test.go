@@ -195,6 +195,13 @@ func TestPlayer_GetTables(t *testing.T) {
 	assert.Equal(t, 2, len(tables))
 	assert.Equal(t, tbl1.UUID, tables[0].UUID)
 	assert.Equal(t, tbl2.UUID, tables[1].UUID)
+
+	tbl1.Deleted = true
+	assert.NoError(t, tbl1.Save(cbg))
+
+	tables, err = p2.GetTables(cbg, 0, 99)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(tables), "only one table since we deleted one")
 }
 
 func verifiedPlayer() *Player {

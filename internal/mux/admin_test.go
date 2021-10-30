@@ -28,8 +28,13 @@ func TestMux_getAdminTable(t *testing.T) {
 	a.Equal("rows must be greater than zero", err.Message)
 
 	for i := 0; i < 5; i++ {
-		_, err := p1.CreateTable(cbg, fmt.Sprintf("Table %d", i))
+		tbl, err := p1.CreateTable(cbg, fmt.Sprintf("Table %d", i))
 		a.NoError(err)
+
+		if i == 4 {
+			tbl.Deleted = true
+			a.NoError(tbl.Save(cbg))
+		}
 	}
 
 	var tables []*model.TableWithPlayerEmail
@@ -37,4 +42,33 @@ func TestMux_getAdminTable(t *testing.T) {
 	a.Equal(3, len(tables))
 	a.Equal(p1.Email, tables[0].Email)
 	a.Equal("Table 4", tables[0].Name)
+	a.True(tables[0].Deleted)
+	a.False(tables[1].Deleted)
+}
+
+func TestMux_adminPostTableUUID(t *testing.T) {
+	a := assert.New(t)
+
+	setupJWT()
+	player, jwt := player()
+
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	player.IsSiteAdmin = true
+	a.NoError(player.Save(cbg))
+
+	table, err := player.CreateTable(cbg, "Test Table")
+	a.NoError(err)
+	a.False(table.Deleted)
+
+	var resp model.Table
+	assertPostWithResp(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{true}, &resp, http.StatusOK, jwt)
+	a.True(resp.Deleted)
+
+	table2, err := model.GetTableByUUID(cbg, table.UUID)
+	a.True(table2.Deleted)
+
+	assertPostWithResp(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{false}, &resp, http.StatusOK, jwt)
+	a.False(resp.Deleted)
 }

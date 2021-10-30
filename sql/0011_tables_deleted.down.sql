@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE tables DROP COLUMN deleted;
+
+COMMIT;
