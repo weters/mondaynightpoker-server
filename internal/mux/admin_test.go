@@ -63,12 +63,13 @@ func TestMux_adminPostTableUUID(t *testing.T) {
 	a.False(table.Deleted)
 
 	var resp model.Table
-	assertPostWithResp(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{true}, &resp, http.StatusOK, jwt)
+	assertPost(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{true}, &resp, http.StatusOK, jwt)
 	a.True(resp.Deleted)
 
 	table2, err := model.GetTableByUUID(cbg, table.UUID)
 	a.True(table2.Deleted)
+	a.NoError(err)
 
-	assertPostWithResp(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{false}, &resp, http.StatusOK, jwt)
+	assertPost(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{false}, &resp, http.StatusOK, jwt)
 	a.False(resp.Deleted)
 }
