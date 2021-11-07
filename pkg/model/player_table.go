@@ -31,6 +31,7 @@ type PlayerTable struct {
 	CanRestart   bool      `json:"canRestart"`
 	CanTerminate bool      `json:"canTerminate"`
 	Balance      int       `json:"balance"`
+	TableStake   int       `json:"tableStake"`
 	Active       bool      `json:"active"`
 	IsBlocked    bool      `json:"isBlocked"`
 	Created      time.Time `json:"created"`
