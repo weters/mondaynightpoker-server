@@ -13,14 +13,15 @@ var ErrParticipantNotFound = errors.New("participant not found")
 var ErrParticipantCannotAct = errors.New("participant cannot act")
 
 type pot struct {
-	amount       int
-	participants map[*ParticipantInPot]bool
+	amount            int
+	allInParticipants []*ParticipantInPot
 }
 
 // PotManager provides capabilities for keeping track of bets and pots
 type PotManager struct {
 	participants map[int]*ParticipantInPot
 	tableOrder   []*ParticipantInPot
+	ante         int
 	pots         []*pot
 	// actionStartIndex is where the action started, or changed (i.e., a raise)
 	actionStartIndex int
@@ -30,35 +31,31 @@ type PotManager struct {
 }
 
 // New instantiates a new PotManager
-func New(initialPot int) *PotManager {
+func New(ante, initialPot int) *PotManager {
 	return &PotManager{
 		participants: make(map[int]*ParticipantInPot),
 		tableOrder:   make([]*ParticipantInPot, 0),
-		pots: []*pot{
-			{
-				amount:       0,
-				participants: make(map[*ParticipantInPot]bool),
-			},
-		},
+		ante:         ante,
+		pots:         []*pot{{}},
 	}
 }
 
 // SeatParticipant adds a participant to the table in the order called
 // This method must be called in order of the players
-func (p *PotManager) SeatParticipant(pt Participant, ante int) {
+func (p *PotManager) SeatParticipant(pt Participant) {
 	pip := &ParticipantInPot{
 		Participant: pt,
 		tableIndex:  len(p.tableOrder),
 	}
 	p.participants[pt.ID()] = pip
 	p.tableOrder = append(p.tableOrder, pip)
-	p.pots[0].participants[pip] = true
 
-	p.adjustParticipant(pip, ante)
+	p.adjustParticipant(pip, p.ante)
 }
 
 // FinishSeatingParticipants must be called after all participants have been seated
 func (p *PotManager) FinishSeatingParticipants() {
+	p.actionAmount = p.ante
 	p.calculatePot()
 }
 
@@ -159,31 +156,79 @@ func (p *PotManager) completeTurn() {
 }
 
 func (p *PotManager) calculatePot() {
-	pips := make([]*ParticipantInPot, len(p.tableOrder))
-	copy(pips, p.tableOrder)
-	sort.Sort(SortByAmountInPlay(pips))
+	if p.actionAmount == 0 {
+		p.reset()
+		return
+	}
 
-	currentPot := p.pots[len(p.pots)-1]
+	allInAmounts := make(map[int][]*ParticipantInPot)
+	totalAction := 0
+	for _, pip := range p.tableOrder {
+		totalAction += pip.amountInPlay
 
-	prevAmount := 0
-	newPotAtAmount := 0
-
-	for i, pip := range pips {
-		if pip.amountInPlay > prevAmount {
-			if !pip.isFolded && pip.amountInPlay < p.actionAmount && newPotAtAmount < pip.amountInPlay {
-				// create a new pot
-				newPot := &pot{
-					participants: ParticipantInPartList(pips[i:]).Map(),
-				}
-				currentPot = newPot
-				p.pots = append(p.pots, newPot)
-				newPotAtAmount = pip.amountInPlay
+		// participant went all-in this round
+		if !pip.isFolded && pip.isAllIn && pip.amountInPlay > 0 {
+			pips, ok := allInAmounts[pip.amountInPlay]
+			if !ok {
+				pips = make([]*ParticipantInPot, 0)
 			}
 
-			currentPot.amount += (len(pips) - i) * (pip.amountInPlay - prevAmount)
+			allInAmounts[pip.amountInPlay] = append(pips, pip)
+		}
+	}
+
+	currentPot := p.pots[len(p.pots)-1]
+	// if it's not nil, then there is someone all-in on this pot. create a side pot
+	if currentPot.allInParticipants != nil {
+		currentPot = &pot{}
+		p.pots = append(p.pots, currentPot)
+	}
+
+	// no all-in
+	if len(allInAmounts) == 0 {
+		currentPot.amount += totalAction
+		p.reset()
+		return
+	}
+
+	// add the bet as the final entry to allInAmounts, even if it isn't actually an all-in
+	// just don't do it if we already have a value there
+	if _, ok := allInAmounts[p.actionAmount]; !ok {
+		allInAmounts[p.actionAmount] = nil
+	}
+
+	amounts := make([]int, 0, len(allInAmounts))
+	for amount := range allInAmounts {
+		amounts = append(amounts, amount)
+	}
+	sort.Ints(amounts)
+
+	prevAmount := 0
+	for i, allInAmount := range amounts {
+		potAmount := 0
+		for _, pip := range p.tableOrder {
+			amount := pip.amountInPlay
+			if amount > allInAmount {
+				amount = allInAmount
+			}
+
+			diffAmount := amount - prevAmount
+			if diffAmount < 0 {
+				diffAmount = 0
+			}
+
+			potAmount += diffAmount
 		}
 
-		prevAmount = pip.amountInPlay
+		currentPot.amount += potAmount
+		currentPot.allInParticipants = allInAmounts[allInAmount]
+
+		if i+1 != len(amounts) {
+			currentPot = &pot{}
+			p.pots = append(p.pots, currentPot)
+		}
+
+		prevAmount = allInAmount
 	}
 
 	p.reset()
@@ -195,8 +240,12 @@ func (p *PotManager) reset() {
 	}
 
 	p.actionAmount = 0
-	p.actionStartIndex = 0
 	p.actionAtIndex = 0
+
+	// reset actionStartIndex to first non-folded, non-all-in player
+	for p.actionStartIndex = 0; p.actionStartIndex < len(p.tableOrder) && !p.tableOrder[p.actionStartIndex].canAct(); p.actionStartIndex++ {
+		// no-op
+	}
 }
 
 func (p *PotManager) normalizedActionAtIndex() int {

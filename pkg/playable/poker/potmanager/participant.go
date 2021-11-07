@@ -30,6 +30,11 @@ func (p *ParticipantInPot) adjustAmountInPlay(amount int) {
 	p.Participant.SetAmountInPlay(amount)
 }
 
+// canAct returns true if the participant can check, call, bet, raise, fold
+func (p *ParticipantInPot) canAct() bool {
+	return !p.isFolded && !p.isAllIn
+}
+
 // SortByAmountInPlay sorts a list of players by amountInPlay
 type SortByAmountInPlay []*ParticipantInPot
 
@@ -48,11 +53,13 @@ func (s SortByAmountInPlay) Swap(i, j int) {
 // ParticipantInPartList is a list of ParticipantInPot
 type ParticipantInPartList []*ParticipantInPot
 
-// Map returns a map
-func (p ParticipantInPartList) Map() map[*ParticipantInPot]bool {
+// ActiveMap returns a map of participants that didn't fold
+func (p ParticipantInPartList) ActiveMap() map[*ParticipantInPot]bool {
 	m := make(map[*ParticipantInPot]bool)
 	for _, pip := range p {
-		m[pip] = true
+		if !pip.isFolded {
+			m[pip] = true
+		}
 	}
 
 	return m
