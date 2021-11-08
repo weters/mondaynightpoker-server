@@ -8,8 +8,8 @@ type Participant interface {
 	SetAmountInPlay(amount int)
 }
 
-// ParticipantInPot is a participant in a pot
-type ParticipantInPot struct {
+// participantInPot is a participant in a pot
+type participantInPot struct {
 	Participant
 	// tableIndex is where the player is seated at the table
 	tableIndex int
@@ -20,22 +20,22 @@ type ParticipantInPot struct {
 }
 
 // reset is called when the betting round is complete
-func (p *ParticipantInPot) reset() {
+func (p *participantInPot) reset() {
 	p.amountInPlay = 0
 	p.SetAmountInPlay(0)
 }
 
-func (p *ParticipantInPot) adjustAmountInPlay(amount int) {
+func (p *participantInPot) adjustAmountInPlay(amount int) {
 	p.amountInPlay += amount
 	p.Participant.SetAmountInPlay(amount)
 }
 
 // canAct returns true if the participant can check, call, bet, raise, fold
-func (p *ParticipantInPot) canAct() bool {
+func (p *participantInPot) canAct() bool {
 	return !p.isFolded && !p.isAllIn
 }
 
-type sortByTableIndex []*ParticipantInPot
+type sortByTableIndex []*participantInPot
 
 func (s sortByTableIndex) Len() int {
 	return len(s)

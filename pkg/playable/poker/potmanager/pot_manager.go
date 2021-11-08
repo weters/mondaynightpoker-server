@@ -12,7 +12,7 @@ var ErrParticipantNotFound = errors.New("participant not found")
 // ErrParticipantCannotAct is an error when the participant cannot act
 var ErrParticipantCannotAct = errors.New("participant cannot act")
 
-type participantInPotMap map[*ParticipantInPot]bool
+type participantInPotMap map[*participantInPot]bool
 
 type pot struct {
 	amount            int
@@ -21,8 +21,8 @@ type pot struct {
 
 // PotManager provides capabilities for keeping track of bets and pots
 type PotManager struct {
-	participants map[int]*ParticipantInPot
-	tableOrder   []*ParticipantInPot
+	participants map[int]*participantInPot
+	tableOrder   []*participantInPot
 	ante         int
 	pots         []*pot
 	// actionStartIndex is where the action started, or changed (i.e., a raise)
@@ -35,8 +35,8 @@ type PotManager struct {
 // New instantiates a new PotManager
 func New(ante, initialPot int) *PotManager {
 	return &PotManager{
-		participants: make(map[int]*ParticipantInPot),
-		tableOrder:   make([]*ParticipantInPot, 0),
+		participants: make(map[int]*participantInPot),
+		tableOrder:   make([]*participantInPot, 0),
 		ante:         ante,
 		pots:         []*pot{{}},
 	}
@@ -45,7 +45,7 @@ func New(ante, initialPot int) *PotManager {
 // SeatParticipant adds a participant to the table in the order called
 // This method must be called in order of the players
 func (p *PotManager) SeatParticipant(pt Participant) {
-	pip := &ParticipantInPot{
+	pip := &participantInPot{
 		Participant: pt,
 		tableIndex:  len(p.tableOrder),
 	}
@@ -131,7 +131,7 @@ func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) 
 	return nil
 }
 
-func (p *PotManager) adjustParticipant(pip *ParticipantInPot, adjustment int) {
+func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
 	adjustment -= pip.amountInPlay
 	if adjustment >= pip.Balance() {
 		adjustment = pip.Balance()
@@ -156,9 +156,9 @@ func (p *PotManager) PayWinners(winners [][]Participant) map[Participant]int {
 
 MainLoop:
 	for _, winnerGroup := range winners {
-		// convert to list of ParticipantInPot objects. Sort by the table order
+		// convert to list of participantInPot objects. Sort by the table order
 		// to ensure we pay left of dealer any uneven amounts
-		pipWinnerGroup := make([]*ParticipantInPot, len(winnerGroup))
+		pipWinnerGroup := make([]*participantInPot, len(winnerGroup))
 		for i, winner := range winnerGroup {
 			pipWinnerGroup[i] = p.participants[winner.ID()]
 		}
@@ -170,7 +170,7 @@ MainLoop:
 			}
 
 			// remove any users who went all in
-			tmp := make([]*ParticipantInPot, 0, len(pipWinnerGroup))
+			tmp := make([]*participantInPot, 0, len(pipWinnerGroup))
 			for i, winner := range pipWinnerGroup {
 				roundedWinnings := (pot.amount / 25 / len(pipWinnerGroup)) * 25
 				if i < (pot.amount/25)%len(pipWinnerGroup) {
@@ -222,7 +222,7 @@ func (p *PotManager) calculatePot() {
 		return
 	}
 
-	allInAmounts := make(map[int]map[*ParticipantInPot]bool)
+	allInAmounts := make(map[int]map[*participantInPot]bool)
 	totalAction := 0
 	for _, pip := range p.tableOrder {
 		totalAction += pip.amountInPlay
@@ -231,7 +231,7 @@ func (p *PotManager) calculatePot() {
 		if !pip.isFolded && pip.isAllIn && pip.amountInPlay > 0 {
 			pips, ok := allInAmounts[pip.amountInPlay]
 			if !ok {
-				pips = make(map[*ParticipantInPot]bool)
+				pips = make(map[*participantInPot]bool)
 				allInAmounts[pip.amountInPlay] = pips
 			}
 
@@ -314,9 +314,9 @@ func (p *PotManager) normalizedActionAtIndex() int {
 	return (p.actionStartIndex + p.actionAtIndex) % len(p.tableOrder)
 }
 
-// getActiveParticipantInPot returns the ParticipantInPot if the participant is on the clock, otherwise
+// getActiveParticipantInPot returns the participantInPot if the participant is on the clock, otherwise
 // an error if the participant cannot act
-func (p *PotManager) getActiveParticipantInPot(pt Participant) (*ParticipantInPot, error) {
+func (p *PotManager) getActiveParticipantInPot(pt Participant) (*participantInPot, error) {
 	pip, ok := p.participants[pt.ID()]
 	if !ok {
 		return nil, ErrParticipantNotFound
