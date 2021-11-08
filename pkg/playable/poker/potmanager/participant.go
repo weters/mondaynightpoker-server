@@ -34,3 +34,17 @@ func (p *ParticipantInPot) adjustAmountInPlay(amount int) {
 func (p *ParticipantInPot) canAct() bool {
 	return !p.isFolded && !p.isAllIn
 }
+
+type sortByTableIndex []*ParticipantInPot
+
+func (s sortByTableIndex) Len() int {
+	return len(s)
+}
+
+func (s sortByTableIndex) Less(i, j int) bool {
+	return s[i].tableIndex < s[j].tableIndex
+}
+
+func (s sortByTableIndex) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}

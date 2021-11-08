@@ -82,8 +82,12 @@ func TestNew_simpleAllIn(t *testing.T) {
 	a.Equal(20, pm.pots[0].amount)
 	a.Equal(15, pm.pots[1].amount)
 
-	a.Equal([]*ParticipantInPot{pm.tableOrder[2]}, pm.pots[0].allInParticipants)
-	a.Equal([]*ParticipantInPot{pm.tableOrder[0], pm.tableOrder[1], pm.tableOrder[3]}, pm.pots[1].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[2]: true}, pm.pots[0].allInParticipants)
+	a.Equal(participantInPotMap{
+		pm.tableOrder[0]: true,
+		pm.tableOrder[1]: true,
+		pm.tableOrder[3]: true,
+	}, pm.pots[1].allInParticipants)
 }
 
 func TestNew_complexAllIn(t *testing.T) {
@@ -106,9 +110,9 @@ func TestNew_complexAllIn(t *testing.T) {
 	a.Equal(0, pm.tableOrder[2].Balance())
 	a.Equal(5, pm.tableOrder[3].Balance())
 
-	a.Equal([]*ParticipantInPot{pm.tableOrder[0]}, pm.pots[0].allInParticipants)
-	a.Equal([]*ParticipantInPot{pm.tableOrder[2]}, pm.pots[1].allInParticipants)
-	a.Equal([]*ParticipantInPot{pm.tableOrder[1]}, pm.pots[2].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[0]: true}, pm.pots[0].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[2]: true}, pm.pots[1].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[1]: true}, pm.pots[2].allInParticipants)
 }
 
 func TestNew_anteAllIn(t *testing.T) {
@@ -118,7 +122,7 @@ func TestNew_anteAllIn(t *testing.T) {
 	a.NoError(pm.ParticipantChecks(pm.tableOrder[1]))
 	a.NoError(pm.ParticipantChecks(pm.tableOrder[2]))
 
-	a.Equal([]*ParticipantInPot{pm.tableOrder[0]}, pm.pots[0].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[0]: true}, pm.pots[0].allInParticipants)
 	a.Nil(pm.pots[1].allInParticipants)
 }
 
@@ -136,9 +140,79 @@ func TestNew_multiRoundWithAllIn(t *testing.T) {
 	a.NoError(pm.ParticipantCalls(pm.tableOrder[3]))
 
 	a.Equal(3, len(pm.pots))
-	a.Equal([]*ParticipantInPot{pm.tableOrder[0]}, pm.pots[0].allInParticipants)
-	a.Equal([]*ParticipantInPot{pm.tableOrder[2]}, pm.pots[1].allInParticipants)
-	a.Equal([]*ParticipantInPot{pm.tableOrder[1]}, pm.pots[2].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[0]: true}, pm.pots[0].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[2]: true}, pm.pots[1].allInParticipants)
+	a.Equal(participantInPotMap{pm.tableOrder[1]: true}, pm.pots[2].allInParticipants)
+}
+
+func TestPotManager_PayWinners_oneWinner(t *testing.T) {
+	pm := setupPotManager(25, 25, 25, 25)
+	payouts := pm.PayWinners([][]Participant{
+		{pm.tableOrder[0].Participant},
+	})
+
+	a := assert.New(t)
+	a.Equal(map[Participant]int{
+		pm.tableOrder[0].Participant: 75,
+	}, payouts)
+}
+
+func TestPotManager_PayWinners_twoWinner(t *testing.T) {
+	pm := setupPotManager(25, 25, 25, 25)
+	payouts := pm.PayWinners([][]Participant{
+		{pm.tableOrder[0].Participant, pm.tableOrder[1].Participant},
+	})
+
+	a := assert.New(t)
+	a.Equal(map[Participant]int{
+		pm.tableOrder[0].Participant: 50,
+		pm.tableOrder[1].Participant: 25,
+	}, payouts)
+}
+
+func TestPotManager_PayWinners_simpleAllIn(t *testing.T) {
+	pm := setupPotManager(50, 25, 50, 50)
+	payouts := pm.PayWinners([][]Participant{
+		{pm.tableOrder[0].Participant}, // can only win 75
+		{pm.tableOrder[1].Participant}, // wins remaining
+		{pm.tableOrder[2].Participant}, // shouldn't win any
+	})
+
+	a := assert.New(t)
+	a.Equal(map[Participant]int{
+		pm.tableOrder[0].Participant: 75,
+		pm.tableOrder[1].Participant: 50,
+	}, payouts)
+
+	a.Equal(75, pm.tableOrder[0].Balance())
+	a.Equal(50, pm.tableOrder[1].Balance())
+	a.Equal(0, pm.tableOrder[2].Balance())
+}
+
+func TestPotManager_PayWinners_complexAllIn(t *testing.T) {
+	pm := setupPotManager(75, 25, 50, 50, 75, 75) // 275
+	payouts := pm.PayWinners([][]Participant{
+		{
+			pm.tableOrder[0].Participant,
+			pm.tableOrder[1].Participant,
+		},
+		{
+			pm.tableOrder[2].Participant,
+			pm.tableOrder[3].Participant,
+		},
+	})
+
+	a := assert.New(t)
+	a.Equal(125, pm.pots[0].amount)
+	a.Equal(100, pm.pots[1].amount)
+	a.Equal(50, pm.pots[2].amount)
+
+	a.Equal(map[Participant]int{
+		pm.tableOrder[0].Participant: 75,
+		pm.tableOrder[1].Participant: 150,
+		pm.tableOrder[2].Participant: 25,
+		pm.tableOrder[3].Participant: 25,
+	}, payouts)
 }
 
 func setupPotManager(ante int, balances ...int) *PotManager {

@@ -12,9 +12,11 @@ var ErrParticipantNotFound = errors.New("participant not found")
 // ErrParticipantCannotAct is an error when the participant cannot act
 var ErrParticipantCannotAct = errors.New("participant cannot act")
 
+type participantInPotMap map[*ParticipantInPot]bool
+
 type pot struct {
 	amount            int
-	allInParticipants []*ParticipantInPot
+	allInParticipants participantInPotMap
 }
 
 // PotManager provides capabilities for keeping track of bets and pots
@@ -140,6 +142,65 @@ func (p *PotManager) adjustParticipant(pip *ParticipantInPot, adjustment int) {
 	pip.Participant.AdjustBalance(-1 * adjustment)
 }
 
+// PayWinners will adjust balance for the winners and return the final payouts
+func (p *PotManager) PayWinners(winners [][]Participant) map[Participant]int {
+	pots := make([]*pot, len(p.pots))
+
+	// shallow-copy
+	for i, pot := range p.pots {
+		tmp := *pot
+		pots[i] = &tmp
+	}
+
+	payouts := make(map[Participant]int)
+
+MainLoop:
+	for _, winnerGroup := range winners {
+		// convert to list of ParticipantInPot objects. Sort by the table order
+		// to ensure we pay left of dealer any uneven amounts
+		pipWinnerGroup := make([]*ParticipantInPot, len(winnerGroup))
+		for i, winner := range winnerGroup {
+			pipWinnerGroup[i] = p.participants[winner.ID()]
+		}
+		sort.Sort(sortByTableIndex(pipWinnerGroup))
+
+		for potIndex, pot := range pots {
+			if pot.amount == 0 {
+				continue
+			}
+
+			// remove any users who went all in
+			tmp := make([]*ParticipantInPot, 0, len(pipWinnerGroup))
+			for i, winner := range pipWinnerGroup {
+				roundedWinnings := (pot.amount / 25 / len(pipWinnerGroup)) * 25
+				if i < (pot.amount/25)%len(pipWinnerGroup) {
+					roundedWinnings += 25
+				}
+
+				winner.AdjustBalance(roundedWinnings)
+				payout := payouts[winner.Participant]
+				payouts[winner.Participant] = payout + roundedWinnings
+
+				if _, ok := pot.allInParticipants[winner]; ok {
+					continue
+				}
+
+				tmp = append(tmp, winner)
+			}
+			pipWinnerGroup = tmp
+			pot.amount = 0
+
+			if potIndex+1 == len(pots) {
+				break MainLoop
+			} else if len(pipWinnerGroup) == 0 {
+				break
+			}
+		}
+	}
+
+	return payouts
+}
+
 // completeTurn must be called after a participant bets, raises, checks, calls, or folds
 func (p *PotManager) completeTurn() {
 	// stay in for loop until we find a player who can act
@@ -161,7 +222,7 @@ func (p *PotManager) calculatePot() {
 		return
 	}
 
-	allInAmounts := make(map[int][]*ParticipantInPot)
+	allInAmounts := make(map[int]map[*ParticipantInPot]bool)
 	totalAction := 0
 	for _, pip := range p.tableOrder {
 		totalAction += pip.amountInPlay
@@ -170,10 +231,11 @@ func (p *PotManager) calculatePot() {
 		if !pip.isFolded && pip.isAllIn && pip.amountInPlay > 0 {
 			pips, ok := allInAmounts[pip.amountInPlay]
 			if !ok {
-				pips = make([]*ParticipantInPot, 0)
+				pips = make(map[*ParticipantInPot]bool)
+				allInAmounts[pip.amountInPlay] = pips
 			}
 
-			allInAmounts[pip.amountInPlay] = append(pips, pip)
+			pips[pip] = true
 		}
 	}
 
