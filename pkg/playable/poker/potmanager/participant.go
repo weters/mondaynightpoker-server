@@ -34,33 +34,3 @@ func (p *ParticipantInPot) adjustAmountInPlay(amount int) {
 func (p *ParticipantInPot) canAct() bool {
 	return !p.isFolded && !p.isAllIn
 }
-
-// SortByAmountInPlay sorts a list of players by amountInPlay
-type SortByAmountInPlay []*ParticipantInPot
-
-func (s SortByAmountInPlay) Len() int {
-	return len(s)
-}
-
-func (s SortByAmountInPlay) Less(i, j int) bool {
-	return s[i].amountInPlay < s[j].amountInPlay
-}
-
-func (s SortByAmountInPlay) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-// ParticipantInPartList is a list of ParticipantInPot
-type ParticipantInPartList []*ParticipantInPot
-
-// ActiveMap returns a map of participants that didn't fold
-func (p ParticipantInPartList) ActiveMap() map[*ParticipantInPot]bool {
-	m := make(map[*ParticipantInPot]bool)
-	for _, pip := range p {
-		if !pip.isFolded {
-			m[pip] = true
-		}
-	}
-
-	return m
-}
