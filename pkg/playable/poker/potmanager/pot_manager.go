@@ -19,6 +19,12 @@ type pot struct {
 	allInParticipants participantInPotMap
 }
 
+// Pot represents an ordered lists of pots
+type Pot struct {
+	Amount            int
+	AllInParticipants []Participant
+}
+
 // PotManager provides capabilities for keeping track of bets and pots
 type PotManager struct {
 	participants map[int]*participantInPot
@@ -140,6 +146,24 @@ func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
 
 	pip.adjustAmountInPlay(adjustment)
 	pip.Participant.AdjustBalance(-1 * adjustment)
+}
+
+// Pots returns a list of pots
+func (p *PotManager) Pots() []*Pot {
+	pots := make([]*Pot, len(p.pots))
+	for i, pot := range p.pots {
+		a := make([]Participant, 0, len(pot.allInParticipants))
+		for pip := range pot.allInParticipants {
+			a = append(a, pip.Participant)
+		}
+
+		pots[i] = &Pot{
+			Amount:            pot.amount,
+			AllInParticipants: a,
+		}
+	}
+
+	return pots
 }
 
 // PayWinners will adjust balance for the winners and return the final payouts

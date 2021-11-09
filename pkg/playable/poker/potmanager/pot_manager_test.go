@@ -49,6 +49,8 @@ func TestNew_smokeTest(t *testing.T) {
 	pm.SeatParticipant(p4)
 	pm.FinishSeatingParticipants() // pot is at 100
 
+	a.Equal(1, len(pm.Pots()))
+
 	a.Equal(75, p1.balance)
 
 	a.EqualError(pm.ParticipantCalls(p1), "participant cannot call")
@@ -88,6 +90,13 @@ func TestNew_simpleAllIn(t *testing.T) {
 		pm.tableOrder[1]: true,
 		pm.tableOrder[3]: true,
 	}, pm.pots[1].allInParticipants)
+
+	pots := pm.Pots()
+	a.Equal(2, len(pots))
+	a.Equal(20, pots[0].Amount)
+	a.Equal(1, len(pots[0].AllInParticipants))
+	a.Equal(15, pots[1].Amount)
+	a.Equal(3, len(pots[1].AllInParticipants))
 }
 
 func TestNew_complexAllIn(t *testing.T) {

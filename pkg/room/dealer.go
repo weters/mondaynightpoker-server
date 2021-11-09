@@ -465,6 +465,37 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			c.Send(playable.OK(msg.Context))
 			d.stateChanged <- stateClientEvent
 		}
+	case "tableStake":
+		d.execInRunLoop <- func() {
+			pt, err := c.player.GetPlayerTable(context.Background(), c.table)
+			if err != nil {
+				c.Send(newErrorResponse(msg.Context, err))
+				return
+			}
+
+			tableStake, ok := msg.AdditionalData["tableStake"].(float64)
+			if !ok {
+				c.Send(newErrorResponse(msg.Context, errors.New("tableStake not passed in")))
+				return
+			}
+
+			const minTableStake = 500
+			const maxTableStake = 10_000
+
+			if tableStake < minTableStake || tableStake > maxTableStake {
+				c.Send(newErrorResponse(msg.Context, fmt.Errorf("tableStake must be >= ${%d} and <= ${%d}", minTableStake, maxTableStake)))
+				return
+			}
+
+			pt.TableStake = int(tableStake)
+			if err := pt.Save(context.Background()); err != nil {
+				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
+				return
+			}
+
+			c.Send(playable.OK(msg.Context))
+			d.stateChanged <- stateClientEvent
+		}
 	case "playerStatus":
 		d.execInRunLoop <- func() {
 			var pt *model.PlayerTable
