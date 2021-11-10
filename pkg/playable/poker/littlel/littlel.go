@@ -7,6 +7,7 @@ import (
 	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 	"sort"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ type Game struct {
 	deck               *deck.Deck
 	decisionStartIndex int
 	decisionCount      int
+	potManager         *potmanager.PotManager
 	pot                int
 	currentBet         int
 	round              round
@@ -57,8 +59,8 @@ type Game struct {
 	endGameAt time.Time
 }
 
-// NewGame returns a new instance of the game
-func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
+// NewGameV2 returns a new instance of the game
+func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Options) (*Game, error) {
 	if options.Ante <= 0 {
 		return nil, errors.New("ante must be greater than zero")
 	}
@@ -67,11 +69,11 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		return nil, errors.New("the initial deal must be between 3 and 5 cards")
 	}
 
-	if len(playerIDs) < 2 {
+	if len(players) < 2 {
 		return nil, errors.New("you must have at least two participants")
 	}
 
-	if len(playerIDs) > maxParticipants {
+	if len(players) > maxParticipants {
 		return nil, fmt.Errorf("you cannot have more than %d participants", maxParticipants)
 	}
 
@@ -80,8 +82,10 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	d.Shuffle()
 
 	idToParticipant := make(map[int64]*Participant)
-	for _, id := range playerIDs {
-		idToParticipant[id] = newParticipant(id, options.Ante)
+	playerIDs := make([]int64, len(players))
+	for i, player := range players {
+		playerIDs[i] = player.GetPlayerID()
+		idToParticipant[player.GetPlayerID()] = newParticipant(player.GetPlayerID(), player.GetTableStake(), options.Ante)
 	}
 
 	tradeIns, err := NewTradeIns(options.TradeIns, options.InitialDeal)
@@ -91,7 +95,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 
 	g := &Game{
 		options:             options,
-		playerIDs:           append([]int64{}, playerIDs...), // make a copy
+		playerIDs:           playerIDs,
 		idToParticipant:     idToParticipant,
 		deck:                d,
 		pot:                 len(idToParticipant) * options.Ante,

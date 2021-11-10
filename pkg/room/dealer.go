@@ -594,20 +594,20 @@ func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetai
 	return nil
 }
 
-func (d *Dealer) getNextPlayersIDsForGame() ([]int64, error) {
+func (d *Dealer) getNextPlayersForGame() ([]*model.PlayerTable, error) {
 	players, err := d.table.GetActivePlayersShifted(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	playerIDs := make([]int64, 0, len(players))
+	filteredPlayers := make([]*model.PlayerTable, 0, len(players))
 	for _, player := range players {
 		if player.IsPlaying() {
-			playerIDs = append(playerIDs, player.PlayerID)
+			filteredPlayers = append(filteredPlayers, player)
 		}
 	}
 
-	return playerIDs, nil
+	return filteredPlayers, nil
 }
 
 func (d *Dealer) scheduleGame(c *Client, msg *playable.PayloadIn) error {
@@ -631,14 +631,19 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 		return fmt.Errorf("game not found: %s", msg.Subject)
 	}
 
-	playerIDs, err := d.getNextPlayersIDsForGame()
+	details, _, err := factory.Details(msg.AdditionalData)
 	if err != nil {
 		return err
 	}
 
-	details, _, err := factory.Details(msg.AdditionalData)
+	players, err := d.getNextPlayersForGame()
 	if err != nil {
 		return err
+	}
+
+	playerIDs := make([]int64, len(players))
+	for i, player := range players {
+		playerIDs[i] = player.PlayerID
 	}
 
 	logger := logrus.WithFields(logrus.Fields{
@@ -648,7 +653,13 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 		"playerIDs": playerIDs,
 	})
 
-	game, err := factory.CreateGame(logger, playerIDs, msg.AdditionalData)
+	var game playable.Playable
+	if v2, ok := factory.(gamefactory.V2); ok {
+		game, err = v2.CreateGameV2(logger, players, msg.AdditionalData)
+	} else {
+		game, err = factory.CreateGame(logger, playerIDs, msg.AdditionalData)
+	}
+
 	if err != nil {
 		return err
 	}

@@ -7,12 +7,14 @@ import (
 
 // Participant represents an individual participant in little L
 type Participant struct {
-	PlayerID int64
-	didFold  bool
-	didWin   bool
-	balance  int
-	hand     deck.Hand
-	traded   int
+	PlayerID   int64
+	tableStake int
+
+	didFold bool
+	didWin  bool
+	balance int
+	hand    deck.Hand
+	traded  int
 
 	// currentBet is how much the player has bet in the current round
 	currentBet int
@@ -21,12 +23,13 @@ type Participant struct {
 	bestHandKey string
 }
 
-func newParticipant(id int64, ante int) *Participant {
+func newParticipant(id int64, tableStake, ante int) *Participant {
 	return &Participant{
-		PlayerID: id,
-		didFold:  false,
-		balance:  -1 * ante,
-		hand:     make(deck.Hand, 0),
+		PlayerID:   id,
+		tableStake: tableStake,
+		didFold:    false,
+		balance:    -1 * ante,
+		hand:       make(deck.Hand, 0),
 	}
 }
 

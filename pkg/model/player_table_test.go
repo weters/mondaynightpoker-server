@@ -86,3 +86,9 @@ func TestPlayerTable_IsPlaying(t *testing.T) {
 	pt.IsBlocked = true
 	assert.False(t, pt.IsPlaying())
 }
+
+func TestPlayerTable_accessors(t *testing.T) {
+	pt := &PlayerTable{PlayerID: 1, TableStake: 2}
+	assert.Equal(t, int64(1), pt.GetPlayerID())
+	assert.Equal(t, 2, pt.GetTableStake())
+}

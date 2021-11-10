@@ -95,3 +95,13 @@ WHERE id = $8`
 func (p *PlayerTable) IsPlaying() bool {
 	return !p.IsBlocked && p.Active
 }
+
+// GetPlayerID returns the player ID
+func (p *PlayerTable) GetPlayerID() int64 {
+	return p.PlayerID
+}
+
+// GetTableStake returns the table stake
+func (p *PlayerTable) GetTableStake() int {
+	return p.TableStake
+}
