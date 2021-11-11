@@ -2,7 +2,7 @@ package potmanager
 
 // Participant provides an interface for retrieving and adjusting a participants balance
 type Participant interface {
-	ID() int
+	ID() int64
 	Balance() int
 	AdjustBalance(amount int)
 	SetAmountInPlay(amount int)
@@ -27,7 +27,7 @@ func (p *participantInPot) reset() {
 
 func (p *participantInPot) adjustAmountInPlay(amount int) {
 	p.amountInPlay += amount
-	p.Participant.SetAmountInPlay(amount)
+	p.Participant.SetAmountInPlay(p.amountInPlay)
 }
 
 // canAct returns true if the participant can check, call, bet, raise, fold

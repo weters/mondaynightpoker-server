@@ -6,6 +6,9 @@ import (
 	"sort"
 )
 
+// ErrRoundOver is an error when the round is over
+var ErrRoundOver = errors.New("round is over")
+
 // ErrParticipantNotFound is an error when a participant with a provided ID cannot be found
 var ErrParticipantNotFound = errors.New("participant not found")
 
@@ -19,15 +22,9 @@ type pot struct {
 	allInParticipants participantInPotMap
 }
 
-// Pot represents an ordered lists of pots
-type Pot struct {
-	Amount            int
-	AllInParticipants []Participant
-}
-
 // PotManager provides capabilities for keeping track of bets and pots
 type PotManager struct {
-	participants map[int]*participantInPot
+	participants map[int64]*participantInPot
 	tableOrder   []*participantInPot
 	ante         int
 	pots         []*pot
@@ -36,12 +33,17 @@ type PotManager struct {
 	// actionAtIndex is who is currently making a decision
 	actionAtIndex int
 	actionAmount  int
+	// amountInPlay is how much has been bet or called, but not yet added to the pot
+	amountInPlay int
+
+	// needsPotCalculation should be set to true if we need to recalculate the pot
+	needsPotCalculation bool
 }
 
 // New instantiates a new PotManager
-func New(ante, initialPot int) *PotManager {
+func New(ante int) *PotManager {
 	return &PotManager{
-		participants: make(map[int]*participantInPot),
+		participants: make(map[int64]*participantInPot),
 		tableOrder:   make([]*participantInPot, 0),
 		ante:         ante,
 		pots:         []*pot{{}},
@@ -50,7 +52,11 @@ func New(ante, initialPot int) *PotManager {
 
 // SeatParticipant adds a participant to the table in the order called
 // This method must be called in order of the players
-func (p *PotManager) SeatParticipant(pt Participant) {
+func (p *PotManager) SeatParticipant(pt Participant) error {
+	if pt.Balance() <= 0 {
+		return errors.New("cannot seat participant without a balance")
+	}
+
 	pip := &participantInPot{
 		Participant: pt,
 		tableIndex:  len(p.tableOrder),
@@ -59,12 +65,17 @@ func (p *PotManager) SeatParticipant(pt Participant) {
 	p.tableOrder = append(p.tableOrder, pip)
 
 	p.adjustParticipant(pip, p.ante)
+
+	return nil
 }
 
 // FinishSeatingParticipants must be called after all participants have been seated
 func (p *PotManager) FinishSeatingParticipants() {
 	p.actionAmount = p.ante
+
+	p.needsPotCalculation = true
 	p.calculatePot()
+	p.reset()
 }
 
 // ParticipantFolds handles a fold
@@ -127,6 +138,10 @@ func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) 
 		return fmt.Errorf("participant has more in play than the new bet or raise")
 	}
 
+	if newBetOrRaise > pip.amountInPlay+pip.Balance() {
+		return errors.New("bet exceeds participant's total")
+	}
+
 	p.actionStartIndex = pip.tableIndex
 	p.actionAtIndex = 0
 
@@ -137,6 +152,38 @@ func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) 
 	return nil
 }
 
+// AdvanceDecision will advance a decision without taking an explicit action
+func (p *PotManager) AdvanceDecision() error {
+	if p.GetInTurnParticipant() == nil {
+		return ErrRoundOver
+	}
+
+	p.completeTurn()
+	return nil
+}
+
+// IsParticipantYetToAct returns true if the participant is not in turn and the participant has yet to act
+// This also ensures the participant didn't fold and they are not all-in
+func (p *PotManager) IsParticipantYetToAct(pt Participant) bool {
+	pip, ok := p.participants[pt.ID()]
+	if !ok {
+		return false
+	}
+
+	// did they fold or go all-in
+	if !pip.canAct() {
+		return false
+	}
+
+	// simple formula to see if the player isn't in turn, but they are still yet to act
+	check := pip.tableIndex
+	if check < p.actionStartIndex {
+		check += len(p.tableOrder)
+	}
+
+	return check > p.actionStartIndex+p.actionAtIndex
+}
+
 func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
 	adjustment -= pip.amountInPlay
 	if adjustment >= pip.Balance() {
@@ -144,12 +191,46 @@ func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
 		pip.isAllIn = true
 	}
 
+	p.amountInPlay += adjustment
 	pip.adjustAmountInPlay(adjustment)
 	pip.Participant.AdjustBalance(-1 * adjustment)
 }
 
+// GetBet returns the current bet
+func (p *PotManager) GetBet() int {
+	return p.actionAmount
+}
+
+// IsRoundOver returns true if all eligible participants have acted
+func (p *PotManager) IsRoundOver() bool {
+	return p.actionAtIndex >= len(p.tableOrder)
+}
+
+// GetInTurnParticipant returns the participant who is to act next
+// Returns nil if the round is over
+func (p *PotManager) GetInTurnParticipant() Participant {
+	if p.IsRoundOver() {
+		return nil
+	}
+
+	return p.tableOrder[p.normalizedActionAtIndex()].Participant
+}
+
+// GetPotLimitMaxBet returns the maximum bet allowed in a pot-limit game
+// Pot + all previous bets + amount to call
+func (p *PotManager) GetPotLimitMaxBet() int {
+	previousBet := p.actionAmount
+
+	pip := p.tableOrder[p.normalizedActionAtIndex()]
+	amountToCall := p.actionAmount - pip.amountInPlay
+
+	potTotal := p.Pots().Total() + p.amountInPlay + amountToCall
+
+	return previousBet + potTotal
+}
+
 // Pots returns a list of pots
-func (p *PotManager) Pots() []*Pot {
+func (p *PotManager) Pots() Pots {
 	pots := make([]*Pot, len(p.pots))
 	for i, pot := range p.pots {
 		a := make([]Participant, 0, len(pot.allInParticipants))
@@ -237,12 +318,17 @@ func (p *PotManager) completeTurn() {
 	}
 
 	// if we reached this point, all players have acted
-	p.calculatePot()
+	p.needsPotCalculation = true
 }
 
 func (p *PotManager) calculatePot() {
+	if !p.needsPotCalculation {
+		return
+	}
+
+	p.needsPotCalculation = false
+
 	if p.actionAmount == 0 {
-		p.reset()
 		return
 	}
 
@@ -273,7 +359,6 @@ func (p *PotManager) calculatePot() {
 	// no all-in
 	if len(allInAmounts) == 0 {
 		currentPot.amount += totalAction
-		p.reset()
 		return
 	}
 
@@ -316,8 +401,17 @@ func (p *PotManager) calculatePot() {
 
 		prevAmount = allInAmount
 	}
+}
 
+// NextRound advances to the next round
+func (p *PotManager) NextRound() error {
+	if !p.IsRoundOver() {
+		return errors.New("round is not over")
+	}
+
+	p.calculatePot()
 	p.reset()
+	return nil
 }
 
 func (p *PotManager) reset() {
@@ -326,6 +420,7 @@ func (p *PotManager) reset() {
 	}
 
 	p.actionAmount = 0
+	p.amountInPlay = 0
 	p.actionAtIndex = 0
 
 	// reset actionStartIndex to first non-folded, non-all-in player
@@ -341,14 +436,19 @@ func (p *PotManager) normalizedActionAtIndex() int {
 // getActiveParticipantInPot returns the participantInPot if the participant is on the clock, otherwise
 // an error if the participant cannot act
 func (p *PotManager) getActiveParticipantInPot(pt Participant) (*participantInPot, error) {
+	pit := p.GetInTurnParticipant()
+	if pit == nil {
+		return nil, ErrRoundOver
+	}
+
+	if pit.ID() != pt.ID() {
+		return nil, ErrParticipantCannotAct
+	}
+
 	pip, ok := p.participants[pt.ID()]
 	if !ok {
 		return nil, ErrParticipantNotFound
 	}
 
-	if pip.tableIndex == p.normalizedActionAtIndex() {
-		return pip, nil
-	}
-
-	return nil, ErrParticipantCannotAct
+	return pip, nil
 }

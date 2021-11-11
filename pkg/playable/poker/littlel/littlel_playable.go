@@ -93,9 +93,9 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		}
 	}
 
-	winners := make([]int64, len(g.winners))
-	for i, p := range g.winners {
-		winners[i] = p.PlayerID
+	winners := make([]int64, 0, len(g.winners))
+	for p := range g.winners {
+		winners = append(winners, p.PlayerID)
 	}
 
 	s := State{
@@ -106,10 +106,11 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			DealerID:     g.idToParticipant[g.playerIDs[0]].PlayerID,
 			Round:        g.round,
 			Action:       action,
-			Pot:          g.pot,
+			Pot:          g.potManager.Pots().Total(),
+			Pots:         g.potManager.Pots(),
 			Ante:         g.options.Ante,
-			CurrentBet:   g.currentBet,
-			MaxBet:       g.getPotLimit(),
+			CurrentBet:   g.potManager.GetBet(),
+			MaxBet:       g.potManager.GetPotLimitMaxBet(),
 			TradeIns:     g.GetAllowedTradeIns(),
 			InitialDeal:  g.options.InitialDeal,
 			Community:    g.GetCommunityCards(),
@@ -124,7 +125,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		pJSON := participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
-			Balance:    p.balance,
+			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
 			Traded:     p.traded,
 		}

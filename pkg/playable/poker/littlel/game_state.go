@@ -2,6 +2,7 @@ package littlel
 
 import (
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 )
 
 type participantJSON struct {
@@ -22,6 +23,7 @@ type GameState struct {
 	Round        round              `json:"round"`
 	Action       int64              `json:"action"`
 	Pot          int                `json:"pot"`
+	Pots         potmanager.Pots    `json:"pots"`
 	Ante         int                `json:"ante"`
 	CurrentBet   int                `json:"currentBet"`
 	MaxBet       int                `json:"maxBet"`
