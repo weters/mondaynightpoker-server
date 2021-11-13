@@ -1,6 +1,7 @@
 package potmanager
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -342,6 +343,72 @@ func TestPotManager_GetCanActParticipantCount(t *testing.T) {
 
 	a.NoError(pm.ParticipantFolds(pm.tableOrder[0]))
 	a.Equal(2, pm.GetCanActParticipantCount())
+}
+
+func TestPotManager_IsParticipantYetToAct(t *testing.T) {
+	pm := setupPotManager(25, 100, 100, 100, 100, 100)
+
+	test := func(isYetToAct ...bool) {
+		if len(isYetToAct) != 5 {
+			panic("missing five values")
+		}
+
+		t.Helper()
+		for i, value := range isYetToAct {
+			assert.Equal(t, value, pm.IsParticipantYetToAct(pm.tableOrder[i]), fmt.Sprintf("pm.tableOrder[%d]", i))
+		}
+	}
+
+	test(false, true, true, true, true)
+	assert.NoError(t, pm.AdvanceDecision())
+	test(false, false, true, true, true)
+
+	pm.actionStartIndex = 3
+	pm.actionAtIndex = 0
+	test(true, true, true, false, true)
+	assert.NoError(t, pm.AdvanceDecision())
+	test(true, true, true, false, false)
+	assert.NoError(t, pm.AdvanceDecision())
+	test(false, true, true, false, false)
+
+	pm.tableOrder[1].isFolded = true
+	test(false, false, true, false, false)
+
+	// test error case
+	tp := &testParticipant{id: 99}
+	assert.False(t, pm.IsParticipantYetToAct(tp))
+}
+
+func TestPotManager_getActiveParticipantInPot(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(25, 50, 50, 50)
+	pt, err := pm.getActiveParticipantInPot(pm.tableOrder[0])
+	a.NoError(err)
+	a.Equal(int64(1), pt.ID())
+
+	pt, err = pm.getActiveParticipantInPot(pm.tableOrder[1])
+	a.Nil(pt)
+	a.EqualError(err, "it is not your turn")
+
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+
+	pt, err = pm.getActiveParticipantInPot(pm.tableOrder[0])
+	a.Nil(pt)
+	a.EqualError(err, "round is over")
+
+	pm.EndGame()
+	pt, err = pm.getActiveParticipantInPot(pm.tableOrder[0])
+	a.Nil(pt)
+	a.EqualError(err, "game is over")
+
+	pm = setupPotManager(25, 100, 100, 100)
+	pm.participants = nil
+	a.PanicsWithValue("participant not found", func() {
+		_, _ = pm.getActiveParticipantInPot(pm.tableOrder[0])
+	})
 }
 
 func setupPotManager(ante int, balances ...int) *PotManager {

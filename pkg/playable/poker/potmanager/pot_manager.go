@@ -486,7 +486,7 @@ func (p *PotManager) getActiveParticipantInPot(pt Participant) (*participantInPo
 
 	pip, ok := p.participants[pt.ID()]
 	if !ok {
-		return nil, ErrParticipantNotFound
+		panic("participant not found")
 	}
 
 	return pip, nil
