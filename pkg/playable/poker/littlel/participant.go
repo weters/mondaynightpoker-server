@@ -10,11 +10,10 @@ type Participant struct {
 	PlayerID   int64
 	tableStake int
 
-	didFold       bool
-	winningAmount int
-	balance       int
-	hand          deck.Hand
-	traded        int
+	didFold bool
+	balance int
+	hand    deck.Hand
+	traded  int
 
 	// currentBet is how much the player has bet in the current round
 	currentBet int
@@ -104,18 +103,22 @@ func (p *Participant) getBestHand(community []*deck.Card) *BestHand {
 
 // potmanager.Participant implementation
 
+// ID returns the ID
 func (p *Participant) ID() int64 {
 	return p.PlayerID
 }
 
+// Balance returns the current balance
 func (p *Participant) Balance() int {
 	return p.balance + p.tableStake
 }
 
+// AdjustBalance will adjust the participant's balance
 func (p *Participant) AdjustBalance(amount int) {
 	p.balance += amount
 }
 
+// SetAmountInPlay sets the amount currently in play
 func (p *Participant) SetAmountInPlay(amount int) {
 	p.currentBet = amount
 }

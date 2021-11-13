@@ -12,9 +12,6 @@ import (
 	"time"
 )
 
-// ErrNotPlayersTurn is an error when a player attempts to act out of turn
-var ErrNotPlayersTurn = errors.New("it is not your turn")
-
 const maxParticipants = 10
 
 type round int
@@ -24,7 +21,7 @@ const (
 	roundBeforeFirstTurn
 	roundBeforeSecondTurn
 	roundBeforeThirdTurn
-	roundFinalBettingRound
+	roundFinalBettingRound // nolint:deadcode,varcheck
 	roundRevealWinner
 )
 
@@ -48,8 +45,6 @@ type Game struct {
 
 	done    bool
 	winners map[*Participant]int
-
-	lastAdjustmentRound round // the last round an adjustment ran
 
 	endGameAt time.Time
 }
@@ -97,16 +92,15 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 	}
 
 	g := &Game{
-		options:             options,
-		playerIDs:           playerIDs,
-		idToParticipant:     idToParticipant,
-		deck:                d,
-		potManager:          pm,
-		discards:            []*deck.Card{},
-		lastAdjustmentRound: round(-1),
-		logChan:             make(chan []*playable.LogMessage, 256),
-		logger:              logger,
-		tradeIns:            tradeIns,
+		options:         options,
+		playerIDs:       playerIDs,
+		idToParticipant: idToParticipant,
+		deck:            d,
+		potManager:      pm,
+		discards:        []*deck.Card{},
+		logChan:         make(chan []*playable.LogMessage, 256),
+		logger:          logger,
+		tradeIns:        tradeIns,
 	}
 
 	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
@@ -205,7 +199,6 @@ func (g *Game) NextRound() error {
 		return errors.New("cannot advance the round")
 	}
 
-	g.endOfRoundAdjustments()
 	g.round++
 
 	if err := g.reset(); err != nil {
@@ -213,18 +206,10 @@ func (g *Game) NextRound() error {
 	}
 
 	if g.round == roundRevealWinner {
-		g.endGame()
+		return g.endGame()
 	}
 
 	return nil
-}
-
-func (g *Game) endOfRoundAdjustments() {
-	if g.lastAdjustmentRound == g.round {
-		panic(fmt.Sprintf("already ran endOfRoundAdjustments() for round: %d", g.round))
-	}
-
-	g.lastAdjustmentRound = g.round
 }
 
 // ParticipantBets handles both bets and raises
@@ -234,10 +219,6 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 	currentBet := g.potManager.GetBet()
 	if currentBet > 0 {
 		term = strings.ToLower(string(ActionRaise))
-	}
-
-	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
 	}
 
 	if bet%g.options.Ante > 0 {
@@ -252,7 +233,7 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 		return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
 	}
 
-	if currentBet > 0 && bet < currentBet {
+	if currentBet > 0 && bet < currentBet*2 {
 		return fmt.Errorf("your raise (${%d}) must be at least equal to double the previous bet (${%d})", bet, currentBet*2)
 	}
 
@@ -261,16 +242,11 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 
 // ParticipantChecks will check for the participant as long as there's no active bet
 func (g *Game) ParticipantChecks(p *Participant) error {
-	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
-	}
-
 	return g.potManager.ParticipantChecks(p)
 }
 
 // ParticipantCalls handles when the player calls the action
 func (g *Game) ParticipantCalls(p *Participant) error {
-	// TODO: check for GetCurrentTurn()?
 	return g.potManager.ParticipantCalls(p)
 }
 
@@ -292,8 +268,7 @@ func (g *Game) ParticipantFolds(p *Participant) error {
 	if stillAlive == 0 {
 		panic("too many players folded")
 	} else if stillAlive == 1 {
-		g.endOfRoundAdjustments()
-		g.endGame()
+		return g.endGame()
 	}
 
 	return nil
@@ -318,7 +293,7 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 	}
 
 	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
+		return potmanager.ErrParticipantCannotAct
 	}
 
 	if !g.CanTrade(len(cards)) {
@@ -410,12 +385,12 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 }
 
 // endGame will handle any end of game actions, calculate winners, etc.
-func (g *Game) endGame() {
+func (g *Game) endGame() error {
 	if g.winners != nil {
 		panic("endGame already called")
 	}
 
-	g.round = roundRevealWinner
+	g.potManager.EndGame()
 
 	tiers := make(tieredHands)
 
@@ -442,14 +417,21 @@ func (g *Game) endGame() {
 	}
 
 	winners := make(map[*Participant]int)
-	payouts := g.potManager.PayWinners(tiers.getSortedTiers())
+	payouts, err := g.potManager.PayWinners(tiers.getSortedTiers())
+	if err != nil {
+		return err
+	}
+
 	for participant, amount := range payouts {
 		p := g.idToParticipant[participant.ID()]
 		winners[p] = amount
 	}
 	g.winners = winners
 
+	g.round = roundRevealWinner
 	g.sendEndOfGameLogMessages()
+
+	return nil
 }
 
 func (g *Game) sendEndOfGameLogMessages() {

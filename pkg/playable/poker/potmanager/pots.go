@@ -13,6 +13,7 @@ type potJSON struct {
 	AllInParticipants []int64 `json:"allInParticipants"`
 }
 
+// MarshalJSON provides custom marshalling
 func (p Pot) MarshalJSON() ([]byte, error) {
 	ids := make([]int64, len(p.AllInParticipants))
 	for i, p := range p.AllInParticipants {

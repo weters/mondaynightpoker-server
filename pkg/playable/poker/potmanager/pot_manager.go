@@ -6,6 +6,20 @@ import (
 	"sort"
 )
 
+// ParticipantError is an error that happened because of a participant error
+type ParticipantError string
+
+func (p ParticipantError) Error() string {
+	return string(p)
+}
+
+func newParticipantError(format string, a ...interface{}) ParticipantError {
+	return ParticipantError(fmt.Sprintf(format, a...))
+}
+
+// ErrGameOver is an error an action is attempted after the game ended
+var ErrGameOver = errors.New("game is over")
+
 // ErrRoundOver is an error when the round is over
 var ErrRoundOver = errors.New("round is over")
 
@@ -13,7 +27,7 @@ var ErrRoundOver = errors.New("round is over")
 var ErrParticipantNotFound = errors.New("participant not found")
 
 // ErrParticipantCannotAct is an error when the participant cannot act
-var ErrParticipantCannotAct = errors.New("participant cannot act")
+var ErrParticipantCannotAct = ParticipantError("it is not your turn")
 
 type participantInPotMap map[*participantInPot]bool
 
@@ -38,6 +52,9 @@ type PotManager struct {
 
 	// needsPotCalculation should be set to true if we need to recalculate the pot
 	needsPotCalculation bool
+
+	// isGameOver will prevent any further action from happening
+	isGameOver bool
 }
 
 // New instantiates a new PotManager
@@ -98,7 +115,7 @@ func (p *PotManager) ParticipantChecks(pt Participant) error {
 	}
 
 	if pip.amountInPlay != p.actionAmount {
-		return errors.New("participant cannot check")
+		return newParticipantError("you cannot check with an active bet")
 	}
 
 	p.completeTurn()
@@ -113,7 +130,7 @@ func (p *PotManager) ParticipantCalls(pt Participant) error {
 	}
 
 	if p.actionAmount <= pip.amountInPlay {
-		return fmt.Errorf("participant cannot call")
+		return newParticipantError("you cannot call without an active bet")
 	}
 
 	p.adjustParticipant(pip, p.actionAmount)
@@ -131,7 +148,7 @@ func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) 
 	}
 
 	if newBetOrRaise <= p.actionAmount {
-		return fmt.Errorf("raise must be greater than previous bet")
+		return newParticipantError("your raise of ${%d} must be greater than the previous bet of ${%d}", newBetOrRaise, p.actionAmount)
 	}
 
 	if newBetOrRaise <= pip.amountInPlay {
@@ -182,6 +199,18 @@ func (p *PotManager) IsParticipantYetToAct(pt Participant) bool {
 	}
 
 	return check > p.actionStartIndex+p.actionAtIndex
+}
+
+// GetCanActParticipantCount returns the number of participants in the hand who didn't fold or go all-in
+func (p *PotManager) GetCanActParticipantCount() int {
+	count := 0
+	for _, pt := range p.tableOrder {
+		if pt.canAct() {
+			count++
+		}
+	}
+
+	return count
 }
 
 func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
@@ -248,7 +277,13 @@ func (p *PotManager) Pots() Pots {
 }
 
 // PayWinners will adjust balance for the winners and return the final payouts
-func (p *PotManager) PayWinners(winners [][]Participant) map[Participant]int {
+func (p *PotManager) PayWinners(winners [][]Participant) (map[Participant]int, error) {
+	if !p.isGameOver {
+		return nil, errors.New("game is not over")
+	}
+
+	p.calculatePot()
+
 	pots := make([]*pot, len(p.pots))
 
 	// shallow-copy
@@ -303,7 +338,7 @@ MainLoop:
 		}
 	}
 
-	return payouts
+	return payouts, nil
 }
 
 // completeTurn must be called after a participant bets, raises, checks, calls, or folds
@@ -436,6 +471,10 @@ func (p *PotManager) normalizedActionAtIndex() int {
 // getActiveParticipantInPot returns the participantInPot if the participant is on the clock, otherwise
 // an error if the participant cannot act
 func (p *PotManager) getActiveParticipantInPot(pt Participant) (*participantInPot, error) {
+	if p.isGameOver {
+		return nil, ErrGameOver
+	}
+
 	pit := p.GetInTurnParticipant()
 	if pit == nil {
 		return nil, ErrRoundOver
@@ -451,4 +490,9 @@ func (p *PotManager) getActiveParticipantInPot(pt Participant) (*participantInPo
 	}
 
 	return pip, nil
+}
+
+// EndGame will prevent further action from happening
+func (p *PotManager) EndGame() {
+	p.isGameOver = true
 }

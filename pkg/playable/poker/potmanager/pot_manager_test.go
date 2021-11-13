@@ -51,24 +51,34 @@ func TestNew_smokeTest(t *testing.T) {
 	a.EqualError(pm.SeatParticipant(p5), "cannot seat participant without a balance")
 	pm.FinishSeatingParticipants() // pot is at 100
 
+	a.Equal(100, pm.Pots().Total())
 	a.Equal(1, len(pm.Pots()))
 
 	a.Equal(75, p1.balance)
 
-	a.EqualError(pm.ParticipantCalls(p1), "participant cannot call")
+	// 25¢ bet - Player 1
+	a.EqualError(pm.ParticipantCalls(p1), "you cannot call without an active bet")
 	a.NoError(pm.ParticipantBetsOrRaises(p1, 25)) // 125
 	a.Equal(25, pm.GetBet())
 	a.Equal(ErrParticipantCannotAct, pm.ParticipantBetsOrRaises(p1, 50))
 
-	a.EqualError(pm.ParticipantBetsOrRaises(p2, 25), "raise must be greater than previous bet")
-	a.EqualError(pm.ParticipantChecks(p2), "participant cannot check")
+	// 25¢ call - Player 2
+	a.EqualError(pm.ParticipantBetsOrRaises(p2, 25), "your raise of ${25} must be greater than the previous bet of ${25}")
+	a.EqualError(pm.ParticipantChecks(p2), "you cannot check with an active bet")
 	a.NoError(pm.ParticipantCalls(p2)) // 150
 
+	// raise to 50¢ - Player 3
 	a.Equal(ErrParticipantCannotAct, pm.ParticipantFolds(p1))
 	a.NoError(pm.ParticipantBetsOrRaises(p3, 50)) // 200
-	a.NoError(pm.ParticipantCalls(p4))            // 250
+
+	// 50¢ call - Player 4
+	a.NoError(pm.ParticipantCalls(p4)) // 250
 	a.EqualError(pm.NextRound(), "round is not over")
+
+	// fold - Player 1
 	a.NoError(pm.ParticipantFolds(p1))
+
+	// 50¢ call - Player 2
 	a.NoError(pm.ParticipantCalls(p2)) // 275
 	a.Equal(ErrRoundOver, pm.ParticipantCalls(p3))
 
@@ -165,24 +175,38 @@ func TestNew_multiRoundWithAllIn(t *testing.T) {
 }
 
 func TestPotManager_PayWinners_oneWinner(t *testing.T) {
+	a := assert.New(t)
+
 	pm := setupPotManager(25, 25, 25, 25)
-	payouts := pm.PayWinners([][]Participant{
+
+	payouts, err := pm.PayWinners([][]Participant{
 		{pm.tableOrder[0].Participant},
 	})
+	a.Nil(payouts)
+	a.EqualError(err, "game is not over")
 
-	a := assert.New(t)
+	pm.EndGame()
+	payouts, err = pm.PayWinners([][]Participant{
+		{pm.tableOrder[0].Participant},
+	})
+	a.NoError(err)
+
 	a.Equal(map[Participant]int{
 		pm.tableOrder[0].Participant: 75,
 	}, payouts)
 }
 
 func TestPotManager_PayWinners_twoWinner(t *testing.T) {
+	a := assert.New(t)
+
 	pm := setupPotManager(25, 25, 25, 25)
-	payouts := pm.PayWinners([][]Participant{
+	pm.EndGame()
+
+	payouts, err := pm.PayWinners([][]Participant{
 		{pm.tableOrder[0].Participant, pm.tableOrder[1].Participant},
 	})
+	a.NoError(err)
 
-	a := assert.New(t)
 	a.Equal(map[Participant]int{
 		pm.tableOrder[0].Participant: 50,
 		pm.tableOrder[1].Participant: 25,
@@ -190,14 +214,18 @@ func TestPotManager_PayWinners_twoWinner(t *testing.T) {
 }
 
 func TestPotManager_PayWinners_simpleAllIn(t *testing.T) {
+	a := assert.New(t)
+
 	pm := setupPotManager(50, 25, 50, 50)
-	payouts := pm.PayWinners([][]Participant{
+	pm.EndGame()
+
+	payouts, err := pm.PayWinners([][]Participant{
 		{pm.tableOrder[0].Participant}, // can only win 75
 		{pm.tableOrder[1].Participant}, // wins remaining
 		{pm.tableOrder[2].Participant}, // shouldn't win any
 	})
+	a.NoError(err)
 
-	a := assert.New(t)
 	a.Equal(map[Participant]int{
 		pm.tableOrder[0].Participant: 75,
 		pm.tableOrder[1].Participant: 50,
@@ -209,8 +237,11 @@ func TestPotManager_PayWinners_simpleAllIn(t *testing.T) {
 }
 
 func TestPotManager_PayWinners_complexAllIn(t *testing.T) {
+	a := assert.New(t)
 	pm := setupPotManager(75, 25, 50, 50, 75, 75) // 275
-	payouts := pm.PayWinners([][]Participant{
+	pm.EndGame()
+
+	payouts, err := pm.PayWinners([][]Participant{
 		{
 			pm.tableOrder[0].Participant,
 			pm.tableOrder[1].Participant,
@@ -220,8 +251,8 @@ func TestPotManager_PayWinners_complexAllIn(t *testing.T) {
 			pm.tableOrder[3].Participant,
 		},
 	})
+	a.NoError(err)
 
-	a := assert.New(t)
 	a.Equal(125, pm.pots[0].amount)
 	a.Equal(100, pm.pots[1].amount)
 	a.Equal(50, pm.pots[2].amount)
@@ -303,11 +334,23 @@ func TestPotManager_AdvanceDecision(t *testing.T) {
 	a.Equal(ErrRoundOver, pm.AdvanceDecision())
 }
 
+func TestPotManager_GetCanActParticipantCount(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(50, 100, 50, 100, 100)
+	a.Equal(3, pm.GetCanActParticipantCount())
+
+	a.NoError(pm.ParticipantFolds(pm.tableOrder[0]))
+	a.Equal(2, pm.GetCanActParticipantCount())
+}
+
 func setupPotManager(ante int, balances ...int) *PotManager {
 	pm := New(ante)
 	for i, balance := range balances {
 		p := newTestParticipant(int64(i+1), balance)
-		pm.SeatParticipant(p)
+		if err := pm.SeatParticipant(p); err != nil {
+			panic(err)
+		}
 	}
 	pm.FinishSeatingParticipants()
 	return pm
