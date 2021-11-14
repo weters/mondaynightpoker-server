@@ -188,6 +188,7 @@ func TestGame_TradeCardsForParticipant_UsingDiscards(t *testing.T) {
 
 func TestGame_NextRound(t *testing.T) {
 	game := mustNewGame(DefaultOptions(), 100, 100, 100)
+	assertTradeIns(t, game)
 
 	a := assert.New(t)
 	a.EqualError(game.NextRound(), "round is not over")
@@ -299,6 +300,97 @@ func TestGame_ParticipantAction(t *testing.T) {
 	}, game.winners)
 }
 
+func TestGame_allIn(t *testing.T) {
+	a := assert.New(t)
+
+	opts := DefaultOptions()
+	opts.Ante = 50
+
+	// Scenario:
+	// Player 1, 2, and 3 will go all in
+	// Final bet will be 125
+	// All four players remain
+	// 1 has best hand, 2 and 3 tie
+	// main pot: 200 (won by player 1)
+	// second pot: 150 (split by player 2 and 3)
+	// third pot: 50 (won by player 3)
+	game := mustNewGame(opts, 50, 100, 125, 200)
+
+	p := func(id int64) *Participant {
+		return game.idToParticipant[id]
+	}
+
+	// setup
+	{
+		a.Equal(200, game.potManager.Pots().Total())
+
+		game.community = deck.CardsFromString("2c,4c,6c")
+		p(1).hand = deck.CardsFromString("14c,13c,12c")
+		p(2).hand = deck.CardsFromString("13d,12d,11d")
+		p(3).hand = deck.CardsFromString("13h,12h,11h")
+		p(4).hand = deck.CardsFromString("11s,10s,9s")
+	}
+
+	// trade-in round
+	{
+		a.NoError(game.tradeCardsForParticipant(p(1), []*deck.Card{}))
+		a.NoError(game.tradeCardsForParticipant(p(2), []*deck.Card{}))
+		a.NoError(game.tradeCardsForParticipant(p(3), []*deck.Card{}))
+		a.NoError(game.tradeCardsForParticipant(p(4), []*deck.Card{}))
+		a.NoError(game.NextRound())
+	}
+
+	// current state: no community cards shown
+
+	{
+		a.NoError(game.ParticipantBets(p(2), 50))
+		a.NoError(game.ParticipantCalls(p(3)))
+		a.NoError(game.ParticipantCalls(p(4)))
+		a.NoError(game.NextRound())
+		a.Equal(350, game.potManager.Pots().Total())
+	}
+
+	// current state: first card shown
+
+	{
+		// normally this raise wouldn't be allowed because it's less than 2x previous bet,
+		// but it's an all-in
+		a.NoError(game.ParticipantBets(p(3), 25))
+		a.EqualError(game.NextRound(), "round is not over")
+		a.NoError(game.ParticipantCalls(p(4)))
+
+		a.NoError(game.NextRound())
+		a.Equal(400, game.potManager.Pots().Total())
+	}
+
+	// current state: second card shown
+
+	{
+		a.NoError(game.NextRound())
+		a.Equal(400, game.potManager.Pots().Total())
+	}
+
+	// current state: final card shown, last betting round
+
+	{
+		a.False(game.IsGameOver())
+		a.NoError(game.NextRound())
+		a.Equal(400, game.potManager.Pots().Total())
+	}
+
+	// end of game
+
+	{
+		a.True(game.IsGameOver())
+		a.Equal(3, len(game.potManager.Pots()))
+		a.Equal(map[*Participant]int{
+			p(1): 200,
+			p(2): 75,
+			p(3): 125,
+		}, game.winners)
+	}
+}
+
 func TestGame_ParticipantActionTie(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Ante = 75
@@ -341,6 +433,8 @@ func TestGame_ParticipantActionTie(t *testing.T) {
 
 func TestGame_ParticipantActionAllFold(t *testing.T) {
 	game := mustNewGame(DefaultOptions(), 100, 100, 100)
+	assertTradeIns(t, game)
+
 	assert.NoError(t, game.DealCards())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
@@ -458,6 +552,7 @@ ForLoop:
 	assert.Equal(t, []int64{3}, msg[2].PlayerIDs)
 	assert.Equal(t, "{} had a Three of a kind and lost ${25}", msg[2].Message)
 }
+
 func TestGame_getFutureActionsForPlayer(t *testing.T) {
 	a := assert.New(t)
 
@@ -492,4 +587,13 @@ func assertHand(t *testing.T, game *Game, playerID int64, hand string) {
 	t.Helper()
 
 	assert.Equal(t, hand, deck.CardsToString(game.idToParticipant[playerID].hand))
+}
+
+func assertTradeIns(t *testing.T, game *Game) {
+	t.Helper()
+	for _, p := range game.playerIDs {
+		assert.NoError(t, game.tradeCardsForParticipant(game.idToParticipant[p], []*deck.Card{}))
+	}
+
+	assert.NoError(t, game.NextRound())
 }

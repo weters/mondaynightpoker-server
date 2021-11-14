@@ -23,8 +23,8 @@ var ErrGameOver = errors.New("game is over")
 // ErrRoundOver is an error when the round is over
 var ErrRoundOver = errors.New("round is over")
 
-// ErrParticipantNotFound is an error when a participant with a provided ID cannot be found
-var ErrParticipantNotFound = errors.New("participant not found")
+// ErrInDecisionRound is an error when a participant tries to check, call, bet, raise, or fold while in the decision round
+var ErrInDecisionRound = errors.New("you cannot perform a betting action while in a decision round")
 
 // ErrParticipantCannotAct is an error when the participant cannot act
 var ErrParticipantCannotAct = ParticipantError("it is not your turn")
@@ -55,6 +55,9 @@ type PotManager struct {
 
 	// isGameOver will prevent any further action from happening
 	isGameOver bool
+
+	// isInDecisionRound allows all non-folded participants to do something
+	isInDecisionRound bool
 }
 
 // New instantiates a new PotManager
@@ -97,6 +100,10 @@ func (p *PotManager) FinishSeatingParticipants() {
 
 // ParticipantFolds handles a fold
 func (p *PotManager) ParticipantFolds(pt Participant) error {
+	if p.isInDecisionRound {
+		return ErrInDecisionRound
+	}
+
 	pip, err := p.getActiveParticipantInPot(pt)
 	if err != nil {
 		return err
@@ -109,6 +116,10 @@ func (p *PotManager) ParticipantFolds(pt Participant) error {
 
 // ParticipantChecks handles a check
 func (p *PotManager) ParticipantChecks(pt Participant) error {
+	if p.isInDecisionRound {
+		return ErrInDecisionRound
+	}
+
 	pip, err := p.getActiveParticipantInPot(pt)
 	if err != nil {
 		return err
@@ -124,6 +135,10 @@ func (p *PotManager) ParticipantChecks(pt Participant) error {
 
 // ParticipantCalls handles a call
 func (p *PotManager) ParticipantCalls(pt Participant) error {
+	if p.isInDecisionRound {
+		return ErrInDecisionRound
+	}
+
 	pip, err := p.getActiveParticipantInPot(pt)
 	if err != nil {
 		return err
@@ -142,6 +157,10 @@ func (p *PotManager) ParticipantCalls(pt Participant) error {
 // This method only enforces that the bet or raise is above the previous bet or raise. Any additional logic
 // must be handled by the game.
 func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) error {
+	if p.isInDecisionRound {
+		return ErrInDecisionRound
+	}
+
 	pip, err := p.getActiveParticipantInPot(pt)
 	if err != nil {
 		return err
@@ -169,6 +188,16 @@ func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) 
 	return nil
 }
 
+// GetParticipantAllInAmount returns the amount required for the participant to go all-in
+func (p *PotManager) GetParticipantAllInAmount(pt Participant) int {
+	pip, ok := p.participants[pt.ID()]
+	if !ok {
+		panic("participant not found")
+	}
+
+	return pip.amountInPlay + pip.Balance()
+}
+
 // AdvanceDecision will advance a decision without taking an explicit action
 func (p *PotManager) AdvanceDecision() error {
 	if p.GetInTurnParticipant() == nil {
@@ -177,6 +206,12 @@ func (p *PotManager) AdvanceDecision() error {
 
 	p.completeTurn()
 	return nil
+}
+
+// StartDecisionRound starts a decision round which is a round that all non-folded players (including all-in) can participate
+func (p *PotManager) StartDecisionRound() {
+	p.isInDecisionRound = true
+	p.reset()
 }
 
 // IsParticipantYetToAct returns true if the participant is not in turn and the participant has yet to act
@@ -346,9 +381,15 @@ func (p *PotManager) completeTurn() {
 	// stay in for loop until we find a player who can act
 	for p.actionAtIndex++; p.actionAtIndex < len(p.tableOrder); p.actionAtIndex++ {
 		pip := p.tableOrder[p.normalizedActionAtIndex()]
-		// player can act
-		if !pip.isAllIn && !pip.isFolded {
-			return
+
+		if p.isInDecisionRound {
+			if !pip.isFolded {
+				return
+			}
+		} else {
+			if pip.canAct() {
+				return
+			}
 		}
 	}
 
@@ -445,6 +486,8 @@ func (p *PotManager) NextRound() error {
 	}
 
 	p.calculatePot()
+
+	p.isInDecisionRound = false
 	p.reset()
 	return nil
 }
@@ -458,9 +501,34 @@ func (p *PotManager) reset() {
 	p.amountInPlay = 0
 	p.actionAtIndex = 0
 
-	// reset actionStartIndex to first non-folded, non-all-in player
-	for p.actionStartIndex = 0; p.actionStartIndex < len(p.tableOrder) && !p.tableOrder[p.actionStartIndex].canAct(); p.actionStartIndex++ {
-		// no-op
+	// set the appropriate actionStartIndex
+	// if there's only one valid participant left (i.e., everyone else folded or is all-in) then skip to the end
+
+	firstValid := -1
+	totalValid := 0
+	for i, pip := range p.tableOrder {
+		var isValid bool
+		if p.isInDecisionRound {
+			isValid = !pip.isFolded
+		} else {
+			isValid = pip.canAct()
+		}
+
+		if isValid {
+			if firstValid == -1 {
+				firstValid = i
+			}
+
+			totalValid++
+		}
+	}
+
+	if totalValid > 1 {
+		p.actionStartIndex = firstValid
+	} else {
+		// move the pointer to the end to force round over
+		p.actionStartIndex = 0
+		p.actionAtIndex = len(p.tableOrder)
 	}
 }
 

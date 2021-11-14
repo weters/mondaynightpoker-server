@@ -105,6 +105,9 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 
 	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
 
+	// decision round allows all-in participants to participate with trade-ins
+	g.potManager.StartDecisionRound()
+
 	return g, nil
 }
 
@@ -221,20 +224,25 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 		term = strings.ToLower(string(ActionRaise))
 	}
 
-	if bet%g.options.Ante > 0 {
-		return fmt.Errorf("your %s must be in multiples of the ante (${%d})", term, g.options.Ante)
-	}
-
 	if maxBet := g.potManager.GetPotLimitMaxBet(); bet > maxBet {
 		return fmt.Errorf("your %s (${%d}) must not exceed the pot limit (${%d})", term, bet, maxBet)
 	}
 
-	if bet < g.options.Ante {
-		return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
-	}
+	allInAmount := g.potManager.GetParticipantAllInAmount(p)
 
-	if currentBet > 0 && bet < currentBet*2 {
-		return fmt.Errorf("your raise (${%d}) must be at least equal to double the previous bet (${%d})", bet, currentBet*2)
+	// only check the following logic IF the participant is not going all-in
+	if bet != allInAmount {
+		if bet%g.options.Ante > 0 {
+			return fmt.Errorf("your %s must be in multiples of the ante (${%d})", term, g.options.Ante)
+		}
+
+		if bet < g.options.Ante {
+			return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
+		}
+
+		if currentBet > 0 && bet < currentBet*2 {
+			return fmt.Errorf("your raise (${%d}) must be at least equal to double the previous bet (${%d})", bet, currentBet*2)
+		}
 	}
 
 	return g.potManager.ParticipantBetsOrRaises(p, bet)

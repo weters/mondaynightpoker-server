@@ -411,6 +411,47 @@ func TestPotManager_getActiveParticipantInPot(t *testing.T) {
 	})
 }
 
+func TestPotManager_StartDecisionRound(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(25, 100, 100, 100)
+	pm.StartDecisionRound()
+	a.Equal(ErrInDecisionRound, pm.ParticipantFolds(pm.tableOrder[0]))
+	a.Equal(ErrInDecisionRound, pm.ParticipantChecks(pm.tableOrder[0]))
+	a.Equal(ErrInDecisionRound, pm.ParticipantCalls(pm.tableOrder[0]))
+	a.Equal(ErrInDecisionRound, pm.ParticipantBetsOrRaises(pm.tableOrder[0], 25))
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.NextRound())
+
+	a.NoError(pm.ParticipantChecks(pm.tableOrder[0]))
+}
+
+func TestPotManager_GetParticipantAllInAmount(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(25, 100, 200)
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[0], 25))
+	a.Equal(75, pm.GetParticipantAllInAmount(pm.tableOrder[0]))
+	a.Equal(175, pm.GetParticipantAllInAmount(pm.tableOrder[1]))
+}
+
+func TestPotManager__onlyOnePlayerWithBalance(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(25, 25, 25, 25, 100)
+	pm.StartDecisionRound()
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.AdvanceDecision())
+	a.NoError(pm.NextRound())
+
+	a.EqualError(pm.ParticipantChecks(pm.tableOrder[3]), "round is over")
+	a.NoError(pm.NextRound())
+}
+
 func setupPotManager(ante int, balances ...int) *PotManager {
 	pm := New(ante)
 	for i, balance := range balances {
