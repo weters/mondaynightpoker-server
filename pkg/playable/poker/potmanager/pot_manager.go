@@ -410,7 +410,13 @@ func (p *PotManager) calculatePot() {
 
 	allInAmounts := make(map[int]map[*participantInPot]bool)
 	totalAction := 0
+	liveParticipants := make(map[*participantInPot]bool)
+
 	for _, pip := range p.tableOrder {
+		if pip.canAct() {
+			liveParticipants[pip] = true
+		}
+
 		totalAction += pip.amountInPlay
 
 		// participant went all-in this round
@@ -476,6 +482,33 @@ func (p *PotManager) calculatePot() {
 		}
 
 		prevAmount = allInAmount
+	}
+
+	switch len(liveParticipants) {
+	case 1:
+		var pip *participantInPot
+		for aPip := range liveParticipants {
+			pip = aPip
+			break
+		}
+
+		if currentPot.allInParticipants == nil {
+			pip.adjustAmountInPlay(-1 * currentPot.amount)
+			pip.Participant.AdjustBalance(currentPot.amount)
+			p.pots = p.pots[0 : len(p.pots)-1]
+		}
+	case 0:
+		if len(currentPot.allInParticipants) == 1 {
+			var pip *participantInPot
+			for aPip := range currentPot.allInParticipants {
+				pip = aPip
+				break
+			}
+
+			pip.adjustAmountInPlay(-1 * currentPot.amount)
+			pip.Participant.AdjustBalance(currentPot.amount)
+			p.pots = p.pots[0 : len(p.pots)-1]
+		}
 	}
 }
 

@@ -175,6 +175,60 @@ func TestNew_multiRoundWithAllIn(t *testing.T) {
 	a.Equal(participantInPotMap{pm.tableOrder[1]: true}, pm.pots[2].allInParticipants)
 }
 
+// nolint:dupl
+func TestNew__reducePot(t *testing.T) {
+	a := assert.New(t)
+	pm := setupPotManager(5, 5, 10, 30, 30)
+
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[1], 5))
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[2], 20))
+	a.NoError(pm.ParticipantFolds(pm.tableOrder[3]))
+	a.NoError(pm.NextRound())
+
+	a.Equal(2, len(pm.Pots()))
+	a.Equal(30, pm.Pots().Total())
+	a.Equal(0, pm.tableOrder[0].Balance())
+	a.Equal(0, pm.tableOrder[1].Balance())
+	a.Equal(20, pm.tableOrder[2].Balance())
+	a.Equal(25, pm.tableOrder[3].Balance())
+}
+
+// nolint:dupl
+func TestNew__reducePotWithLastAllIn(t *testing.T) {
+	a := assert.New(t)
+	pm := setupPotManager(5, 5, 10, 30, 30)
+
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[1], 5))
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[2], 25))
+	a.NoError(pm.ParticipantFolds(pm.tableOrder[3]))
+	a.NoError(pm.NextRound())
+
+	a.Equal(2, len(pm.Pots()))
+	a.Equal(30, pm.Pots().Total())
+	a.Equal(0, pm.tableOrder[0].Balance())
+	a.Equal(0, pm.tableOrder[1].Balance())
+	a.Equal(20, pm.tableOrder[2].Balance())
+	a.Equal(25, pm.tableOrder[3].Balance())
+}
+
+// nolint:dupl
+func TestNew__reducePotWithMultipleLastAllIn(t *testing.T) {
+	a := assert.New(t)
+	pm := setupPotManager(5, 5, 10, 30, 30)
+
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[1], 5))
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[2], 25))
+	a.NoError(pm.ParticipantCalls(pm.tableOrder[3]))
+	a.NoError(pm.NextRound())
+
+	a.Equal(3, len(pm.Pots()))
+	a.Equal(75, pm.Pots().Total())
+	a.Equal(0, pm.tableOrder[0].Balance())
+	a.Equal(0, pm.tableOrder[1].Balance())
+	a.Equal(0, pm.tableOrder[2].Balance())
+	a.Equal(0, pm.tableOrder[3].Balance())
+}
+
 func TestPotManager_PayWinners_oneWinner(t *testing.T) {
 	a := assert.New(t)
 
