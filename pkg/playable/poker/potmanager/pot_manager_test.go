@@ -209,6 +209,11 @@ func TestNew__reducePotWithLastAllIn(t *testing.T) {
 	a.Equal(0, pm.tableOrder[1].Balance())
 	a.Equal(20, pm.tableOrder[2].Balance())
 	a.Equal(25, pm.tableOrder[3].Balance())
+
+	a.NoError(pm.NextRound())
+	a.NoError(pm.NextRound())
+	a.Equal(2, len(pm.Pots()))
+	a.Equal(30, pm.Pots().Total())
 }
 
 // nolint:dupl
@@ -227,6 +232,11 @@ func TestNew__reducePotWithMultipleLastAllIn(t *testing.T) {
 	a.Equal(0, pm.tableOrder[1].Balance())
 	a.Equal(0, pm.tableOrder[2].Balance())
 	a.Equal(0, pm.tableOrder[3].Balance())
+
+	a.NoError(pm.NextRound())
+	a.NoError(pm.NextRound())
+	a.Equal(3, len(pm.Pots()))
+	a.Equal(75, pm.Pots().Total())
 }
 
 func TestPotManager_PayWinners_oneWinner(t *testing.T) {
