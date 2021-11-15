@@ -26,6 +26,7 @@ type GameState struct {
 	Pots         potmanager.Pots    `json:"pots"`
 	Ante         int                `json:"ante"`
 	CurrentBet   int                `json:"currentBet"`
+	MinBet       int                `json:"minBet"`
 	MaxBet       int                `json:"maxBet"`
 	TradeIns     *TradeIns          `json:"tradeIns"`
 	InitialDeal  int                `json:"initialDeal"`

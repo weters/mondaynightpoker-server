@@ -232,16 +232,17 @@ func (g *Game) ParticipantBets(p *Participant, bet int) error {
 
 	// only check the following logic IF the participant is not going all-in
 	if bet != allInAmount {
-		if bet%g.options.Ante > 0 {
-			return fmt.Errorf("your %s must be in multiples of the ante (${%d})", term, g.options.Ante)
+		if bet%25 > 0 {
+			return fmt.Errorf("your %s must be in multiples of ${25}", term)
 		}
 
 		if bet < g.options.Ante {
 			return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
 		}
 
-		if currentBet > 0 && bet < currentBet*2 {
-			return fmt.Errorf("your raise (${%d}) must be at least equal to double the previous bet (${%d})", bet, currentBet*2)
+		minRaiseTo := currentBet + g.potManager.GetRaise()
+		if currentBet > 0 && bet < minRaiseTo {
+			return fmt.Errorf("your raise of ${%d} must be at least equal to double the previous raise of ${%d}", bet-currentBet, g.potManager.GetRaise())
 		}
 	}
 

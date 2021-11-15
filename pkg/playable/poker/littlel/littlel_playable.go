@@ -86,7 +86,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		pJSON = &participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
-			Balance:    p.balance,
+			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
 			Hand:       p.hand,
 			HandRank:   p.GetBestHand(g.GetCommunityCards()).analyzer.GetHand().String(),
@@ -96,6 +96,18 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	winners := make([]int64, 0, len(g.winners))
 	for p := range g.winners {
 		winners = append(winners, p.PlayerID)
+	}
+
+	currentBet := g.potManager.GetBet()
+
+	minBet := g.options.Ante
+	if currentBet > 0 {
+		minBet = currentBet + g.potManager.GetRaise()
+	}
+
+	maxBet := g.potManager.GetPotLimitMaxBet()
+	if allInAmount := g.potManager.GetParticipantAllInAmount(p); allInAmount < maxBet {
+		maxBet = allInAmount
 	}
 
 	s := State{
@@ -109,8 +121,9 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			Pot:          g.potManager.Pots().Total(),
 			Pots:         g.potManager.Pots(),
 			Ante:         g.options.Ante,
-			CurrentBet:   g.potManager.GetBet(),
-			MaxBet:       g.potManager.GetPotLimitMaxBet(),
+			CurrentBet:   currentBet,
+			MinBet:       minBet,
+			MaxBet:       maxBet,
 			TradeIns:     g.GetAllowedTradeIns(),
 			InitialDeal:  g.options.InitialDeal,
 			Community:    g.GetCommunityCards(),

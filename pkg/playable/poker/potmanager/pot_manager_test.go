@@ -516,6 +516,29 @@ func TestPotManager__onlyOnePlayerWithBalance(t *testing.T) {
 	a.NoError(pm.NextRound())
 }
 
+func TestPotManager_GetRaise(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(50, 500, 500, 500)
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[0], 50))
+	a.Equal(50, pm.GetBet())
+	a.Equal(50, pm.GetRaise())
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[1], 100))
+	a.Equal(100, pm.GetBet())
+	a.Equal(50, pm.GetRaise())
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[2], 150))
+	a.Equal(150, pm.GetBet())
+	a.Equal(50, pm.GetRaise())
+	a.NoError(pm.ParticipantBetsOrRaises(pm.tableOrder[0], 350))
+	a.Equal(350, pm.GetBet())
+	a.Equal(200, pm.GetRaise())
+	a.NoError(pm.ParticipantCalls(pm.tableOrder[1]))
+	a.NoError(pm.ParticipantCalls(pm.tableOrder[2]))
+	a.NoError(pm.NextRound())
+	a.Equal(0, pm.GetBet())
+	a.Equal(0, pm.GetRaise())
+}
+
 func setupPotManager(ante int, balances ...int) *PotManager {
 	pm := New(ante)
 	for i, balance := range balances {

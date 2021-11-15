@@ -47,6 +47,8 @@ type PotManager struct {
 	// actionAtIndex is who is currently making a decision
 	actionAtIndex int
 	actionAmount  int
+	// actionDiffAmount keeps track of the raise
+	actionDiffAmount int
 	// amountInPlay is how much has been bet or called, but not yet added to the pot
 	amountInPlay int
 
@@ -181,6 +183,7 @@ func (p *PotManager) ParticipantBetsOrRaises(pt Participant, newBetOrRaise int) 
 	p.actionStartIndex = pip.tableIndex
 	p.actionAtIndex = 0
 
+	p.actionDiffAmount = newBetOrRaise - p.actionAmount
 	p.actionAmount = newBetOrRaise
 	p.adjustParticipant(pip, newBetOrRaise)
 
@@ -263,6 +266,12 @@ func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
 // GetBet returns the current bet
 func (p *PotManager) GetBet() int {
 	return p.actionAmount
+}
+
+// GetRaise returns the raise amount
+// Example. Player A bets $25. Player B raises to $50. This would returns $25.
+func (p *PotManager) GetRaise() int {
+	return p.actionDiffAmount
 }
 
 // IsRoundOver returns true if all eligible participants have acted
@@ -531,6 +540,7 @@ func (p *PotManager) reset() {
 	}
 
 	p.actionAmount = 0
+	p.actionDiffAmount = 0
 	p.amountInPlay = 0
 	p.actionAtIndex = 0
 

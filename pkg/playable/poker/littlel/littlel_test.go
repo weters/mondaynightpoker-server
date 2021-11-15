@@ -239,7 +239,7 @@ func TestGame_ParticipantAction(t *testing.T) {
 	assert.EqualError(t, game.ParticipantBets(p(2), 0), "your bet must at least match the ante (${25})")
 	assert.NoError(t, game.ParticipantBets(p(2), 75)) // pot is now 150¢
 	assert.EqualError(t, game.ParticipantChecks(p(3)), "you cannot check with an active bet")
-	assert.EqualError(t, game.ParticipantBets(p(3), 125), "your raise (${125}) must be at least equal to double the previous bet (${150})")
+	assert.EqualError(t, game.ParticipantBets(p(3), 125), "your raise of ${50} must be at least equal to double the previous raise of ${75}")
 	assert.EqualError(t, game.ParticipantBets(p(3), 325), "your raise (${325}) must not exceed the pot limit (${300})")
 	assert.NoError(t, game.ParticipantBets(p(3), 225)) // pot is now 375¢
 	assert.NoError(t, game.ParticipantFolds(p(1)))
@@ -499,15 +499,19 @@ func TestGame_ParticipantBets(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Ante = 25
 
-	game := mustNewGame(opts, 100, 100)
+	game := mustNewGame(opts, 1000, 1000)
 	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
 	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
 	_ = game.NextRound()
 
-	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of the ante (${25})")
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[1], 24), "your bet must be in multiples of ${25}")
 	assert.NoError(t, game.ParticipantBets(game.idToParticipant[1], 25))
-	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your raise must be in multiples of the ante (${25})")
-	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 50))
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 51), "your raise must be in multiples of ${25}")
+	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 75))
+
+	assert.NoError(t, game.ParticipantBets(game.idToParticipant[1], 150))
+	assert.EqualError(t, game.ParticipantBets(game.idToParticipant[2], 200), "your raise of ${50} must be at least equal to double the previous raise of ${75}")
+	assert.NoError(t, game.ParticipantBets(game.idToParticipant[2], 225))
 }
 
 func TestGame_sendEndOfGameLogMessages(t *testing.T) {
