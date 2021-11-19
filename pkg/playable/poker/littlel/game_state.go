@@ -2,6 +2,7 @@ package littlel
 
 import (
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 )
 
 type participantJSON struct {
@@ -22,13 +23,15 @@ type GameState struct {
 	Round        round              `json:"round"`
 	Action       int64              `json:"action"`
 	Pot          int                `json:"pot"`
+	Pots         potmanager.Pots    `json:"pots"`
 	Ante         int                `json:"ante"`
 	CurrentBet   int                `json:"currentBet"`
+	MinBet       int                `json:"minBet"`
 	MaxBet       int                `json:"maxBet"`
 	TradeIns     *TradeIns          `json:"tradeIns"`
 	InitialDeal  int                `json:"initialDeal"`
 	Community    []*deck.Card       `json:"community"`
-	Winners      []int64            `json:"winners"`
+	Winners      map[int64]int      `json:"winners"`
 }
 
 // State represents the state of the game and the state of the current player

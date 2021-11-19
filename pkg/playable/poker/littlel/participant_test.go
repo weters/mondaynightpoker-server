@@ -1,7 +1,6 @@
 package littlel
 
 import (
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
@@ -53,7 +52,7 @@ func TestParticipant_GetBestHand(t *testing.T) {
 }
 
 func TestParticipant_GetBestHand_CacheAfterTrade(t *testing.T) {
-	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
+	game := mustNewGame(DefaultOptions(), 50, 50)
 	assert.NoError(t, game.DealCards())
 	p := func(id int64) *Participant {
 		return game.idToParticipant[id]
@@ -69,4 +68,9 @@ func TestParticipant_GetBestHand_CacheAfterTrade(t *testing.T) {
 	assert.NoError(t, game.NextRound())
 
 	assert.Equal(t, handanalyzer.StraightFlush.String(), p(1).GetBestHand(deck.CardsFromString(",,")).analyzer.GetHand().String())
+}
+
+func TestParticipant_GetBestHand__invalidCommunity(t *testing.T) {
+	p := &Participant{}
+	assert.PanicsWithValue(t, "invalid community", func() { p.GetBestHand(deck.CardsFromString("2c,2d")) })
 }

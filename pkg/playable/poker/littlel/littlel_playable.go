@@ -16,8 +16,8 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, errors.New("participant is not in the game")
 	}
 
-	switch message.Action {
-	case "trade":
+	switch Action(message.Action) {
+	case ActionTrade:
 		if err := g.tradeCardsForParticipant(p, message.Cards); err != nil {
 			return nil, false, err
 		}
@@ -25,7 +25,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
 
 		return playable.OK(), true, nil
-	case "check":
+	case ActionCheck:
 		if err := g.ParticipantChecks(p); err != nil {
 			return nil, false, err
 		}
@@ -33,7 +33,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
 
 		return playable.OK(), true, nil
-	case "fold":
+	case ActionFold:
 		if err := g.ParticipantFolds(p); err != nil {
 			return nil, false, err
 		}
@@ -41,7 +41,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
 
 		return playable.OK(), true, nil
-	case "call":
+	case ActionCall:
 		if err := g.ParticipantCalls(p); err != nil {
 			return nil, false, err
 		}
@@ -49,9 +49,9 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
 
 		return playable.OK(), true, nil
-	case "raise":
+	case ActionRaise:
 		fallthrough
-	case "bet":
+	case ActionBet:
 		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount == 0 {
 			return nil, false, errors.New("amount must be > 0")
@@ -86,16 +86,28 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		pJSON = &participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
-			Balance:    p.balance,
+			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
 			Hand:       p.hand,
 			HandRank:   p.GetBestHand(g.GetCommunityCards()).analyzer.GetHand().String(),
 		}
 	}
 
-	winners := make([]int64, len(g.winners))
-	for i, p := range g.winners {
-		winners[i] = p.PlayerID
+	currentBet := g.potManager.GetBet()
+
+	minBet := g.getMinBet()
+
+	maxBet := g.potManager.GetPotLimitMaxBet()
+	if allInAmount := g.potManager.GetParticipantAllInAmount(p); allInAmount < maxBet {
+		maxBet = allInAmount
+	}
+
+	var winners map[int64]int
+	if len(g.winners) > 0 {
+		winners = make(map[int64]int)
+		for pt, amt := range g.winners {
+			winners[pt.PlayerID] = amt
+		}
 	}
 
 	s := State{
@@ -106,10 +118,12 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			DealerID:     g.idToParticipant[g.playerIDs[0]].PlayerID,
 			Round:        g.round,
 			Action:       action,
-			Pot:          g.pot,
+			Pot:          g.potManager.Pots().Total(),
+			Pots:         g.potManager.Pots(),
 			Ante:         g.options.Ante,
-			CurrentBet:   g.currentBet,
-			MaxBet:       g.getPotLimit(),
+			CurrentBet:   currentBet,
+			MinBet:       minBet,
+			MaxBet:       maxBet,
 			TradeIns:     g.GetAllowedTradeIns(),
 			InitialDeal:  g.options.InitialDeal,
 			Community:    g.GetCommunityCards(),
@@ -124,7 +138,7 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		pJSON := participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
-			Balance:    p.balance,
+			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
 			Traded:     p.traded,
 		}
@@ -146,6 +160,14 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		Value: "little-l",
 		Data:  &s,
 	}, nil
+}
+
+func (g *Game) getMinBet() int {
+	minBet := g.options.Ante
+	if currentBet := g.potManager.GetBet(); currentBet > 0 {
+		minBet = currentBet + g.potManager.GetRaise()
+	}
+	return minBet
 }
 
 // GetEndOfGameDetails returns the details at the end of a game

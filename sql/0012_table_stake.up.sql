@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE players_tables ADD COLUMN table_stake INT NOT NULL DEFAULT 2000;
+COMMIT;

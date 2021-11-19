@@ -4,16 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 	"sort"
 	"strings"
 	"time"
 )
-
-// ErrNotPlayersTurn is an error when a player attempts to act out of turn
-var ErrNotPlayersTurn = errors.New("it is not your turn")
 
 const maxParticipants = 10
 
@@ -24,7 +21,7 @@ const (
 	roundBeforeFirstTurn
 	roundBeforeSecondTurn
 	roundBeforeThirdTurn
-	roundFinalBettingRound
+	roundFinalBettingRound // nolint:deadcode,varcheck
 	roundRevealWinner
 )
 
@@ -34,31 +31,26 @@ var seed int64 = -1
 
 // Game represents an individual game of Little L
 type Game struct {
-	playerIDs          []int64
-	idToParticipant    map[int64]*Participant
-	options            Options
-	logger             logrus.FieldLogger
-	logChan            chan []*playable.LogMessage
-	tradeIns           *TradeIns
-	deck               *deck.Deck
-	decisionStartIndex int
-	decisionCount      int
-	pot                int
-	currentBet         int
-	round              round
-	community          []*deck.Card
-	discards           []*deck.Card
+	playerIDs       []int64
+	idToParticipant map[int64]*Participant
+	options         Options
+	logger          logrus.FieldLogger
+	logChan         chan []*playable.LogMessage
+	tradeIns        *TradeIns
+	deck            *deck.Deck
+	potManager      *potmanager.PotManager
+	round           round
+	community       []*deck.Card
+	discards        []*deck.Card
 
 	done    bool
-	winners []*Participant
-
-	lastAdjustmentRound round // the last round an adjustment ran
+	winners map[*Participant]int
 
 	endGameAt time.Time
 }
 
-// NewGame returns a new instance of the game
-func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
+// NewGameV2 returns a new instance of the game
+func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Options) (*Game, error) {
 	if options.Ante <= 0 {
 		return nil, errors.New("ante must be greater than zero")
 	}
@@ -67,11 +59,11 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		return nil, errors.New("the initial deal must be between 3 and 5 cards")
 	}
 
-	if len(playerIDs) < 2 {
+	if len(players) < 2 {
 		return nil, errors.New("you must have at least two participants")
 	}
 
-	if len(playerIDs) > maxParticipants {
+	if len(players) > maxParticipants {
 		return nil, fmt.Errorf("you cannot have more than %d participants", maxParticipants)
 	}
 
@@ -79,10 +71,20 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	d.SetSeed(seed)
 	d.Shuffle()
 
+	pm := potmanager.New(options.Ante)
+
 	idToParticipant := make(map[int64]*Participant)
-	for _, id := range playerIDs {
-		idToParticipant[id] = newParticipant(id, options.Ante)
+	playerIDs := make([]int64, len(players))
+	for i, player := range players {
+		playerIDs[i] = player.GetPlayerID()
+		participant := newParticipant(player.GetPlayerID(), player.GetTableStake())
+		idToParticipant[player.GetPlayerID()] = participant
+
+		if err := pm.SeatParticipant(participant); err != nil {
+			return nil, err
+		}
 	}
+	pm.FinishSeatingParticipants()
 
 	tradeIns, err := NewTradeIns(options.TradeIns, options.InitialDeal)
 	if err != nil {
@@ -90,19 +92,21 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	}
 
 	g := &Game{
-		options:             options,
-		playerIDs:           append([]int64{}, playerIDs...), // make a copy
-		idToParticipant:     idToParticipant,
-		deck:                d,
-		pot:                 len(idToParticipant) * options.Ante,
-		discards:            []*deck.Card{},
-		lastAdjustmentRound: round(-1),
-		logChan:             make(chan []*playable.LogMessage, 256),
-		logger:              logger,
-		tradeIns:            tradeIns,
+		options:         options,
+		playerIDs:       playerIDs,
+		idToParticipant: idToParticipant,
+		deck:            d,
+		potManager:      pm,
+		discards:        []*deck.Card{},
+		logChan:         make(chan []*playable.LogMessage, 256),
+		logger:          logger,
+		tradeIns:        tradeIns,
 	}
 
 	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
+
+	// decision round allows all-in participants to participate with trade-ins
+	g.potManager.StartDecisionRound()
 
 	return g, nil
 }
@@ -170,27 +174,17 @@ func (g *Game) GetCommunityCards() []*deck.Card {
 
 // GetCurrentTurn returns the current participant who needs to make a decision
 func (g *Game) GetCurrentTurn() *Participant {
-	if g.decisionCount >= len(g.playerIDs) {
+	p := g.potManager.GetInTurnParticipant()
+	if p == nil {
 		return nil
 	}
 
-	// no more actions
-	if g.round > roundFinalBettingRound {
-		return nil
-	}
-
-	index := (g.decisionStartIndex + g.decisionCount) % len(g.playerIDs)
-	p := g.idToParticipant[g.playerIDs[index]]
-	if p.didFold {
-		panic("decision index is on a folded player")
-	}
-
-	return p
+	return g.idToParticipant[p.ID()]
 }
 
 // IsRoundOver returns true if all participants have had a turn
 func (g *Game) IsRoundOver() bool {
-	return g.GetCurrentTurn() == nil
+	return g.potManager.IsRoundOver()
 }
 
 // IsGameOver returns true if the game is over
@@ -208,116 +202,67 @@ func (g *Game) NextRound() error {
 		return errors.New("cannot advance the round")
 	}
 
-	g.endOfRoundAdjustments()
-
 	g.round++
-	g.reset()
+
+	if err := g.reset(); err != nil {
+		return err
+	}
 
 	if g.round == roundRevealWinner {
-		g.endGame()
+		return g.endGame()
 	}
 
 	return nil
-}
-
-func (g *Game) endOfRoundAdjustments() {
-	if g.lastAdjustmentRound == g.round {
-		panic(fmt.Sprintf("already ran endOfRoundAdjustments() for round: %d", g.round))
-	}
-
-	g.lastAdjustmentRound = g.round
-
-	for _, p := range g.idToParticipant {
-		p.balance -= p.currentBet
-	}
-}
-
-func (g *Game) getPotLimit() int {
-	return g.pot + g.currentBet
 }
 
 // ParticipantBets handles both bets and raises
 func (g *Game) ParticipantBets(p *Participant, bet int) error {
 	term := strings.ToLower(string(ActionBet))
-	if g.currentBet > 0 {
+
+	currentBet := g.potManager.GetBet()
+	if currentBet > 0 {
 		term = strings.ToLower(string(ActionRaise))
 	}
 
-	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
+	if maxBet := g.potManager.GetPotLimitMaxBet(); bet > maxBet {
+		return fmt.Errorf("your %s (${%d}) must not exceed the pot limit (${%d})", term, bet, maxBet)
 	}
 
-	if bet%g.options.Ante > 0 {
-		return fmt.Errorf("your %s must be in multiples of the ante (${%d})", term, g.options.Ante)
+	allInAmount := g.potManager.GetParticipantAllInAmount(p)
+
+	// only check the following logic IF the participant is not going all-in
+	if bet != allInAmount {
+		if bet%25 > 0 {
+			return fmt.Errorf("your %s must be in multiples of ${25}", term)
+		}
+
+		if bet < g.options.Ante {
+			return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
+		}
+
+		minRaiseTo := currentBet + g.potManager.GetRaise()
+		if currentBet > 0 && bet < minRaiseTo {
+			return fmt.Errorf("your raise of ${%d} must be at least equal to double the previous raise of ${%d}", bet-currentBet, g.potManager.GetRaise())
+		}
 	}
 
-	if bet > g.getPotLimit() {
-		return fmt.Errorf("your %s (${%d}) must not exceed the pot limit (${%d})", term, bet, g.getPotLimit())
-	}
-
-	if bet < g.options.Ante {
-		return fmt.Errorf("your %s must at least match the ante (${%d})", term, g.options.Ante)
-	}
-
-	if g.currentBet > 0 && bet < g.currentBet*2 {
-		return fmt.Errorf("your raise (${%d}) must be at least equal to double the previous bet (${%d})", bet, g.currentBet*2)
-	}
-
-	diff := bet - p.currentBet
-	p.currentBet = bet
-	g.currentBet = bet
-	g.pot += diff
-
-	g.setDecisionIndexToCurrentTurn()
-	g.advanceDecision()
-
-	return nil
-}
-
-// setDecisionIndexToCurrentTurn will update the decision index to the current player's turn
-// This will happen when a player raises because we'll need to go around the table again
-func (g *Game) setDecisionIndexToCurrentTurn() {
-	currentIndex := (g.decisionStartIndex + g.decisionCount) % len(g.playerIDs)
-	g.decisionStartIndex = currentIndex
-	g.decisionCount = 0
+	return g.potManager.ParticipantBetsOrRaises(p, bet)
 }
 
 // ParticipantChecks will check for the participant as long as there's no active bet
 func (g *Game) ParticipantChecks(p *Participant) error {
-	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
-	}
-
-	if g.currentBet != 0 {
-		return errors.New("you cannot check with an active bet")
-	}
-
-	g.advanceDecision()
-	return nil
+	return g.potManager.ParticipantChecks(p)
 }
 
 // ParticipantCalls handles when the player calls the action
 func (g *Game) ParticipantCalls(p *Participant) error {
-	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
-	}
-
-	if g.currentBet == 0 {
-		return errors.New("you cannot call without an active bet")
-	}
-
-	diff := g.currentBet - p.currentBet
-	p.currentBet = g.currentBet
-	g.pot += diff
-
-	g.advanceDecision()
-	return nil
+	return g.potManager.ParticipantCalls(p)
 }
 
 // ParticipantFolds handles when a player folds their hand
 func (g *Game) ParticipantFolds(p *Participant) error {
-	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
+	if err := g.potManager.ParticipantFolds(p); err != nil {
+		return err
 	}
 
 	p.didFold = true
@@ -332,42 +277,23 @@ func (g *Game) ParticipantFolds(p *Participant) error {
 	if stillAlive == 0 {
 		panic("too many players folded")
 	} else if stillAlive == 1 {
-		g.endOfRoundAdjustments()
-		g.endGame()
-		return nil
+		return g.endGame()
 	}
 
-	g.advanceDecision()
 	return nil
 }
 
 // reset should be called when we enter a new round
-func (g *Game) reset() {
+func (g *Game) reset() error {
+	if err := g.potManager.NextRound(); err != nil {
+		return err
+	}
+
 	for _, p := range g.idToParticipant {
 		p.reset()
 	}
 
-	// find first live player
-	g.decisionStartIndex = 0
-	g.decisionCount = 0
-	g.advanceDecisionIfPlayerFolded()
-	g.currentBet = 0
-}
-
-func (g *Game) advanceDecision() {
-	g.decisionCount++
-	g.advanceDecisionIfPlayerFolded()
-}
-
-func (g *Game) advanceDecisionIfPlayerFolded() {
-	nPlayers := len(g.playerIDs)
-	for ; g.decisionCount < nPlayers; g.decisionCount++ {
-		playerIndex := (g.decisionStartIndex + g.decisionCount) % nPlayers
-		p := g.idToParticipant[g.playerIDs[playerIndex]]
-		if !p.didFold {
-			break
-		}
-	}
+	return nil
 }
 
 func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) error {
@@ -376,7 +302,7 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 	}
 
 	if g.GetCurrentTurn() != p {
-		return ErrNotPlayersTurn
+		return potmanager.ErrParticipantCannotAct
 	}
 
 	if !g.CanTrade(len(cards)) {
@@ -418,8 +344,7 @@ func (g *Game) tradeCardsForParticipant(p *Participant, cards []*deck.Card) erro
 	sort.Sort(p.hand)
 
 	p.traded = len(cards)
-	g.advanceDecision()
-	return nil
+	return g.potManager.AdvanceDecision()
 }
 
 // CanRevealCards returns true if all cards are flipped
@@ -427,43 +352,10 @@ func (g *Game) CanRevealCards() bool {
 	return g.round >= roundRevealWinner
 }
 
-// playerIsPendingTurn will return true if the player still has to make a decision in the current round
-func (g *Game) playerIsPendingTurn(playerID int64) bool {
-	if g.GetCurrentTurn() == nil {
-		return false
-	}
-
-	player, ok := g.idToParticipant[playerID]
-	if !ok {
-		return false
-	}
-
-	if player.didFold {
-		return false
-	}
-
-	playerIndex := -1
-	for i, pid := range g.playerIDs {
-		if pid == playerID {
-			playerIndex = i
-			break
-		}
-	}
-
-	if playerIndex < 0 {
-		return false
-	}
-
-	playerIndex -= g.decisionStartIndex
-	if playerIndex < 0 {
-		playerIndex += len(g.playerIDs)
-	}
-
-	return playerIndex > g.decisionCount
-}
-
 func (g *Game) getFutureActionsForPlayer(playerID int64) []Action {
-	if !g.playerIsPendingTurn(playerID) {
+	if p, ok := g.idToParticipant[playerID]; !ok {
+		return nil
+	} else if !g.potManager.IsParticipantYetToAct(p) {
 		return nil
 	}
 
@@ -471,7 +363,7 @@ func (g *Game) getFutureActionsForPlayer(playerID int64) []Action {
 		return []Action{ActionTrade}
 	}
 
-	if g.currentBet == 0 {
+	if g.potManager.GetBet() == 0 {
 		return []Action{ActionCheck, ActionFold}
 	}
 
@@ -490,8 +382,10 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 		if g.round == roundTradeIn {
 			actions = append(actions, ActionTrade)
 		} else {
-			if g.currentBet == 0 {
+			if bet := g.potManager.GetBet(); bet == 0 {
 				actions = append(actions, ActionCheck, ActionBet, ActionFold)
+			} else if g.potManager.GetParticipantAllInAmount(p) < bet {
+				actions = append(actions, ActionCall, ActionFold)
 			} else {
 				actions = append(actions, ActionCall, ActionRaise, ActionFold)
 			}
@@ -502,15 +396,15 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 }
 
 // endGame will handle any end of game actions, calculate winners, etc.
-func (g *Game) endGame() {
+func (g *Game) endGame() error {
 	if g.winners != nil {
 		panic("endGame already called")
 	}
 
-	g.round = roundRevealWinner
+	g.potManager.EndGame()
 
-	winners := make([]*Participant, 0, 1)
-	best := math.MinInt32
+	tiers := make(tieredHands)
+
 	community := g.GetCommunityCards()
 	for _, id := range g.playerIDs {
 		p := g.idToParticipant[id]
@@ -520,39 +414,49 @@ func (g *Game) endGame() {
 
 		bestHand := p.GetBestHand(community)
 		strength := bestHand.analyzer.GetStrength()
-		if strength == best {
-			winners = append(winners, p)
-		} else if strength > best {
-			winners = []*Participant{p}
-			best = strength
+
+		tier, ok := tiers[strength]
+		if !ok {
+			tier = &strengthTier{
+				strength:     strength,
+				participants: make([]potmanager.Participant, 0),
+			}
+			tiers[strength] = tier
 		}
+
+		tier.participants = append(tier.participants, p)
 	}
 
+	winners := make(map[*Participant]int)
+	payouts, err := g.potManager.PayWinners(tiers.getSortedTiers())
+	if err != nil {
+		return err
+	}
+
+	for participant, amount := range payouts {
+		p := g.idToParticipant[participant.ID()]
+		winners[p] = amount
+	}
 	g.winners = winners
-	for _, winner := range winners {
-		winner.balance += g.pot / len(winners)
-		winner.didWin = true
-	}
 
-	if mod := g.pot % len(winners); mod > 0 {
-		winners[0].balance += mod
-	}
-
+	g.round = roundRevealWinner
 	g.sendEndOfGameLogMessages()
+
+	return nil
 }
 
 func (g *Game) sendEndOfGameLogMessages() {
 	community := g.GetCommunityCards()
 
 	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
-	for _, winner := range g.winners {
+	for winner, amount := range g.winners {
 		hand := winner.GetBestHand(community).analyzer.GetHand().String()
-		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, winner.balance))
+		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, amount))
 	}
 
 	for _, playerID := range g.playerIDs {
 		p := g.idToParticipant[playerID]
-		if p.didWin {
+		if _, ok := g.winners[p]; ok {
 			continue
 		}
 

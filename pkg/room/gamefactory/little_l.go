@@ -2,6 +2,7 @@ package gamefactory
 
 import (
 	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/littlel"
 )
@@ -19,7 +20,16 @@ func (l littleLFactory) Details(additionalData playable.AdditionalData) (string,
 }
 
 func (l littleLFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	game, err := littlel.NewGame(logger, playerIDs, getOptions(additionalData))
+	panic("use CreateGameV2")
+}
+
+func (l littleLFactory) CreateGameV2(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
+	p := make([]playable.Player, len(players))
+	for i, player := range players {
+		p[i] = player
+	}
+
+	game, err := littlel.NewGameV2(logger, p, getOptions(additionalData))
 	if err != nil {
 		return nil, err
 	}
