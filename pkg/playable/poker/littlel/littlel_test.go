@@ -580,6 +580,19 @@ func TestGame_getFutureActionsForPlayer(t *testing.T) {
 	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionCall, ActionFold})
 }
 
+func TestGame_CanRevealCards(t *testing.T) {
+	game, _ := newGame(DefaultOptions(), 100, 100)
+	assert.False(t, game.CanRevealCards())
+
+	for _, invalidRound := range []round{roundBeforeFirstTurn, roundBeforeSecondTurn, roundBeforeThirdTurn, roundFinalBettingRound} {
+		game.round = invalidRound
+		assert.False(t, game.CanRevealCards())
+	}
+
+	game.round = roundRevealWinner
+	assert.True(t, game.CanRevealCards())
+}
+
 func createTradeHelperFunc(game *Game) func(playerID int64, cards string) error {
 	return func(playerID int64, cards string) error {
 		p := game.idToParticipant[playerID]

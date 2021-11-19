@@ -69,3 +69,8 @@ func TestParticipant_GetBestHand_CacheAfterTrade(t *testing.T) {
 
 	assert.Equal(t, handanalyzer.StraightFlush.String(), p(1).GetBestHand(deck.CardsFromString(",,")).analyzer.GetHand().String())
 }
+
+func TestParticipant_GetBestHand__invalidCommunity(t *testing.T) {
+	p := &Participant{}
+	assert.PanicsWithValue(t, "invalid community", func() { p.GetBestHand(deck.CardsFromString("2c,2d")) })
+}
