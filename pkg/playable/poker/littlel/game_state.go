@@ -31,7 +31,7 @@ type GameState struct {
 	TradeIns     *TradeIns          `json:"tradeIns"`
 	InitialDeal  int                `json:"initialDeal"`
 	Community    []*deck.Card       `json:"community"`
-	Winners      []int64            `json:"winners"`
+	Winners      map[int64]int      `json:"winners"`
 }
 
 // State represents the state of the game and the state of the current player

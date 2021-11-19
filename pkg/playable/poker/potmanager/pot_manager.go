@@ -220,6 +220,10 @@ func (p *PotManager) StartDecisionRound() {
 // IsParticipantYetToAct returns true if the participant is not in turn and the participant has yet to act
 // This also ensures the participant didn't fold and they are not all-in
 func (p *PotManager) IsParticipantYetToAct(pt Participant) bool {
+	if p.isGameOver {
+		return false
+	}
+
 	pip, ok := p.participants[pt.ID()]
 	if !ok {
 		return false
@@ -282,6 +286,10 @@ func (p *PotManager) IsRoundOver() bool {
 // GetInTurnParticipant returns the participant who is to act next
 // Returns nil if the round is over
 func (p *PotManager) GetInTurnParticipant() Participant {
+	if p.isGameOver {
+		return nil
+	}
+
 	if p.IsRoundOver() {
 		return nil
 	}

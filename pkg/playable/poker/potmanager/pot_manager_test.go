@@ -413,7 +413,7 @@ func TestPotManager_IsParticipantYetToAct(t *testing.T) {
 	pm := setupPotManager(25, 100, 100, 100, 100, 100)
 
 	test := func(isYetToAct ...bool) {
-		if len(isYetToAct) != 5 {
+		if len(isYetToAct) != len(pm.tableOrder) {
 			panic("missing five values")
 		}
 
@@ -441,6 +441,32 @@ func TestPotManager_IsParticipantYetToAct(t *testing.T) {
 	// test error case
 	tp := &testParticipant{id: 99}
 	assert.False(t, pm.IsParticipantYetToAct(tp))
+
+	pm = setupPotManager(0, 100, 100, 100)
+	test(false, true, true)
+	pm.EndGame()
+	test(false, false, false)
+}
+
+func TestPotManager_GetInTurnParticipant(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(25, 100, 100, 100)
+	a.Equal(pm.tableOrder[0].Participant, pm.GetInTurnParticipant())
+
+	a.NoError(pm.AdvanceDecision())
+	a.Equal(pm.tableOrder[1].Participant, pm.GetInTurnParticipant())
+
+	a.NoError(pm.AdvanceDecision())
+	a.Equal(pm.tableOrder[2].Participant, pm.GetInTurnParticipant())
+
+	a.NoError(pm.AdvanceDecision())
+	a.Nil(pm.GetInTurnParticipant())
+
+	a.NoError(pm.NextRound())
+	a.Equal(pm.tableOrder[0].Participant, pm.GetInTurnParticipant())
+	pm.EndGame()
+	a.Nil(pm.GetInTurnParticipant())
 }
 
 func TestPotManager_getActiveParticipantInPot(t *testing.T) {

@@ -382,8 +382,10 @@ func (g *Game) getActionsForPlayer(playerID int64) []Action {
 		if g.round == roundTradeIn {
 			actions = append(actions, ActionTrade)
 		} else {
-			if g.potManager.GetBet() == 0 {
+			if bet := g.potManager.GetBet(); bet == 0 {
 				actions = append(actions, ActionCheck, ActionBet, ActionFold)
+			} else if g.potManager.GetParticipantAllInAmount(p) < bet {
+				actions = append(actions, ActionCall, ActionFold)
 			} else {
 				actions = append(actions, ActionCall, ActionRaise, ActionFold)
 			}

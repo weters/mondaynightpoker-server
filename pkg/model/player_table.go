@@ -102,6 +102,12 @@ func (p *PlayerTable) GetPlayerID() int64 {
 }
 
 // GetTableStake returns the table stake
+// This method returns the player's balance, unless their balance is below their table stake. In that case,
+// it returns the table stake.
 func (p *PlayerTable) GetTableStake() int {
+	if p.Balance > p.TableStake {
+		return p.Balance
+	}
+
 	return p.TableStake
 }

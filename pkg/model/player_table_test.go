@@ -88,7 +88,10 @@ func TestPlayerTable_IsPlaying(t *testing.T) {
 }
 
 func TestPlayerTable_accessors(t *testing.T) {
-	pt := &PlayerTable{PlayerID: 1, TableStake: 2}
+	pt := &PlayerTable{PlayerID: 1, TableStake: 2, Balance: 0}
 	assert.Equal(t, int64(1), pt.GetPlayerID())
 	assert.Equal(t, 2, pt.GetTableStake())
+
+	pt.Balance = 10
+	assert.Equal(t, 10, pt.GetTableStake())
 }

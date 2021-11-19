@@ -93,21 +93,21 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		}
 	}
 
-	winners := make([]int64, 0, len(g.winners))
-	for p := range g.winners {
-		winners = append(winners, p.PlayerID)
-	}
-
 	currentBet := g.potManager.GetBet()
 
-	minBet := g.options.Ante
-	if currentBet > 0 {
-		minBet = currentBet + g.potManager.GetRaise()
-	}
+	minBet := g.getMinBet()
 
 	maxBet := g.potManager.GetPotLimitMaxBet()
 	if allInAmount := g.potManager.GetParticipantAllInAmount(p); allInAmount < maxBet {
 		maxBet = allInAmount
+	}
+
+	var winners map[int64]int
+	if len(g.winners) > 0 {
+		winners = make(map[int64]int)
+		for pt, amt := range g.winners {
+			winners[pt.PlayerID] = amt
+		}
 	}
 
 	s := State{
@@ -160,6 +160,14 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		Value: "little-l",
 		Data:  &s,
 	}, nil
+}
+
+func (g *Game) getMinBet() int {
+	minBet := g.options.Ante
+	if currentBet := g.potManager.GetBet(); currentBet > 0 {
+		minBet = currentBet + g.potManager.GetRaise()
+	}
+	return minBet
 }
 
 // GetEndOfGameDetails returns the details at the end of a game
