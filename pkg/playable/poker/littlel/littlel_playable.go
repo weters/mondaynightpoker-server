@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 )
 
 // --- Playable Interface ---
@@ -16,8 +17,8 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, errors.New("participant is not in the game")
 	}
 
-	switch Action(message.Action) {
-	case ActionTrade:
+	switch action.Action(message.Action) {
+	case action.Trade:
 		if err := g.tradeCardsForParticipant(p, message.Cards); err != nil {
 			return nil, false, err
 		}
@@ -25,7 +26,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
 
 		return playable.OK(), true, nil
-	case ActionCheck:
+	case action.Check:
 		if err := g.ParticipantChecks(p); err != nil {
 			return nil, false, err
 		}
@@ -33,7 +34,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
 
 		return playable.OK(), true, nil
-	case ActionFold:
+	case action.Fold:
 		if err := g.ParticipantFolds(p); err != nil {
 			return nil, false, err
 		}
@@ -41,7 +42,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
 
 		return playable.OK(), true, nil
-	case ActionCall:
+	case action.Call:
 		if err := g.ParticipantCalls(p); err != nil {
 			return nil, false, err
 		}
@@ -49,9 +50,9 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
 
 		return playable.OK(), true, nil
-	case ActionRaise:
+	case action.Raise:
 		fallthrough
-	case ActionBet:
+	case action.Bet:
 		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount == 0 {
 			return nil, false, errors.New("amount must be > 0")

@@ -203,8 +203,8 @@ func (p *PotManager) GetParticipantAllInAmount(pt Participant) int {
 
 // AdvanceDecision will advance a decision without taking an explicit action
 func (p *PotManager) AdvanceDecision() error {
-	if p.GetInTurnParticipant() == nil {
-		return ErrRoundOver
+	if _, err := p.GetInTurnParticipant(); err != nil {
+		return err
 	}
 
 	p.completeTurn()
@@ -218,7 +218,7 @@ func (p *PotManager) StartDecisionRound() {
 }
 
 // IsParticipantYetToAct returns true if the participant is not in turn and the participant has yet to act
-// This also ensures the participant didn't fold and they are not all-in
+// This also ensures the participant didn't fold, and they are not all-in
 func (p *PotManager) IsParticipantYetToAct(pt Participant) bool {
 	if p.isGameOver {
 		return false
@@ -255,6 +255,18 @@ func (p *PotManager) GetCanActParticipantCount() int {
 	return count
 }
 
+// GetAliveParticipantCount returns the number of participants who haven't folded
+func (p *PotManager) GetAliveParticipantCount() int {
+	count := 0
+	for _, pt := range p.tableOrder {
+		if !pt.isFolded {
+			count++
+		}
+	}
+
+	return count
+}
+
 func (p *PotManager) adjustParticipant(pip *participantInPot, adjustment int) {
 	adjustment -= pip.amountInPlay
 	if adjustment >= pip.Balance() {
@@ -273,7 +285,7 @@ func (p *PotManager) GetBet() int {
 }
 
 // GetRaise returns the raise amount
-// Example. Player A bets $25. Player B raises to $50. This would returns $25.
+// Example. Player A bets $25. Player B raises to $50. This would return $25.
 func (p *PotManager) GetRaise() int {
 	return p.actionDiffAmount
 }
@@ -285,16 +297,16 @@ func (p *PotManager) IsRoundOver() bool {
 
 // GetInTurnParticipant returns the participant who is to act next
 // Returns nil if the round is over
-func (p *PotManager) GetInTurnParticipant() Participant {
+func (p *PotManager) GetInTurnParticipant() (Participant, error) {
 	if p.isGameOver {
-		return nil
+		return nil, ErrGameOver
 	}
 
 	if p.IsRoundOver() {
-		return nil
+		return nil, ErrRoundOver
 	}
 
-	return p.tableOrder[p.normalizedActionAtIndex()].Participant
+	return p.tableOrder[p.normalizedActionAtIndex()].Participant, nil
 }
 
 // GetPotLimitMaxBet returns the maximum bet allowed in a pot-limit game
@@ -594,9 +606,9 @@ func (p *PotManager) getActiveParticipantInPot(pt Participant) (*participantInPo
 		return nil, ErrGameOver
 	}
 
-	pit := p.GetInTurnParticipant()
-	if pit == nil {
-		return nil, ErrRoundOver
+	pit, err := p.GetInTurnParticipant()
+	if err != nil {
+		return nil, err
 	}
 
 	if pit.ID() != pt.ID() {

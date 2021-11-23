@@ -409,6 +409,16 @@ func TestPotManager_GetCanActParticipantCount(t *testing.T) {
 	a.Equal(2, pm.GetCanActParticipantCount())
 }
 
+func TestPotManager_GetAliveParticipantCount(t *testing.T) {
+	a := assert.New(t)
+
+	pm := setupPotManager(50, 100, 50, 100, 100)
+	a.Equal(4, pm.GetAliveParticipantCount())
+
+	a.NoError(pm.ParticipantFolds(pm.tableOrder[0]))
+	a.Equal(3, pm.GetAliveParticipantCount())
+}
+
 func TestPotManager_IsParticipantYetToAct(t *testing.T) {
 	pm := setupPotManager(25, 100, 100, 100, 100, 100)
 
@@ -452,21 +462,35 @@ func TestPotManager_GetInTurnParticipant(t *testing.T) {
 	a := assert.New(t)
 
 	pm := setupPotManager(25, 100, 100, 100)
-	a.Equal(pm.tableOrder[0].Participant, pm.GetInTurnParticipant())
+	test := func(index int, expectedErr error) {
+		t.Helper()
+
+		p, err := pm.GetInTurnParticipant()
+
+		if err != nil {
+			assert.Nil(t, p)
+			assert.Equal(t, expectedErr, err)
+		} else {
+			assert.Equal(t, pm.tableOrder[index].Participant, p)
+			assert.NoError(t, err)
+		}
+	}
+
+	test(0, nil)
 
 	a.NoError(pm.AdvanceDecision())
-	a.Equal(pm.tableOrder[1].Participant, pm.GetInTurnParticipant())
+	test(1, nil)
 
 	a.NoError(pm.AdvanceDecision())
-	a.Equal(pm.tableOrder[2].Participant, pm.GetInTurnParticipant())
+	test(2, nil)
 
 	a.NoError(pm.AdvanceDecision())
-	a.Nil(pm.GetInTurnParticipant())
+	test(-1, ErrRoundOver)
 
 	a.NoError(pm.NextRound())
-	a.Equal(pm.tableOrder[0].Participant, pm.GetInTurnParticipant())
+	test(0, nil)
 	pm.EndGame()
-	a.Nil(pm.GetInTurnParticipant())
+	test(-1, ErrGameOver)
 }
 
 func TestPotManager_getActiveParticipantInPot(t *testing.T) {

@@ -1,11 +1,14 @@
 package texasholdem
 
-import "mondaynightpoker-server/pkg/deck"
+import (
+	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/action"
+)
 
 // ParticipantState represents the state of an individual participant
 type ParticipantState struct {
-	Actions       []Action         `json:"actions"`
-	FutureActions []Action         `json:"futureActions"`
+	Actions       []action.Action  `json:"actions"`
+	FutureActions []action.Action  `json:"futureActions"`
 	Participant   *participantJSON `json:"participant"`
 	GameState     *GameState       `json:"gameState"`
 }
@@ -24,8 +27,8 @@ type GameState struct {
 
 func (g *Game) getGameState() *GameState {
 	p := make([]*participantJSON, len(g.participants))
-	for i, id := range g.participantOrder {
-		p[i] = g.participants[id].participantJSON(g, false)
+	for i, pt := range g.participantOrder {
+		p[i] = g.participants[pt.ID()].participantJSON(g, false)
 	}
 
 	var currentTurn int64 = 0
@@ -36,8 +39,8 @@ func (g *Game) getGameState() *GameState {
 	return &GameState{
 		Name:         g.Name(),
 		DealerState:  g.dealerState,
-		Pot:          g.pot,
-		CurrentBet:   g.currentBet,
+		Pot:          0, // FIXME
+		CurrentBet:   g.potManager.GetBet(),
 		Participants: p,
 		CurrentTurn:  currentTurn,
 		Community:    g.community,
@@ -47,7 +50,7 @@ func (g *Game) getGameState() *GameState {
 
 func (g *Game) getParticipantStateByPlayerID(id int64) *ParticipantState {
 	var pjson *participantJSON
-	var actions, futureActions []Action
+	var actions, futureActions []action.Action
 	if p, ok := g.participants[id]; ok {
 		// force reveal because it's for the current player
 		pjson = p.participantJSON(g, true)

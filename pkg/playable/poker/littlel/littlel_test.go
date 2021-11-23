@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/actions"
 	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 	"testing"
 )
@@ -562,8 +563,8 @@ func TestGame_getFutureActionsForPlayer(t *testing.T) {
 
 	game := mustNewGame(DefaultOptions(), 100, 100, 100)
 	a.Nil(game.getFutureActionsForPlayer(1))
-	a.Equal(game.getFutureActionsForPlayer(2), []Action{ActionTrade})
-	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionTrade})
+	a.Equal(game.getFutureActionsForPlayer(2), []action.Action{action.ActionTrade})
+	a.Equal(game.getFutureActionsForPlayer(3), []action.Action{action.ActionTrade})
 
 	_ = game.tradeCardsForParticipant(game.idToParticipant[1], []*deck.Card{})
 	_ = game.tradeCardsForParticipant(game.idToParticipant[2], []*deck.Card{})
@@ -571,13 +572,13 @@ func TestGame_getFutureActionsForPlayer(t *testing.T) {
 	_ = game.NextRound()
 
 	a.Nil(game.getFutureActionsForPlayer(1))
-	a.Equal(game.getFutureActionsForPlayer(2), []Action{ActionCheck, ActionFold})
-	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionCheck, ActionFold})
+	a.Equal(game.getFutureActionsForPlayer(2), []action.Action{action.ActionCheck, action.ActionFold})
+	a.Equal(game.getFutureActionsForPlayer(3), []action.Action{action.ActionCheck, action.ActionFold})
 
 	_ = game.ParticipantBets(game.idToParticipant[1], game.options.Ante)
 	a.Nil(game.getFutureActionsForPlayer(1))
 	a.Nil(game.getFutureActionsForPlayer(2))
-	a.Equal(game.getFutureActionsForPlayer(3), []Action{ActionCall, ActionFold})
+	a.Equal(game.getFutureActionsForPlayer(3), []action.Action{action.ActionCall, action.ActionFold})
 }
 
 func TestGame_CanRevealCards(t *testing.T) {

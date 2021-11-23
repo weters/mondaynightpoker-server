@@ -2,6 +2,7 @@ package littlel
 
 import (
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 )
 
@@ -38,6 +39,6 @@ type GameState struct {
 type State struct {
 	Participant   *participantJSON `json:"participant"`
 	GameState     *GameState       `json:"gameState"`
-	Actions       []Action         `json:"actions"`
-	FutureActions []Action         `json:"futureActions"`
+	Actions       []action.Action  `json:"actions"`
+	FutureActions []action.Action  `json:"futureActions"`
 }
