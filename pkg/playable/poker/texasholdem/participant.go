@@ -42,7 +42,7 @@ type participantJSON struct {
 	Bet      int       `json:"currentBet"`
 	MinBet   int       `json:"minBet"`
 	MaxBet   int       `json:"maxBet"`
-	Hand     string    `json:"hand"`
+	HandRank string    `json:"handRank"`
 	Result   result    `json:"result"`
 	Winnings int       `json:"winnings"`
 }
@@ -55,11 +55,6 @@ func newParticipant(id int64, tableStake int) *Participant {
 		cards:      make(deck.Hand, 0),
 		result:     resultPending,
 	}
-}
-
-// SubtractBalance subtracts from the player's balance
-func (p *Participant) SubtractBalance(amount int) {
-	p.balance -= amount
 }
 
 // FutureActionsForParticipant are actions the participant can perform when they are on the clock
@@ -111,17 +106,6 @@ func (g *Game) ActionsForParticipant(id int64) []action.Action {
 	return append(actions, action.Fold)
 }
 
-// Bet ensures the participant throws to the specified amount
-// The value return is the amount added to the pot. For example, if a player already bet 100, and then calls
-// for another 50, this method will return 50
-func (p *Participant) Bet(amount int) int {
-	diff := amount - p.bet
-	p.bet = amount
-	p.balance -= diff
-
-	return diff
-}
-
 // NewRound will reset the participant for a new round
 func (p *Participant) NewRound() {
 	p.bet = 0
@@ -144,12 +128,12 @@ func (p *Participant) getHandAnalyzer(community []*deck.Card) *handanalyzer.Hand
 
 func (p *Participant) participantJSON(game *Game, forceReveal bool) *participantJSON {
 	var cards deck.Hand
-	var hand string
+	var handRank string
 	if forceReveal || (p.reveal && !p.folded) {
 		cards = p.cards
 
 		if ha := p.getHandAnalyzer(game.community); ha != nil {
-			hand = ha.GetHand().String()
+			handRank = ha.GetHand().String()
 		}
 	}
 
@@ -159,7 +143,7 @@ func (p *Participant) participantJSON(game *Game, forceReveal bool) *participant
 		Cards:    cards,
 		Folded:   p.folded,
 		Bet:      p.bet,
-		Hand:     hand,
+		HandRank: handRank,
 		Result:   p.result,
 		Winnings: p.winnings,
 	}
@@ -167,18 +151,22 @@ func (p *Participant) participantJSON(game *Game, forceReveal bool) *participant
 
 // potmanager.Participant interface
 
+// ID returns the ID
 func (p *Participant) ID() int64 {
 	return p.PlayerID
 }
 
+// Balance returns the balance
 func (p *Participant) Balance() int {
 	return p.balance + p.tableStake
 }
 
+// AdjustBalance adjusts the balance
 func (p *Participant) AdjustBalance(amount int) {
 	p.balance += amount
 }
 
+// SetAmountInPlay sets the amount in play
 func (p *Participant) SetAmountInPlay(amount int) {
 	p.bet = amount
 }

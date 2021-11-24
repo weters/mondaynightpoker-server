@@ -2,7 +2,9 @@ package texasholdem
 
 import (
 	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable/poker/action"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 	"testing"
 )
 
@@ -18,9 +20,6 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 	a := assert.New(t)
 
 	a.Nil(game.ActionsForParticipant(1))
-	a.Nil(game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
-	a.Nil(game.ActionsForParticipant(4))
 
 	game.dealerState = DealerStatePreFlopBettingRound
 	{
@@ -29,17 +28,17 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 		a.Nil(game.ActionsForParticipant(3))
 		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(4))
 
-		assertAction(t, game, 4, action.Call.ID())
+		assertAction(t, game, 4, action.Call)
 
 		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(1))
 		a.Nil(game.ActionsForParticipant(2))
 		a.Nil(game.ActionsForParticipant(3))
 		a.Nil(game.ActionsForParticipant(4))
 
-		assertAction(t, game, 1, action.Call.ID())
-		assertAction(t, game, 2, action.Call.ID())
+		assertAction(t, game, 1, action.Call)
+		assertAction(t, game, 2, action.Call)
 		a.Equal([]action.Action{action.Check, action.Raise, action.Fold}, game.ActionsForParticipant(3))
-		assertAction(t, game, 3, action.Check.ID())
+		assertAction(t, game, 3, action.Check)
 
 		a.True(game.potManager.IsRoundOver())
 	}
@@ -50,38 +49,23 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 	a.Equal(DealerStateFlopBettingRound, game.dealerState)
 	{
 		a.Equal([]action.Action{action.Check, action.Bet, action.Fold}, game.ActionsForParticipant(1))
-		assertAction(t, game, 1, action.Check.ID())
+		assertAction(t, game, 1, action.Check)
 		a.Equal([]action.Action{action.Check, action.Bet, action.Fold}, game.ActionsForParticipant(2))
-		assertActionAndAmount(t, game, 2, action.Bet.ID(), 200)
+		assertActionAndAmount(t, game, 2, action.Bet, 200)
 
 		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(3))
-		assertActionAndAmount(t, game, 3, action.Raise.ID(), game.participants[3].Balance()-25)
+		assertActionAndAmount(t, game, 3, action.Raise, game.participants[3].Balance()-25)
 
 		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(4))
-		assertActionAndAmount(t, game, 4, action.Raise.ID(), game.participants[4].Balance())
+		assertActionAndAmount(t, game, 4, action.Raise, game.participants[4].Balance())
 
 		a.Equal([]action.Action{action.Call, action.Fold}, game.ActionsForParticipant(1))
 	}
-
-}
-
-/*
-func TestGame_ActionsForParticipant_panicsInInvalidState(t *testing.T) {
-	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
-
-	// we should never be in this state
-	game.newRoundSetup()
-	game.dealerState = DealerStateTurnBettingRound
-	game.decisionIndex = math.MaxInt32
-
-	assert.PanicsWithError(t, "betting round is over", func() {
-		game.ActionsForParticipant(1)
-	})
 }
 
 func TestParticipant_getHandAnalyzer(t *testing.T) {
 	a := assert.New(t)
-	p := newParticipant(1)
+	p := newParticipant(1, 100)
 	p.getHandAnalyzer(nil)
 	a.Nil(p.getHandAnalyzer(nil))
 
@@ -114,79 +98,15 @@ func TestParticipant_participantJSON(t *testing.T) {
 	assert.NotNil(t, record.Cards)
 }
 
-func TestGame_isParticipantPendingTurn(t *testing.T) {
-	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, DefaultOptions())
-	game.newRoundSetup()
-
-	a := assert.New(t)
-	a.False(game.isParticipantPendingTurn(3), "not in betting round")
-
-	game.dealerState = DealerStateFinalBettingRound
-	a.False(game.isParticipantPendingTurn(1))
-	a.True(game.isParticipantPendingTurn(2))
-	a.True(game.isParticipantPendingTurn(3))
-	a.True(game.isParticipantPendingTurn(4))
-	a.True(game.isParticipantPendingTurn(5))
-
-	game.decisionIndex = 4
-	a.False(game.isParticipantPendingTurn(1))
-	a.False(game.isParticipantPendingTurn(2))
-	a.False(game.isParticipantPendingTurn(3))
-	a.False(game.isParticipantPendingTurn(4))
-	a.False(game.isParticipantPendingTurn(5))
-
-	game.decisionIndex = 1
-	game.decisionStart = 3
-	a.True(game.isParticipantPendingTurn(1))
-	a.True(game.isParticipantPendingTurn(2))
-	a.True(game.isParticipantPendingTurn(3))
-	a.False(game.isParticipantPendingTurn(4))
-	a.False(game.isParticipantPendingTurn(5))
-
-	game.participants[1].folded = true
-	a.False(game.isParticipantPendingTurn(1))
-}
-
 func TestGame_FutureActionsForParticipant(t *testing.T) {
 	a := assert.New(t)
 
-	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
-	a.NotNil(game)
+	game := setupNewGame(DefaultOptions(), 1000, 1000, 1000, 1000)
+	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(1))
+	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(2))
+	a.Equal([]action.Action{action.Check, action.Fold}, game.FutureActionsForParticipant(3))
+	a.Nil(game.FutureActionsForParticipant(4))
 
-	assertTick(t, game, "move into dealing cards")
-	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "put in betting round")
-	a.Equal(DealerStatePreFlopBettingRound, game.dealerState)
-
-	a.Equal([]Action{{"Call", 50}, {"Raise", 200}, actionFold}, game.FutureActionsForParticipant(1))
-	a.Equal([]Action{actionCheck, {"Raise", 200}, actionFold}, game.FutureActionsForParticipant(2))
-	a.Nil(game.FutureActionsForParticipant(3), "player three has current actions")
-
-	game.newRoundSetup()
-	game.dealerState = DealerStateTurnBettingRound
-
-	a.Nil(game.FutureActionsForParticipant(1), "player one has current actions")
-	a.Equal([]Action{actionCheck, {"Bet", 200}, actionFold}, game.FutureActionsForParticipant(2))
-	a.Equal([]Action{actionCheck, {"Bet", 200}, actionFold}, game.FutureActionsForParticipant(3))
-
-	game.decisionIndex = 1
-	game.currentBet = 600
-	a.Nil(game.FutureActionsForParticipant(1), "player one already went")
-	a.Nil(game.FutureActionsForParticipant(2), "player two has current actions")
-	game.participants[3].bet = 200
-	a.Equal([]Action{{"Call", 400}, {"Raise", 800}, actionFold}, game.FutureActionsForParticipant(3))
-
-	game.decisionStart = 2
-	game.decisionIndex = 1
-	game.currentBet = 800
-	a.Nil(game.FutureActionsForParticipant(1), "player one has current actions")
-	game.participants[2].bet = 600
-	a.Equal([]Action{{"Call", 200}, actionFold}, game.FutureActionsForParticipant(2))
-	a.Nil(game.FutureActionsForParticipant(3), "player three already went")
-
-	game.decisionStart = 0
-	game.decisionIndex = 0
-	game.currentBet = 200
-	game.participants[2].bet = 200
+	game.dealerState = DealerStateRevealWinner
+	a.Nil(game.FutureActionsForParticipant(1))
 }
-
-*/

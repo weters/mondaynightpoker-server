@@ -603,7 +603,7 @@ func TestPotManager_PayBlinds(t *testing.T) {
 		a.Equal(50, pm.tableOrder[1].Balance())
 		a.Equal(25, pm.tableOrder[2].Balance())
 		a.Equal(75, pm.tableOrder[3].Balance())
-		a.Equal(175, pm.Pots().Total()+pm.amountInPlay)
+		a.Equal(175, pm.GetTotalOnTable())
 
 		a.Equal(50, pm.GetRaise())
 

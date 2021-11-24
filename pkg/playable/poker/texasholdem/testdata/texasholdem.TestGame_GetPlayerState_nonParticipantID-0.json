@@ -6,45 +6,61 @@
     "futureActions": null,
     "participant": null,
     "gameState": {
-      "name": "Limit Texas Hold'em (${100}/${200})",
+      "name": "Pot-Limit Texas Hold'em (${25}/${50})",
       "dealerState": 1,
-      "community": [],
-      "pot": 225,
-      "currentBet": 100,
       "participants": [
         {
           "playerId": 1,
-          "balance": -75,
+          "balance": 975,
           "cards": null,
           "folded": false,
-          "bet": 50,
-          "hand": "",
+          "currentBet": 0,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "",
           "result": "",
           "winnings": 0
         },
         {
           "playerId": 2,
-          "balance": -125,
+          "balance": 950,
           "cards": null,
           "folded": false,
-          "bet": 100,
-          "hand": "",
+          "currentBet": 25,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "",
           "result": "",
           "winnings": 0
         },
         {
           "playerId": 3,
-          "balance": -25,
+          "balance": 925,
           "cards": null,
           "folded": false,
-          "bet": 0,
-          "hand": "",
+          "currentBet": 50,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "",
           "result": "",
           "winnings": 0
         }
       ],
-      "currentTurn": 3,
+      "currentTurn": 1,
       "lastAction": null
+    },
+    "pokerState": {
+      "ante": 25,
+      "currentBet": 50,
+      "minBet": 100,
+      "maxBet": 250,
+      "pots": [
+        {
+          "amount": 75,
+          "allInParticipants": []
+        }
+      ],
+      "community": []
     }
   },
   "context": ""

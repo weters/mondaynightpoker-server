@@ -4,6 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 	"testing"
 	"time"
 )
@@ -21,7 +22,7 @@ func (t *testParticipant) GetTableStake() int {
 	return t.tableStake
 }
 
-func setupNewGame(opts Options, tableStakes ...int) *Game {
+func setupParticipants(tableStakes ...int) []playable.Player {
 	p := make([]playable.Player, len(tableStakes))
 	for i, ts := range tableStakes {
 		p[i] = &testParticipant{
@@ -30,7 +31,11 @@ func setupNewGame(opts Options, tableStakes ...int) *Game {
 		}
 	}
 
-	game, err := NewGame(logrus.StandardLogger(), p, opts)
+	return p
+}
+
+func setupNewGame(opts Options, tableStakes ...int) *Game {
+	game, err := NewGame(logrus.StandardLogger(), setupParticipants(tableStakes...), opts)
 	if err != nil {
 		panic(err)
 	}
@@ -38,15 +43,12 @@ func setupNewGame(opts Options, tableStakes ...int) *Game {
 	return game
 }
 
-func assertAction(t *testing.T, game *Game, playerID int64, action string, msgAndArgs ...interface{}) {
+func assertAction(t *testing.T, game *Game, playerID int64, action action.Action, msgAndArgs ...interface{}) {
 	t.Helper()
-	resp, update, err := game.Action(playerID, payload(action))
-	assert.NoError(t, err, msgAndArgs...)
-	assert.Equal(t, playable.OK(), resp, msgAndArgs...)
-	assert.True(t, update, msgAndArgs...)
+	assertActionAndAmount(t, game, playerID, action, 0, msgAndArgs...)
 }
 
-func assertActionAndAmount(t *testing.T, game *Game, playerID int64, action string, amount int, msgAndArgs ...interface{}) {
+func assertActionAndAmount(t *testing.T, game *Game, playerID int64, action action.Action, amount int, msgAndArgs ...interface{}) {
 	t.Helper()
 	resp, update, err := game.Action(playerID, payload(action, amount))
 	assert.NoError(t, err, msgAndArgs...)
@@ -54,22 +56,27 @@ func assertActionAndAmount(t *testing.T, game *Game, playerID int64, action stri
 	assert.True(t, update, msgAndArgs...)
 }
 
-func assertActionFailed(t *testing.T, game *Game, playerID int64, action, expectedErr string, msgAndArgs ...interface{}) {
+func assertActionFailedAndAmount(t *testing.T, game *Game, playerID int64, action action.Action, amount int, expectedErr string, msgAndArgs ...interface{}) {
 	t.Helper()
-	resp, update, err := game.Action(playerID, payload(action))
+	resp, update, err := game.Action(playerID, payload(action, amount))
 	assert.EqualError(t, err, expectedErr, msgAndArgs...)
 	assert.Nil(t, resp, msgAndArgs...)
 	assert.False(t, update, msgAndArgs...)
 }
 
-func payload(action string, amount ...int) *playable.PayloadIn {
+func assertActionFailed(t *testing.T, game *Game, playerID int64, action action.Action, expectedErr string, msgAndArgs ...interface{}) {
+	t.Helper()
+	assertActionFailedAndAmount(t, game, playerID, action, 0, expectedErr, msgAndArgs...)
+}
+
+func payload(action action.Action, amount ...int) *playable.PayloadIn {
 	amt := 0
 	if len(amount) == 1 {
 		amt = amount[0]
 	}
 
 	return &playable.PayloadIn{
-		Action: action,
+		Action: string(action),
 		AdditionalData: playable.AdditionalData{
 			"amount": float64(amt),
 		},

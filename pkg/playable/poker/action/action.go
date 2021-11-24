@@ -36,10 +36,6 @@ func FromString(s string) (Action, error) {
 	return "", fmt.Errorf("unknown action for identifier: %s", s)
 }
 
-func (a Action) ID() string {
-	return string(a)
-}
-
 func (a Action) String() string {
 	switch a {
 	case Trade:

@@ -365,6 +365,11 @@ func (p *PotManager) Pots() Pots {
 	return pots
 }
 
+// GetTotalOnTable returns the total of all the money in all the pots and any money currently in the bet
+func (p *PotManager) GetTotalOnTable() int {
+	return p.amountInPlay + p.Pots().Total()
+}
+
 // PayWinners will adjust balance for the winners and return the final payouts
 func (p *PotManager) PayWinners(winners [][]Participant) (map[Participant]int, error) {
 	if !p.isGameOver {

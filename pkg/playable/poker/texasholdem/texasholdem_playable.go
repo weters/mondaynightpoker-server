@@ -70,9 +70,10 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	g.lastAction = &lastAction{
 		Action:   foundAction,
 		PlayerID: p.PlayerID,
+		Amount:   amount,
 	}
 
-	if g.potManager.IsRoundOver() {
+	if g.potManager.IsRoundOver() && g.pendingDealerState == nil {
 		g.setPendingDealerState(DealerState(int(g.dealerState)+1), time.Second*1)
 	}
 
@@ -193,7 +194,7 @@ func (g *Game) endGame() error {
 	return nil
 }
 
-func (g *Game) validateBetOrRaise(p *Participant, amount int) error {
+func (g *Game) validateBetOrRaise(p *Participant, amount int) error { // nolint:interfacer
 	if amount%25 > 0 {
 		return fmt.Errorf("bet must be in increments of ${25}")
 	}
@@ -220,7 +221,7 @@ func (g *Game) validateBetOrRaise(p *Participant, amount int) error {
 
 	minBet := max(g.options.Ante, g.options.BigBlind, 25)
 	if amount > potLimit {
-		return fmt.Errorf("bet must be less than ${%d}", potLimit)
+		return fmt.Errorf("bet must be at most ${%d}", potLimit)
 	} else if amount < allInAmont && amount < minBet {
 		return fmt.Errorf("bet must be at least ${%d}", minBet)
 	}

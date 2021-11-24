@@ -19,6 +19,7 @@ const bigBlindMax = 200
 
 type lastAction struct {
 	Action   action.Action `json:"action"`
+	Amount   int           `json:"amount"`
 	PlayerID int64         `json:"playerId"`
 }
 
@@ -136,11 +137,11 @@ func validateAmount(desc string, number, min, max int) error {
 	}
 
 	if number < min {
-		return fmt.Errorf("%s must be greater than %d", desc, min)
+		return fmt.Errorf("%s must be at least ${%d}", desc, min)
 	}
 
 	if number > max {
-		return fmt.Errorf("%s must be less than %d", desc, max)
+		return fmt.Errorf("%s must be at most ${%d}", desc, max)
 	}
 
 	return nil
