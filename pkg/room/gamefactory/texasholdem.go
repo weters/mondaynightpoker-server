@@ -32,11 +32,11 @@ func texasHoldEmOptions(additionData playable.AdditionalData) texasholdem.Option
 		opts.Ante = ante
 	}
 
-	if smallBlind, _ := additionData.GetInt("smallBlind"); smallBlind > 0 {
+	if smallBlind, ok := additionData.GetInt("smallBlind"); ok && smallBlind >= 0 {
 		opts.SmallBlind = smallBlind
 	}
 
-	if bigBlind, _ := additionData.GetInt("bigBlind"); bigBlind > 0 {
+	if bigBlind, ok := additionData.GetInt("bigBlind"); ok && bigBlind >= 0 {
 		opts.BigBlind = bigBlind
 	}
 

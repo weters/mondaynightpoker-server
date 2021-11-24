@@ -155,6 +155,31 @@ func (p *PotManager) ParticipantCalls(pt Participant) error {
 	return nil
 }
 
+// PayBlinds will have the participants pay the blinds
+func (p *PotManager) PayBlinds(sbAmt, bbAmt int) (smallBlind Participant, bigBlind Participant) {
+	if bbAmt < sbAmt {
+		panic(fmt.Sprintf("big blind (%d) must be more than small blind (%d)", bbAmt, sbAmt))
+	}
+
+	var sbPip, bbPip *participantInPot
+
+	if len(p.tableOrder) == 2 {
+		sbPip = p.tableOrder[0]
+		bbPip = p.tableOrder[1]
+	} else {
+		sbPip = p.tableOrder[1]
+		bbPip = p.tableOrder[2]
+		p.actionStartIndex = 3 % len(p.tableOrder) // dealer is 0, sb is 1, bb is 2
+	}
+
+	p.actionAmount = bbAmt
+	p.actionDiffAmount = bbAmt
+	p.adjustParticipant(sbPip, sbAmt)
+	p.adjustParticipant(bbPip, bbAmt)
+
+	return sbPip, bbPip
+}
+
 // ParticipantBetsOrRaises will place a bet or a raise for a participant
 // This method only enforces that the bet or raise is above the previous bet or raise. Any additional logic
 // must be handled by the game.

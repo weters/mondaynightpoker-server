@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker"
 	"mondaynightpoker-server/pkg/playable/poker/action"
 )
 
@@ -84,20 +85,11 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	p, ok := g.idToParticipant[playerID]
 	var pJSON *participantJSON
 	if ok {
-		minBet := g.getMinBet()
-
-		maxBet := g.potManager.GetPotLimitMaxBet()
-		if allInAmount := g.potManager.GetParticipantAllInAmount(p); allInAmount < maxBet {
-			maxBet = allInAmount
-		}
-
 		pJSON = &participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
 			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
-			MinBet:     minBet,
-			MaxBet:     maxBet,
 			Hand:       p.hand,
 			HandRank:   p.GetBestHand(g.GetCommunityCards()).analyzer.GetHand().String(),
 		}
@@ -119,14 +111,17 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			DealerID:     g.idToParticipant[g.playerIDs[0]].PlayerID,
 			Round:        g.round,
 			Action:       action,
-			Pot:          g.potManager.Pots().Total(),
-			Pots:         g.potManager.Pots(),
-			Ante:         g.options.Ante,
-			CurrentBet:   g.potManager.GetBet(),
 			TradeIns:     g.GetAllowedTradeIns(),
 			InitialDeal:  g.options.InitialDeal,
-			Community:    g.GetCommunityCards(),
 			Winners:      winners,
+		},
+		PokerState: &poker.State{
+			Ante:       g.options.Ante,
+			CurrentBet: g.potManager.GetBet(),
+			MinBet:     g.getMinBet(),
+			MaxBet:     g.potManager.GetPotLimitMaxBet(),
+			Pots:       g.potManager.Pots(),
+			Community:  g.GetCommunityCards(),
 		},
 		Actions:       g.getActionsForPlayer(playerID),
 		FutureActions: g.getFutureActionsForPlayer(playerID),

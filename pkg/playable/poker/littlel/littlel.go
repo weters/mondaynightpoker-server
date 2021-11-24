@@ -404,7 +404,7 @@ func (g *Game) endGame() error {
 
 	g.potManager.EndGame()
 
-	tiers := make(tieredHands)
+	wm := potmanager.NewWinManager()
 
 	community := g.GetCommunityCards()
 	for _, id := range g.playerIDs {
@@ -416,20 +416,11 @@ func (g *Game) endGame() error {
 		bestHand := p.GetBestHand(community)
 		strength := bestHand.analyzer.GetStrength()
 
-		tier, ok := tiers[strength]
-		if !ok {
-			tier = &strengthTier{
-				strength:     strength,
-				participants: make([]potmanager.Participant, 0),
-			}
-			tiers[strength] = tier
-		}
-
-		tier.participants = append(tier.participants, p)
+		wm.AddParticipant(p, strength)
 	}
 
 	winners := make(map[*Participant]int)
-	payouts, err := g.potManager.PayWinners(tiers.getSortedTiers())
+	payouts, err := g.potManager.PayWinners(wm.GetSortedTiers())
 	if err != nil {
 		return err
 	}

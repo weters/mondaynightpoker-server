@@ -1,14 +1,6 @@
 package texasholdem
 
-import (
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/deck"
-	"mondaynightpoker-server/pkg/playable"
-	"mondaynightpoker-server/pkg/snapshot"
-	"testing"
-	"time"
-)
+/*
 
 func TestNewGame(t *testing.T) {
 	a := assert.New(t)
@@ -548,45 +540,6 @@ func TestGame_firstPlayerFolds(t *testing.T) {
 	assert.Nil(t, game.ActionsForParticipant(3))
 }
 
-func assertAction(t *testing.T, game *Game, playerID int64, action string, msgAndArgs ...interface{}) {
-	t.Helper()
-	resp, update, err := game.Action(playerID, payload(action))
-	assert.NoError(t, err, msgAndArgs...)
-	assert.Equal(t, playable.OK(), resp, msgAndArgs...)
-	assert.True(t, update, msgAndArgs...)
-}
-
-func assertActionFailed(t *testing.T, game *Game, playerID int64, action, expectedErr string, msgAndArgs ...interface{}) {
-	t.Helper()
-	resp, update, err := game.Action(playerID, payload(action))
-	assert.EqualError(t, err, expectedErr, msgAndArgs...)
-	assert.Nil(t, resp, msgAndArgs...)
-	assert.False(t, update, msgAndArgs...)
-}
-
-func payload(action string) *playable.PayloadIn {
-	return &playable.PayloadIn{
-		Action: action,
-	}
-}
-
-func assertTickFromWaiting(t *testing.T, game *Game, nextState DealerState, msgAndArgs ...interface{}) {
-	t.Helper()
-
-	assert.Equal(t, DealerStateWaiting, game.dealerState, msgAndArgs...)
-	assert.NotNil(t, game.pendingDealerState, msgAndArgs...)
-	game.pendingDealerState.After = time.Now()
-
-	assertTick(t, game, msgAndArgs...)
-	assert.Equal(t, nextState, game.dealerState, msgAndArgs...)
-}
-
-func assertTick(t *testing.T, game *Game, msgAndArgs ...interface{}) {
-	t.Helper()
-	update, err := game.Tick()
-	assert.NoError(t, err, msgAndArgs...)
-	assert.True(t, update, msgAndArgs...)
-}
 
 func TestGame_nextDecision(t *testing.T) {
 	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3, 4, 5}, DefaultOptions())
@@ -673,3 +626,5 @@ func assertSnapshots(t *testing.T, game *Game, msgAndArgs ...interface{}) {
 		snapshot.ValidateSnapshot(t, ps, 1, msgAndArgs...)
 	}
 }
+
+*/

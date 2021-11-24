@@ -589,6 +589,72 @@ func TestPotManager_GetRaise(t *testing.T) {
 	a.Equal(0, pm.GetRaise())
 }
 
+func TestPotManager_PayBlinds(t *testing.T) {
+	a := assert.New(t)
+
+	// four player test
+	{
+		pm := setupPotManager(25, 100, 100, 100, 100)
+
+		sb, bb := pm.PayBlinds(25, 50)
+		a.Equal(pm.tableOrder[1], sb)
+		a.Equal(pm.tableOrder[2], bb)
+		a.Equal(75, pm.tableOrder[0].Balance())
+		a.Equal(50, pm.tableOrder[1].Balance())
+		a.Equal(25, pm.tableOrder[2].Balance())
+		a.Equal(75, pm.tableOrder[3].Balance())
+		a.Equal(175, pm.Pots().Total()+pm.amountInPlay)
+
+		a.Equal(50, pm.GetRaise())
+
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[3]))
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[0]))
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[1]))
+		a.NoError(pm.ParticipantChecks(pm.tableOrder[2]))
+		a.True(pm.IsRoundOver())
+	}
+
+	// three player test
+	{
+		pm := setupPotManager(25, 100, 100, 100)
+
+		sb, bb := pm.PayBlinds(25, 50)
+		a.Equal(pm.tableOrder[1], sb)
+		a.Equal(pm.tableOrder[2], bb)
+		a.Equal(75, pm.tableOrder[0].Balance())
+		a.Equal(50, pm.tableOrder[1].Balance())
+		a.Equal(25, pm.tableOrder[2].Balance())
+
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[0]))
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[1]))
+		a.NoError(pm.ParticipantChecks(pm.tableOrder[2]))
+		a.True(pm.IsRoundOver())
+	}
+
+	// two player test
+	{
+		pm := setupPotManager(25, 100, 100)
+
+		sb, bb := pm.PayBlinds(25, 50)
+		a.Equal(pm.tableOrder[0], sb)
+		a.Equal(pm.tableOrder[1], bb)
+		a.Equal(50, pm.tableOrder[0].Balance())
+		a.Equal(25, pm.tableOrder[1].Balance())
+
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[0]))
+		a.NoError(pm.ParticipantChecks(pm.tableOrder[1]))
+		a.True(pm.IsRoundOver())
+	}
+
+	// test panic
+	{
+		pm := setupPotManager(25, 100, 100)
+		a.PanicsWithValue("big blind (25) must be more than small blind (50)", func() {
+			pm.PayBlinds(50, 25)
+		})
+	}
+}
+
 func setupPotManager(ante int, balances ...int) *PotManager {
 	pm := New(ante)
 	for i, balance := range balances {

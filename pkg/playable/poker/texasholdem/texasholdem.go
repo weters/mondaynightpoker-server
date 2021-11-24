@@ -90,19 +90,9 @@ func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options)
 	}
 	mgr.FinishSeatingParticipants()
 
-	if opts.BigBlind > 0 {
-		if opts.SmallBlind > 0 {
-			if err := mgr.ParticipantBetsOrRaises(participantOrder[0], opts.SmallBlind); err != nil {
-				return nil, err
-			}
-			blindLogs[0] = playable.SimpleLogMessage(participantOrder[0].ID(), "{} paid the small blind of ${%d}", opts.SmallBlind)
-		}
-
-		if err := mgr.ParticipantBetsOrRaises(participantOrder[1], opts.BigBlind); err != nil {
-			return nil, err
-		}
-		blindLogs[1] = playable.SimpleLogMessage(participantOrder[1].ID(), "{} paid the big blind of ${%d}", opts.BigBlind)
-	}
+	sb, bb := mgr.PayBlinds(opts.SmallBlind, opts.BigBlind)
+	blindLogs[0] = playable.SimpleLogMessage(sb.ID(), "{} paid the small blind of ${%d}", opts.SmallBlind)
+	blindLogs[1] = playable.SimpleLogMessage(bb.ID(), "{} paid the big blind of ${%d}", opts.BigBlind)
 
 	lc := make(chan []*playable.LogMessage, 256)
 	lc <- append(logs, blindLogs...)

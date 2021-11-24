@@ -2,8 +2,8 @@ package littlel
 
 import (
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker"
 	"mondaynightpoker-server/pkg/playable/poker/action"
-	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 )
 
 type participantJSON struct {
@@ -11,8 +11,6 @@ type participantJSON struct {
 	DidFold    bool      `json:"didFold"`
 	Balance    int       `json:"balance"`
 	CurrentBet int       `json:"currentBet"`
-	MinBet     int       `json:"minBet"`
-	MaxBet     int       `json:"maxBet"`
 	Traded     int       `json:"traded"`
 	Hand       deck.Hand `json:"hand"`
 	HandRank   string    `json:"handRank"`
@@ -25,13 +23,8 @@ type GameState struct {
 	DealerID     int64              `json:"dealerId"`
 	Round        round              `json:"round"`
 	Action       int64              `json:"action"`
-	Pot          int                `json:"pot"`
-	Pots         potmanager.Pots    `json:"pots"`
-	Ante         int                `json:"ante"`
-	CurrentBet   int                `json:"currentBet"`
 	TradeIns     *TradeIns          `json:"tradeIns"`
 	InitialDeal  int                `json:"initialDeal"`
-	Community    []*deck.Card       `json:"community"`
 	Winners      map[int64]int      `json:"winners"`
 }
 
@@ -39,6 +32,7 @@ type GameState struct {
 type State struct {
 	Participant   *participantJSON `json:"participant"`
 	GameState     *GameState       `json:"gameState"`
+	PokerState    *poker.State     `json:"pokerState"`
 	Actions       []action.Action  `json:"actions"`
 	FutureActions []action.Action  `json:"futureActions"`
 }

@@ -2,9 +2,11 @@ package texasholdem
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"math"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/action"
+	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 	"time"
 )
 
@@ -45,7 +47,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	case action.Bet:
 		fallthrough
 	case action.Raise:
-		if err := g.validateBetOrRaise(amount); err != nil {
+		if err := g.validateBetOrRaise(p, amount); err != nil {
 			return nil, false, err
 		}
 
@@ -134,77 +136,93 @@ func (g *Game) endGame() error {
 		return fmt.Errorf("cannot endGame from state %d", g.dealerState)
 	}
 
-	// FIXME
+	g.potManager.EndGame()
 
-	/*
-
-		var bestHand int
-		var winners []*Participant
-
-		for _, p := range g.participantOrder {
-			if p.folded {
-				p.result = resultFolded
-				continue
-			}
-
-			p.result = resultLost
-			p.reveal = true
-			if s := p.getHandAnalyzer(g.community).GetStrength(); s > bestHand {
-				bestHand = s
-				winners = []*Participant{p}
-			} else if s == bestHand {
-				winners = append(winners, p)
-			}
+	wm := potmanager.NewWinManager()
+	for _, p := range g.participantOrder {
+		if p.folded {
+			p.result = resultFolded
+			continue
 		}
 
-		n := len(winners)
-		for pos, winner := range winners {
-			winner.won(g.getShareOfWinnings(n, pos))
+		p.result = resultLost
+		p.reveal = true
+
+		strength := p.getHandAnalyzer(g.community).GetStrength()
+		wm.AddParticipant(p, strength)
+	}
+
+	winners, err := g.potManager.PayWinners(wm.GetSortedTiers())
+	if err != nil {
+		return err
+	}
+
+	for p, amt := range winners {
+		pt := g.participants[p.ID()]
+		pt.result = resultWon
+		pt.winnings = amt
+	}
+
+	logs := make([]*playable.LogMessage, 0, len(g.participantOrder))
+	for _, p := range g.participantOrder {
+		pid := p.ID()
+
+		hand := p.getHandAnalyzer(g.community).GetHand().String()
+		msg := playable.LogMessage{
+			UUID:      uuid.New().String(),
+			PlayerIDs: []int64{pid},
+			Time:      time.Now(),
+			Cards:     nil,
+			Message:   "",
+		}
+		if p.result == resultWon {
+			msg.Message = fmt.Sprintf("{} won ${%d} (${%d}) with a %s", p.winnings, p.balance, hand)
+			msg.Cards = p.cards
+		} else if p.folded {
+			msg.Message = fmt.Sprintf("{} folded and lost ${%d}", -1*p.balance)
+		} else {
+			msg.Message = fmt.Sprintf("{} lost ${%d} with a %s", -1*p.balance, hand)
+			msg.Cards = p.cards
 		}
 
-		logs := make([]*playable.LogMessage, 0, len(g.participantOrder))
-		for _, p := range g.participantOrder {
-			pid := p.ID()
+		logs = append(logs, &msg)
+	}
 
-			hand := p.getHandAnalyzer(g.community).GetHand().String()
-			if p.result == resultWon {
-				logs = append(logs, playable.SimpleLogMessage(pid, "{} won ${%d} (${%d}) with a %s", p.winnings, p.balance, hand))
-			} else if p.folded {
-				logs = append(logs, playable.SimpleLogMessage(pid, "{} folded and lost ${%d}", -1*p.balance))
-			} else {
-				logs = append(logs, playable.SimpleLogMessage(pid, "{} lost ${%d} with a %s", -1*p.balance, hand))
-			}
-		}
-
-		g.logChan <- logs
-		g.setPendingDealerState(DealerStateEnd, time.Second*5)
-	*/
+	g.logChan <- logs
+	g.setPendingDealerState(DealerStateEnd, time.Second*5)
 	return nil
 }
 
-func (g *Game) validateBetOrRaise(amount int) error {
+func (g *Game) validateBetOrRaise(p *Participant, amount int) error {
 	if amount%25 > 0 {
 		return fmt.Errorf("bet must be in increments of ${25}")
 	}
 
 	potLimit := g.potManager.GetPotLimitMaxBet()
+	allInAmont := g.potManager.GetParticipantAllInAmount(p)
 
-	if g.potManager.GetBet() > 0 {
-		raise := g.potManager.GetRaise()
-		if amount < raise {
+	if currentBet := g.potManager.GetBet(); currentBet > 0 {
+		if amount > potLimit {
+			return fmt.Errorf("raise must not exceed total of ${%d}", potLimit)
+		}
+
+		if amount < currentBet {
+			return fmt.Errorf("you cannot raise to an amount less than the current bet")
+		}
+
+		raise := g.potManager.GetRaise() + g.potManager.GetBet()
+		if amount < allInAmont && amount < raise {
 			return fmt.Errorf("raise must be to at least ${%d}", raise)
-		} else if amount > potLimit {
-			return fmt.Errorf("raise must not exceed total of ${%d}", raise)
 		}
 
 		return nil
 	}
 
 	minBet := max(g.options.Ante, g.options.BigBlind, 25)
-	if amount < minBet {
-		return fmt.Errorf("bet must be at least ${%d}", minBet)
-	} else if amount > potLimit {
+	if amount > potLimit {
 		return fmt.Errorf("bet must be less than ${%d}", potLimit)
+	} else if amount < allInAmont && amount < minBet {
+		return fmt.Errorf("bet must be at least ${%d}", minBet)
 	}
 
 	return nil

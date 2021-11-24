@@ -1,69 +1,71 @@
 package texasholdem
 
 import (
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"math"
-	"mondaynightpoker-server/pkg/deck"
-	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 	"testing"
 )
 
 func TestGame_ActionsForParticipant(t *testing.T) {
 	opts := Options{
 		Ante:       25,
-		LowerLimit: 100,
-		UpperLimit: 200,
+		SmallBlind: 100,
+		BigBlind:   200,
 	}
 
-	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+	game := setupNewGame(opts, 1000, 1000, 1000, 1000)
 
 	a := assert.New(t)
+
 	a.Nil(game.ActionsForParticipant(1))
 	a.Nil(game.ActionsForParticipant(2))
 	a.Nil(game.ActionsForParticipant(3))
+	a.Nil(game.ActionsForParticipant(4))
 
 	game.dealerState = DealerStatePreFlopBettingRound
-	a.Nil(game.ActionsForParticipant(1))
-	a.Nil(game.ActionsForParticipant(2))
-	a.Equal([]Action{{"Call", 100}, {"Raise", 200}, actionFold}, game.ActionsForParticipant(3))
+	{
+		a.Nil(game.ActionsForParticipant(1))
+		a.Nil(game.ActionsForParticipant(2))
+		a.Nil(game.ActionsForParticipant(3))
+		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(4))
 
-	game.newRoundSetup()
-	game.dealerState = DealerStateFlopBettingRound
-	a.Equal([]Action{actionCheck, {"Bet", 100}, actionFold}, game.ActionsForParticipant(1))
-	a.Nil(game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
+		assertAction(t, game, 4, action.Call.ID())
 
-	game.decisionIndex = 1
-	a.Nil(game.ActionsForParticipant(1))
-	a.Equal([]Action{actionCheck, {"Bet", 100}, actionFold}, game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
+		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(1))
+		a.Nil(game.ActionsForParticipant(2))
+		a.Nil(game.ActionsForParticipant(3))
+		a.Nil(game.ActionsForParticipant(4))
 
-	game.currentBet = 100
-	game.participants[2].bet = 50
-	a.Nil(game.ActionsForParticipant(1))
-	a.Equal([]Action{{"Call", 50}, {"Raise", 200}, actionFold}, game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
+		assertAction(t, game, 1, action.Call.ID())
+		assertAction(t, game, 2, action.Call.ID())
+		a.Equal([]action.Action{action.Check, action.Raise, action.Fold}, game.ActionsForParticipant(3))
+		assertAction(t, game, 3, action.Check.ID())
 
-	game.participants[2].bet = 100
-	a.Nil(game.ActionsForParticipant(1))
-	a.Equal([]Action{actionCheck, {"Raise", 200}, actionFold}, game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
+		a.True(game.potManager.IsRoundOver())
+	}
 
-	game.currentBet = 400
-	a.Nil(game.ActionsForParticipant(1))
-	a.Equal([]Action{{"Call", 300}, actionFold}, game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
+	assertTickFromWaiting(t, game, DealerStateDealFlop)
+	assertTick(t, game)
 
-	game.participants[2].bet = 400
-	a.Nil(game.ActionsForParticipant(1))
-	a.Equal([]Action{actionCheck, actionFold}, game.ActionsForParticipant(2))
-	a.Nil(game.ActionsForParticipant(3))
+	a.Equal(DealerStateFlopBettingRound, game.dealerState)
+	{
+		a.Equal([]action.Action{action.Check, action.Bet, action.Fold}, game.ActionsForParticipant(1))
+		assertAction(t, game, 1, action.Check.ID())
+		a.Equal([]action.Action{action.Check, action.Bet, action.Fold}, game.ActionsForParticipant(2))
+		assertActionAndAmount(t, game, 2, action.Bet.ID(), 200)
 
-	game.participants[2].folded = true
-	a.Nil(game.ActionsForParticipant(2))
+		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(3))
+		assertActionAndAmount(t, game, 3, action.Raise.ID(), game.participants[3].Balance()-25)
+
+		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(4))
+		assertActionAndAmount(t, game, 4, action.Raise.ID(), game.participants[4].Balance())
+
+		a.Equal([]action.Action{action.Call, action.Fold}, game.ActionsForParticipant(1))
+	}
+
 }
 
+/*
 func TestGame_ActionsForParticipant_panicsInInvalidState(t *testing.T) {
 	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, DefaultOptions())
 
@@ -186,3 +188,5 @@ func TestGame_FutureActionsForParticipant(t *testing.T) {
 	game.currentBet = 200
 	game.participants[2].bet = 200
 }
+
+*/

@@ -40,6 +40,8 @@ type participantJSON struct {
 	Cards    deck.Hand `json:"cards"`
 	Folded   bool      `json:"folded"`
 	Bet      int       `json:"currentBet"`
+	MinBet   int       `json:"minBet"`
+	MaxBet   int       `json:"maxBet"`
 	Hand     string    `json:"hand"`
 	Result   result    `json:"result"`
 	Winnings int       `json:"winnings"`
@@ -64,6 +66,10 @@ func (p *Participant) SubtractBalance(amount int) {
 func (g *Game) FutureActionsForParticipant(id int64) []action.Action {
 	p := g.participants[id]
 	if !g.potManager.IsParticipantYetToAct(p) {
+		return nil
+	}
+
+	if g.dealerState >= DealerStateRevealWinner {
 		return nil
 	}
 
@@ -96,14 +102,9 @@ func (g *Game) ActionsForParticipant(id int64) []action.Action {
 		actions = append(actions, action.Call)
 	}
 
-	raiseAmount := g.potManager.GetRaise()
-	if allInAmount := g.potManager.GetParticipantAllInAmount(turn); allInAmount < raiseAmount {
-		raiseAmount = allInAmount
-	}
-
 	if currentBet == 0 {
 		actions = append(actions, action.Bet)
-	} else {
+	} else if g.potManager.GetParticipantAllInAmount(turn) > currentBet {
 		actions = append(actions, action.Raise)
 	}
 
@@ -139,12 +140,6 @@ func (p *Participant) getHandAnalyzer(community []*deck.Card) *handanalyzer.Hand
 	}
 
 	return p.handAnalyzer
-}
-
-func (p *Participant) won(amount int) {
-	p.result = resultWon
-	p.balance += amount
-	p.winnings = amount
 }
 
 func (p *Participant) participantJSON(game *Game, forceReveal bool) *participantJSON {

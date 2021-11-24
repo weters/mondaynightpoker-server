@@ -1,7 +1,7 @@
 package texasholdem
 
 import (
-	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker"
 	"mondaynightpoker-server/pkg/playable/poker/action"
 )
 
@@ -11,15 +11,13 @@ type ParticipantState struct {
 	FutureActions []action.Action  `json:"futureActions"`
 	Participant   *participantJSON `json:"participant"`
 	GameState     *GameState       `json:"gameState"`
+	PokerState    *poker.State     `json:"pokerState"`
 }
 
 // GameState represents the state of the game
 type GameState struct {
 	Name         string             `json:"name"`
 	DealerState  DealerState        `json:"dealerState"`
-	Community    deck.Hand          `json:"community"`
-	Pot          int                `json:"pot"`
-	CurrentBet   int                `json:"currentBet"`
 	Participants []*participantJSON `json:"participants"`
 	CurrentTurn  int64              `json:"currentTurn"`
 	LastAction   *lastAction        `json:"lastAction"`
@@ -39,11 +37,8 @@ func (g *Game) getGameState() *GameState {
 	return &GameState{
 		Name:         g.Name(),
 		DealerState:  g.dealerState,
-		Pot:          0, // FIXME
-		CurrentBet:   g.potManager.GetBet(),
 		Participants: p,
 		CurrentTurn:  currentTurn,
-		Community:    g.community,
 		LastAction:   g.lastAction,
 	}
 }
@@ -63,5 +58,20 @@ func (g *Game) getParticipantStateByPlayerID(id int64) *ParticipantState {
 		FutureActions: futureActions,
 		Participant:   pjson,
 		GameState:     g.getGameState(),
+		PokerState:    g.getPokerState(),
+	}
+}
+
+func (g *Game) getPokerState() *poker.State {
+	currentBet := g.potManager.GetBet()
+	minBet := max(g.options.Ante, g.options.BigBlind, currentBet+g.potManager.GetRaise(), 25)
+
+	return &poker.State{
+		Ante:       g.options.Ante,
+		CurrentBet: currentBet,
+		MinBet:     minBet,
+		MaxBet:     g.potManager.GetPotLimitMaxBet(),
+		Pots:       g.potManager.Pots(),
+		Community:  g.community,
 	}
 }

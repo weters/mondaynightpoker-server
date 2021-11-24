@@ -9,12 +9,15 @@ type tier struct {
 	participants []Participant
 }
 
+// WinManager keeps track of who won based on hand strengths
 type WinManager map[int]*tier
 
+// NewWinManager returns a new WinManager instance
 func NewWinManager() WinManager {
 	return make(WinManager)
 }
 
+// AddParticipant adds a participant with the provided hand strength
 func (w WinManager) AddParticipant(p Participant, handStrength int) {
 	t, ok := w[handStrength]
 	if !ok {
@@ -28,6 +31,8 @@ func (w WinManager) AddParticipant(p Participant, handStrength int) {
 	w[handStrength] = t
 }
 
+// GetSortedTiers will return a list of tiers sorted by their hand strength
+// The first element in the list is the tier with the best hand
 func (w WinManager) GetSortedTiers() [][]Participant {
 	tiers := make([]*tier, 0, len(w))
 	for _, tier := range w {

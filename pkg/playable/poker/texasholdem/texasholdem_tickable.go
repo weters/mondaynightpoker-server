@@ -87,6 +87,10 @@ func (g *Game) Tick() (bool, error) {
 			g.finished = true
 			return true, nil
 		}
+	default:
+		if g.InBettingRound() && g.potManager.IsRoundOver() {
+			g.setPendingDealerState(DealerState(int(g.dealerState)+1), time.Second)
+		}
 	}
 
 	return false, nil
