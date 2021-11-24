@@ -10,6 +10,8 @@ type participantJSON struct {
 	DidFold    bool      `json:"didFold"`
 	Balance    int       `json:"balance"`
 	CurrentBet int       `json:"currentBet"`
+	MinBet     int       `json:"minBet"`
+	MaxBet     int       `json:"maxBet"`
 	Traded     int       `json:"traded"`
 	Hand       deck.Hand `json:"hand"`
 	HandRank   string    `json:"handRank"`
@@ -26,8 +28,6 @@ type GameState struct {
 	Pots         potmanager.Pots    `json:"pots"`
 	Ante         int                `json:"ante"`
 	CurrentBet   int                `json:"currentBet"`
-	MinBet       int                `json:"minBet"`
-	MaxBet       int                `json:"maxBet"`
 	TradeIns     *TradeIns          `json:"tradeIns"`
 	InitialDeal  int                `json:"initialDeal"`
 	Community    []*deck.Card       `json:"community"`
