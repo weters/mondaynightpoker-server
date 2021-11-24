@@ -2,6 +2,7 @@ package texasholdem
 
 import (
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
@@ -18,8 +19,9 @@ const (
 type Participant struct {
 	PlayerID int64
 
-	balance int
-	cards   deck.Hand
+	balance    int
+	tableStake int
+	cards      deck.Hand
 
 	folded bool
 	reveal bool
@@ -37,103 +39,48 @@ type participantJSON struct {
 	Balance  int       `json:"balance"`
 	Cards    deck.Hand `json:"cards"`
 	Folded   bool      `json:"folded"`
-	Bet      int       `json:"bet"`
-	Hand     string    `json:"hand"`
+	Bet      int       `json:"currentBet"`
+	MinBet   int       `json:"minBet"`
+	MaxBet   int       `json:"maxBet"`
+	HandRank string    `json:"handRank"`
 	Result   result    `json:"result"`
 	Winnings int       `json:"winnings"`
 }
 
-func newParticipant(id int64) *Participant {
+func newParticipant(id int64, tableStake int) *Participant {
 	return &Participant{
-		PlayerID: id,
-		balance:  0,
-		cards:    make(deck.Hand, 0),
-		result:   resultPending,
+		PlayerID:   id,
+		balance:    0,
+		tableStake: tableStake,
+		cards:      make(deck.Hand, 0),
+		result:     resultPending,
 	}
-}
-
-// SubtractBalance subtracts from the player's balance
-func (p *Participant) SubtractBalance(amount int) {
-	p.balance -= amount
 }
 
 // FutureActionsForParticipant are actions the participant can perform when they are on the clock
-func (g *Game) FutureActionsForParticipant(id int64) []Action {
-	if !g.isParticipantPendingTurn(id) {
+func (g *Game) FutureActionsForParticipant(id int64) []action.Action {
+	p := g.participants[id]
+	if !g.potManager.IsParticipantYetToAct(p) {
 		return nil
 	}
 
-	p := g.participants[id]
-
-	bet, err := g.GetBetAmount()
-	if err != nil {
-		panic(err)
+	if g.dealerState >= DealerStateRevealWinner {
+		return nil
 	}
 
-	futureActions := make([]Action, 0)
-	if g.currentBet == 0 {
-		return append(futureActions, actionCheck, mustAction(newAction(betKey, bet)), actionFold)
+	currentBet := g.potManager.GetBet()
+
+	if currentBet == p.bet {
+		return []action.Action{action.Check, action.Fold}
 	}
 
-	if g.currentBet > p.bet {
-		// must call
-		futureActions = append(futureActions, mustAction(newAction(callKey, g.currentBet-p.bet)))
-	} else {
-		// this should _only_ happen in opening round
-		futureActions = append(futureActions, actionCheck)
-	}
-
-	if g.CanBet() {
-		futureActions = append(futureActions, mustAction(newAction(raiseKey, g.currentBet+bet)))
-	}
-
-	futureActions = append(futureActions, actionFold)
-
-	return futureActions
-}
-
-// isParticipantPendingTurn returns true if they still have to make a decision this turn
-func (g *Game) isParticipantPendingTurn(id int64) bool {
-	if !g.InBettingRound() {
-		return false
-	}
-
-	if g.participants[id].folded {
-		return false
-	}
-
-	var index = -1
-	for i, pid := range g.participantOrder {
-		if pid == id {
-			index = i
-			break
-		}
-	}
-
-	if index < 0 {
-		panic("could not find participant")
-	}
-
-	index -= g.decisionStart
-	if index < 0 {
-		index += len(g.participantOrder)
-	}
-
-	return index > g.decisionIndex
+	return []action.Action{action.Call, action.Fold}
 }
 
 // ActionsForParticipant return the actions the current participant can take
-func (g *Game) ActionsForParticipant(id int64) []Action {
-	if !g.InBettingRound() {
-		return nil
-	}
-
+func (g *Game) ActionsForParticipant(id int64) []action.Action {
 	turn, err := g.GetCurrentTurn()
 	if err != nil {
-		panic(err)
-	}
-
-	if turn.folded {
 		return nil
 	}
 
@@ -141,41 +88,22 @@ func (g *Game) ActionsForParticipant(id int64) []Action {
 		return nil
 	}
 
-	actions := make([]Action, 0)
-	if g.currentBet == turn.bet {
-		actions = append(actions, actionCheck)
-	} else if turn.bet < g.currentBet {
-		call, _ := newAction(callKey, g.currentBet-turn.bet)
-		actions = append(actions, call)
+	currentBet := g.potManager.GetBet()
+
+	actions := make([]action.Action, 0)
+	if currentBet == turn.bet {
+		actions = append(actions, action.Check)
+	} else if turn.bet < currentBet {
+		actions = append(actions, action.Call)
 	}
 
-	if g.CanBet() {
-		amt, err := g.GetBetAmount()
-		if err != nil {
-			panic("could not get the bet amount")
-		}
-
-		if g.currentBet == 0 {
-			bet, _ := newAction(betKey, amt)
-			actions = append(actions, bet)
-		} else {
-			raise, _ := newAction(raiseKey, g.currentBet+amt)
-			actions = append(actions, raise)
-		}
+	if currentBet == 0 {
+		actions = append(actions, action.Bet)
+	} else if g.potManager.GetParticipantAllInAmount(turn) > currentBet {
+		actions = append(actions, action.Raise)
 	}
 
-	return append(actions, actionFold)
-}
-
-// Bet ensures the participant throws to the specified amount
-// The value return is the amount added to the pot. For example, if a player already bet 100, and then calls
-// for another 50, this method will return 50
-func (p *Participant) Bet(amount int) int {
-	diff := amount - p.bet
-	p.bet = amount
-	p.balance -= diff
-
-	return diff
+	return append(actions, action.Fold)
 }
 
 // NewRound will reset the participant for a new round
@@ -198,31 +126,47 @@ func (p *Participant) getHandAnalyzer(community []*deck.Card) *handanalyzer.Hand
 	return p.handAnalyzer
 }
 
-func (p *Participant) won(amount int) {
-	p.result = resultWon
-	p.balance += amount
-	p.winnings = amount
-}
-
 func (p *Participant) participantJSON(game *Game, forceReveal bool) *participantJSON {
 	var cards deck.Hand
-	var hand string
+	var handRank string
 	if forceReveal || (p.reveal && !p.folded) {
 		cards = p.cards
 
 		if ha := p.getHandAnalyzer(game.community); ha != nil {
-			hand = ha.GetHand().String()
+			handRank = ha.GetHand().String()
 		}
 	}
 
 	return &participantJSON{
 		PlayerID: p.PlayerID,
-		Balance:  p.balance,
+		Balance:  p.Balance(),
 		Cards:    cards,
 		Folded:   p.folded,
 		Bet:      p.bet,
-		Hand:     hand,
+		HandRank: handRank,
 		Result:   p.result,
 		Winnings: p.winnings,
 	}
+}
+
+// potmanager.Participant interface
+
+// ID returns the ID
+func (p *Participant) ID() int64 {
+	return p.PlayerID
+}
+
+// Balance returns the balance
+func (p *Participant) Balance() int {
+	return p.balance + p.tableStake
+}
+
+// AdjustBalance adjusts the balance
+func (p *Participant) AdjustBalance(amount int) {
+	p.balance += amount
+}
+
+// SetAmountInPlay sets the amount in play
+func (p *Participant) SetAmountInPlay(amount int) {
+	p.bet = amount
 }

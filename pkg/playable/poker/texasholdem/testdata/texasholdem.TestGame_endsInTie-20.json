@@ -6,7 +6,7 @@
     "futureActions": null,
     "participant": {
       "playerId": 3,
-      "balance": 50,
+      "balance": 1025,
       "cards": [
         {
           "rank": 8,
@@ -34,14 +34,143 @@
         }
       ],
       "folded": false,
-      "bet": 0,
-      "hand": "Four of a kind",
+      "currentBet": 0,
+      "minBet": 0,
+      "maxBet": 0,
+      "handRank": "Four of a kind",
       "result": "won",
-      "winnings": 175
+      "winnings": 100
     },
     "gameState": {
-      "name": "Limit Texas Hold'em (${100}/${200})",
+      "name": "Pot-Limit Texas Hold'em (${25}/${50})",
       "dealerState": 9,
+      "participants": [
+        {
+          "playerId": 1,
+          "balance": 925,
+          "cards": [
+            {
+              "rank": 2,
+              "suit": "diamonds",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 4,
+              "suit": "hearts",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 2,
+              "suit": "diamonds",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 4,
+              "suit": "hearts",
+              "isWild": false,
+              "bitField": 0
+            }
+          ],
+          "folded": false,
+          "currentBet": 0,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "Four of a kind",
+          "result": "lost",
+          "winnings": 0
+        },
+        {
+          "playerId": 2,
+          "balance": 1050,
+          "cards": [
+            {
+              "rank": 8,
+              "suit": "clubs",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 10,
+              "suit": "clubs",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 8,
+              "suit": "clubs",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 10,
+              "suit": "clubs",
+              "isWild": false,
+              "bitField": 0
+            }
+          ],
+          "folded": false,
+          "currentBet": 0,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "Four of a kind",
+          "result": "won",
+          "winnings": 125
+        },
+        {
+          "playerId": 3,
+          "balance": 1025,
+          "cards": [
+            {
+              "rank": 8,
+              "suit": "diamonds",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 10,
+              "suit": "diamonds",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 8,
+              "suit": "diamonds",
+              "isWild": false,
+              "bitField": 0
+            },
+            {
+              "rank": 10,
+              "suit": "diamonds",
+              "isWild": false,
+              "bitField": 0
+            }
+          ],
+          "folded": false,
+          "currentBet": 0,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "Four of a kind",
+          "result": "won",
+          "winnings": 100
+        }
+      ],
+      "currentTurn": 0,
+      "lastAction": null
+    },
+    "pokerState": {
+      "ante": 25,
+      "currentBet": 0,
+      "minBet": 50,
+      "maxBet": 225,
+      "pots": [
+        {
+          "amount": 225,
+          "allInParticipants": []
+        }
+      ],
       "community": [
         {
           "rank": 2,
@@ -103,118 +232,7 @@
           "isWild": false,
           "bitField": 0
         }
-      ],
-      "pot": 375,
-      "currentBet": 0,
-      "participants": [
-        {
-          "playerId": 1,
-          "balance": -125,
-          "cards": [
-            {
-              "rank": 2,
-              "suit": "diamonds",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 4,
-              "suit": "hearts",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 2,
-              "suit": "diamonds",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 4,
-              "suit": "hearts",
-              "isWild": false,
-              "bitField": 0
-            }
-          ],
-          "folded": false,
-          "bet": 0,
-          "hand": "Four of a kind",
-          "result": "lost",
-          "winnings": 0
-        },
-        {
-          "playerId": 2,
-          "balance": 75,
-          "cards": [
-            {
-              "rank": 8,
-              "suit": "clubs",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 10,
-              "suit": "clubs",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 8,
-              "suit": "clubs",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 10,
-              "suit": "clubs",
-              "isWild": false,
-              "bitField": 0
-            }
-          ],
-          "folded": false,
-          "bet": 0,
-          "hand": "Four of a kind",
-          "result": "won",
-          "winnings": 200
-        },
-        {
-          "playerId": 3,
-          "balance": 50,
-          "cards": [
-            {
-              "rank": 8,
-              "suit": "diamonds",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 10,
-              "suit": "diamonds",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 8,
-              "suit": "diamonds",
-              "isWild": false,
-              "bitField": 0
-            },
-            {
-              "rank": 10,
-              "suit": "diamonds",
-              "isWild": false,
-              "bitField": 0
-            }
-          ],
-          "folded": false,
-          "bet": 0,
-          "hand": "Four of a kind",
-          "result": "won",
-          "winnings": 175
-        }
-      ],
-      "currentTurn": 0,
-      "lastAction": null
+      ]
     }
   },
   "context": ""

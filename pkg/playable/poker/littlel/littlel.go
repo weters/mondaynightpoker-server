@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 	"sort"
 	"strings"
@@ -174,8 +175,8 @@ func (g *Game) GetCommunityCards() []*deck.Card {
 
 // GetCurrentTurn returns the current participant who needs to make a decision
 func (g *Game) GetCurrentTurn() *Participant {
-	p := g.potManager.GetInTurnParticipant()
-	if p == nil {
+	p, err := g.potManager.GetInTurnParticipant()
+	if err != nil {
 		return nil
 	}
 
@@ -217,11 +218,11 @@ func (g *Game) NextRound() error {
 
 // ParticipantBets handles both bets and raises
 func (g *Game) ParticipantBets(p *Participant, bet int) error {
-	term := strings.ToLower(string(ActionBet))
+	term := strings.ToLower(string(action.Bet))
 
 	currentBet := g.potManager.GetBet()
 	if currentBet > 0 {
-		term = strings.ToLower(string(ActionRaise))
+		term = strings.ToLower(string(action.Raise))
 	}
 
 	if maxBet := g.potManager.GetPotLimitMaxBet(); bet > maxBet {
@@ -352,7 +353,7 @@ func (g *Game) CanRevealCards() bool {
 	return g.round >= roundRevealWinner
 }
 
-func (g *Game) getFutureActionsForPlayer(playerID int64) []Action {
+func (g *Game) getFutureActionsForPlayer(playerID int64) []action.Action {
 	if p, ok := g.idToParticipant[playerID]; !ok {
 		return nil
 	} else if !g.potManager.IsParticipantYetToAct(p) {
@@ -360,34 +361,34 @@ func (g *Game) getFutureActionsForPlayer(playerID int64) []Action {
 	}
 
 	if g.round == roundTradeIn {
-		return []Action{ActionTrade}
+		return []action.Action{action.Trade}
 	}
 
 	if g.potManager.GetBet() == 0 {
-		return []Action{ActionCheck, ActionFold}
+		return []action.Action{action.Check, action.Fold}
 	}
 
-	return []Action{ActionCall, ActionFold}
+	return []action.Action{action.Call, action.Fold}
 }
 
-func (g *Game) getActionsForPlayer(playerID int64) []Action {
+func (g *Game) getActionsForPlayer(playerID int64) []action.Action {
 	p, ok := g.idToParticipant[playerID]
 	if !ok {
 		// viewer
 		return nil
 	}
 
-	actions := make([]Action, 0)
+	actions := make([]action.Action, 0)
 	if p == g.GetCurrentTurn() {
 		if g.round == roundTradeIn {
-			actions = append(actions, ActionTrade)
+			actions = append(actions, action.Trade)
 		} else {
 			if bet := g.potManager.GetBet(); bet == 0 {
-				actions = append(actions, ActionCheck, ActionBet, ActionFold)
+				actions = append(actions, action.Check, action.Bet, action.Fold)
 			} else if g.potManager.GetParticipantAllInAmount(p) < bet {
-				actions = append(actions, ActionCall, ActionFold)
+				actions = append(actions, action.Call, action.Fold)
 			} else {
-				actions = append(actions, ActionCall, ActionRaise, ActionFold)
+				actions = append(actions, action.Call, action.Raise, action.Fold)
 			}
 		}
 	}
@@ -403,7 +404,7 @@ func (g *Game) endGame() error {
 
 	g.potManager.EndGame()
 
-	tiers := make(tieredHands)
+	wm := potmanager.NewWinManager()
 
 	community := g.GetCommunityCards()
 	for _, id := range g.playerIDs {
@@ -415,20 +416,11 @@ func (g *Game) endGame() error {
 		bestHand := p.GetBestHand(community)
 		strength := bestHand.analyzer.GetStrength()
 
-		tier, ok := tiers[strength]
-		if !ok {
-			tier = &strengthTier{
-				strength:     strength,
-				participants: make([]potmanager.Participant, 0),
-			}
-			tiers[strength] = tier
-		}
-
-		tier.participants = append(tier.participants, p)
+		wm.AddParticipant(p, strength)
 	}
 
 	winners := make(map[*Participant]int)
-	payouts, err := g.potManager.PayWinners(tiers.getSortedTiers())
+	payouts, err := g.potManager.PayWinners(wm.GetSortedTiers())
 	if err != nil {
 		return err
 	}

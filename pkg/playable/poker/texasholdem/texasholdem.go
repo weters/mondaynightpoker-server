@@ -6,18 +6,21 @@ import (
 	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/action"
+	"mondaynightpoker-server/pkg/playable/poker/potmanager"
 	"time"
 )
 
 const anteMin = 0
 const anteMax = 50
-const lowerLimitMax = 100
-
-var errBettingRoundIsOver = errors.New("betting round is over")
+const smallBlindMin = 0
+const smallBlindMax = 100
+const bigBlindMax = 200
 
 type lastAction struct {
-	Action   Action `json:"action"`
-	PlayerID int64  `json:"playerId"`
+	Action   action.Action `json:"action"`
+	Amount   int           `json:"amount"`
+	PlayerID int64         `json:"playerId"`
 }
 
 // Game is a game of Limit Texas Hold'em
@@ -25,13 +28,10 @@ type Game struct {
 	options            Options
 	deck               *deck.Deck
 	participants       map[int64]*Participant
-	participantOrder   []int64
+	participantOrder   []*Participant
 	dealerState        DealerState
 	pendingDealerState *pendingDealerState
-	decisionIndex      int
-	decisionStart      int
-	pot                int
-	currentBet         int
+	potManager         *potmanager.PotManager
 	lastAction         *lastAction
 	community          deck.Hand
 	logChan            chan []*playable.LogMessage
@@ -43,71 +43,57 @@ type Game struct {
 // Options configures how Texas Hold'em is played
 type Options struct {
 	Ante       int
-	LowerLimit int
-	UpperLimit int
+	SmallBlind int
+	BigBlind   int
 }
 
 // DefaultOptions returns the default options for Texas Hold'em
 func DefaultOptions() Options {
 	return Options{
 		Ante:       25,
-		LowerLimit: 100,
-		UpperLimit: 200,
+		SmallBlind: 25,
+		BigBlind:   50,
 	}
 }
 
 // NewGame returns a new game of Texas Hold'em
-func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game, error) {
+func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options) (*Game, error) {
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
 
-	opts.UpperLimit = opts.LowerLimit * 2
-
-	if len(playerIDs) < 2 {
+	if len(players) < 2 {
 		return nil, errors.New("there must be at least two players")
 	}
 
 	d := deck.New()
 	d.Shuffle()
 
-	smallBlind := (opts.LowerLimit / 50) * 25
-	if smallBlind == 0 {
-		smallBlind = opts.LowerLimit
-	}
-
 	participants := make(map[int64]*Participant)
-	participantOrder := make([]int64, len(playerIDs))
-	copy(participantOrder, playerIDs)
+	participantOrder := make([]*Participant, len(players))
 
 	logs := make([]*playable.LogMessage, 0)
 	logs = append(logs, playable.SimpleLogMessage(0, "started a new game of %s", NameFromOptions(opts)))
 	blindLogs := make([]*playable.LogMessage, 2)
 
-	pot := 0
-	for i, id := range playerIDs {
-		p := newParticipant(id)
-		logs = append(logs, playable.SimpleLogMessage(id, "{} paid the ante of ${%d}", opts.Ante))
-		p.SubtractBalance(opts.Ante)
-		pot += opts.Ante
+	mgr := potmanager.New(opts.Ante)
 
-		if i == 0 {
-			// small blind
-			pot += p.Bet(smallBlind)
-			blindLogs[0] = playable.SimpleLogMessage(id, "{} paid the small blind of ${%d}", smallBlind)
-		} else if i == 1 {
-			// big blind
-			pot += p.Bet(opts.LowerLimit)
-			blindLogs[1] = playable.SimpleLogMessage(id, "{} paid the big blind of ${%d}", opts.LowerLimit)
+	for i, player := range players {
+		id := player.GetPlayerID()
+		p := newParticipant(id, player.GetTableStake())
+		if err := mgr.SeatParticipant(p); err != nil {
+			return nil, err
 		}
 
 		participants[id] = p
+		participantOrder[i] = p
+		logs = append(logs, playable.SimpleLogMessage(id, "{} paid the ante of ${%d}", opts.Ante))
 	}
+	mgr.FinishSeatingParticipants()
 
-	startIndex := 0
-	if len(playerIDs) > 2 {
-		startIndex = 2 // start with the third player
-	}
+	sb, bb := mgr.PayBlinds(opts.SmallBlind, opts.BigBlind)
+	blindLogs[0] = playable.SimpleLogMessage(sb.ID(), "{} paid the small blind of ${%d}", opts.SmallBlind)
+	blindLogs[1] = playable.SimpleLogMessage(bb.ID(), "{} paid the big blind of ${%d}", opts.BigBlind)
 
 	lc := make(chan []*playable.LogMessage, 256)
 	lc <- append(logs, blindLogs...)
@@ -119,12 +105,9 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 		participantOrder:   participantOrder,
 		dealerState:        DealerStateStart,
 		pendingDealerState: nil,
-		decisionIndex:      0,
-		decisionStart:      startIndex,
-		pot:                pot,
-		currentBet:         opts.LowerLimit,
 		community:          make(deck.Hand, 0, 5),
 		logChan:            lc,
+		potManager:         mgr,
 	}, nil
 }
 
@@ -134,13 +117,13 @@ func (g *Game) dealTwoCardsToEachParticipant() error {
 	}
 
 	for i := 0; i < 2; i++ {
-		for _, id := range g.participantOrder {
+		for _, p := range g.participantOrder {
 			card, err := g.deck.Draw()
 			if err != nil {
 				return err
 			}
 
-			g.participants[id].cards.AddCard(card)
+			p.cards.AddCard(card)
 		}
 	}
 
@@ -148,29 +131,33 @@ func (g *Game) dealTwoCardsToEachParticipant() error {
 	return nil
 }
 
+func validateAmount(desc string, number, min, max int) error {
+	if number%25 > 0 {
+		return fmt.Errorf("%s must be in increments of ${25}", desc)
+	}
+
+	if number < min {
+		return fmt.Errorf("%s must be at least ${%d}", desc, min)
+	}
+
+	if number > max {
+		return fmt.Errorf("%s must be at most ${%d}", desc, max)
+	}
+
+	return nil
+}
+
 func validateOptions(opts Options) error {
-	if opts.Ante < anteMin {
-		return fmt.Errorf("ante must be >= ${%d}", anteMin)
+	if err := validateAmount("ante", opts.Ante, anteMin, anteMax); err != nil {
+		return err
 	}
 
-	if opts.Ante > opts.LowerLimit {
-		return errors.New("ante must be less than the lower limit")
+	if err := validateAmount("small blind", opts.SmallBlind, smallBlindMin, smallBlindMax); err != nil {
+		return err
 	}
 
-	if opts.Ante > anteMax {
-		return fmt.Errorf("ante must not exceed ${%d}", anteMax)
-	}
-
-	if opts.Ante%25 > 0 {
-		return errors.New("ante must be divisible by ${25}")
-	}
-
-	if opts.LowerLimit%25 > 0 {
-		return errors.New("lower limit must be divisible by ${25}")
-	}
-
-	if opts.LowerLimit > lowerLimitMax {
-		return fmt.Errorf("lower limit must not exceed ${%d}", lowerLimitMax)
+	if err := validateAmount("big blind", opts.BigBlind, opts.SmallBlind, bigBlindMax); err != nil {
+		return err
 	}
 
 	return nil
@@ -183,13 +170,12 @@ func (g *Game) GetCurrentTurn() (*Participant, error) {
 		return nil, errors.New("not in a betting round")
 	}
 
-	n := len(g.participantOrder)
-	if g.decisionIndex >= n {
-		return nil, errBettingRoundIsOver
+	p, err := g.potManager.GetInTurnParticipant()
+	if err != nil {
+		return nil, err
 	}
 
-	index := (g.decisionStart + g.decisionIndex) % n
-	return g.participants[g.participantOrder[index]], nil
+	return g.participants[p.ID()], nil
 }
 
 // InBettingRound returns true if the current state is in a betting round
@@ -200,72 +186,14 @@ func (g *Game) InBettingRound() bool {
 		g.dealerState == DealerStateFinalBettingRound
 }
 
-// GetBetAmount returns what the current bet can be
-func (g *Game) GetBetAmount() (int, error) {
-	switch g.dealerState {
-	case DealerStatePreFlopBettingRound:
-		return g.options.LowerLimit, nil
-	case DealerStateFlopBettingRound:
-		return g.options.LowerLimit, nil
-	case DealerStateTurnBettingRound:
-		return g.options.UpperLimit, nil
-	case DealerStateFinalBettingRound:
-		return g.options.UpperLimit, nil
-	}
-
-	return 0, errors.New("not in a betting round")
-}
-
-// CanBet determines if cap has been reached yet
-func (g *Game) CanBet() bool {
-	betAmount, err := g.GetBetAmount()
-	if err != nil {
-		return false
-	}
-
-	// one bet + three raises is the cap
-	return g.currentBet < betAmount*4
-}
-
-func (g *Game) nextDecision() {
-	g.decisionIndex++
-	g.advanceToActiveParticipant()
-	if g.decisionIndex == len(g.participantOrder) {
-		g.setPendingDealerState(DealerState(int(g.dealerState)+1), time.Second*1)
+func (g *Game) newRoundSetup() {
+	if err := g.potManager.NextRound(); err != nil {
 		return
 	}
-}
 
-func (g *Game) newRoundSetup() {
-	g.currentBet = 0
-	g.decisionStart = 0
-	g.decisionIndex = 0
 	g.lastAction = nil
-	g.advanceToActiveParticipant()
+
 	for _, p := range g.participants {
 		p.NewRound()
 	}
-}
-
-func (g *Game) advanceToActiveParticipant() {
-	n := len(g.participantOrder)
-
-	// do not advance if we are already at the end
-	if g.decisionIndex == n {
-		return
-	}
-
-	for {
-		index := (g.decisionStart + g.decisionIndex) % n
-		if !g.participants[g.participantOrder[index]].folded {
-			return
-		}
-
-		g.decisionIndex++
-		if g.decisionIndex >= n {
-			break
-		}
-	}
-
-	// if we get here, it's because all players folded at the end of the round
 }

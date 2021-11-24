@@ -24,10 +24,7 @@ func (l littleLFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64,
 }
 
 func (l littleLFactory) CreateGameV2(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
-	p := make([]playable.Player, len(players))
-	for i, player := range players {
-		p[i] = player
-	}
+	p := getPlayersFromPlayerTableList(players)
 
 	game, err := littlel.NewGameV2(logger, p, getOptions(additionalData))
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 )
 
 // --- Playable Interface ---
@@ -16,8 +18,8 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, errors.New("participant is not in the game")
 	}
 
-	switch Action(message.Action) {
-	case ActionTrade:
+	switch action.Action(message.Action) {
+	case action.Trade:
 		if err := g.tradeCardsForParticipant(p, message.Cards); err != nil {
 			return nil, false, err
 		}
@@ -25,7 +27,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
 
 		return playable.OK(), true, nil
-	case ActionCheck:
+	case action.Check:
 		if err := g.ParticipantChecks(p); err != nil {
 			return nil, false, err
 		}
@@ -33,7 +35,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
 
 		return playable.OK(), true, nil
-	case ActionFold:
+	case action.Fold:
 		if err := g.ParticipantFolds(p); err != nil {
 			return nil, false, err
 		}
@@ -41,7 +43,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
 
 		return playable.OK(), true, nil
-	case ActionCall:
+	case action.Call:
 		if err := g.ParticipantCalls(p); err != nil {
 			return nil, false, err
 		}
@@ -49,9 +51,9 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
 
 		return playable.OK(), true, nil
-	case ActionRaise:
+	case action.Raise:
 		fallthrough
-	case ActionBet:
+	case action.Bet:
 		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount == 0 {
 			return nil, false, errors.New("amount must be > 0")
@@ -83,20 +85,11 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	p, ok := g.idToParticipant[playerID]
 	var pJSON *participantJSON
 	if ok {
-		minBet := g.getMinBet()
-
-		maxBet := g.potManager.GetPotLimitMaxBet()
-		if allInAmount := g.potManager.GetParticipantAllInAmount(p); allInAmount < maxBet {
-			maxBet = allInAmount
-		}
-
 		pJSON = &participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
 			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
-			MinBet:     minBet,
-			MaxBet:     maxBet,
 			Hand:       p.hand,
 			HandRank:   p.GetBestHand(g.GetCommunityCards()).analyzer.GetHand().String(),
 		}
@@ -118,14 +111,17 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 			DealerID:     g.idToParticipant[g.playerIDs[0]].PlayerID,
 			Round:        g.round,
 			Action:       action,
-			Pot:          g.potManager.Pots().Total(),
-			Pots:         g.potManager.Pots(),
-			Ante:         g.options.Ante,
-			CurrentBet:   g.potManager.GetBet(),
 			TradeIns:     g.GetAllowedTradeIns(),
 			InitialDeal:  g.options.InitialDeal,
-			Community:    g.GetCommunityCards(),
 			Winners:      winners,
+		},
+		PokerState: &poker.State{
+			Ante:       g.options.Ante,
+			CurrentBet: g.potManager.GetBet(),
+			MinBet:     g.getMinBet(),
+			MaxBet:     g.potManager.GetPotLimitMaxBet(),
+			Pots:       g.potManager.Pots(),
+			Community:  g.GetCommunityCards(),
 		},
 		Actions:       g.getActionsForPlayer(playerID),
 		FutureActions: g.getFutureActionsForPlayer(playerID),

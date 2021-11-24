@@ -2,14 +2,20 @@ package gamefactory
 
 import (
 	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/texasholdem"
 )
 
 type texasHoldEmFactory struct{}
 
+func (t texasHoldEmFactory) CreateGameV2(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
+	p := getPlayersFromPlayerTableList(players)
+	return texasholdem.NewGame(logger, p, texasHoldEmOptions(additionalData))
+}
+
 func (t texasHoldEmFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	return texasholdem.NewGame(logger, playerIDs, texasHoldEmOptions(additionalData))
+	panic("use CreateGameV2")
 }
 
 func (t texasHoldEmFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {
@@ -26,8 +32,12 @@ func texasHoldEmOptions(additionData playable.AdditionalData) texasholdem.Option
 		opts.Ante = ante
 	}
 
-	if lowerLimit, _ := additionData.GetInt("lowLimit"); lowerLimit > 0 {
-		opts.LowerLimit = lowerLimit
+	if smallBlind, ok := additionData.GetInt("smallBlind"); ok && smallBlind >= 0 {
+		opts.SmallBlind = smallBlind
+	}
+
+	if bigBlind, ok := additionData.GetInt("bigBlind"); ok && bigBlind >= 0 {
+		opts.BigBlind = bigBlind
 	}
 
 	return opts

@@ -12,7 +12,7 @@ For more information about the architecture of this open-source project, see the
 * Bourré
 * Pass the Poop
 * Poker
-  * Limit Texas Hold'em
+  * Pot-Limit Texas Hold'em
   * Little L
   * Seven-card games
     * Follow the Queen

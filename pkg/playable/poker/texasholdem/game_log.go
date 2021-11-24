@@ -10,13 +10,13 @@ type gameLog struct {
 
 func (g *Game) gameLog() *gameLog {
 	p := make([]*participantJSON, len(g.participantOrder))
-	for i, id := range g.participantOrder {
-		p[i] = g.participants[id].participantJSON(g, true)
+	for i, pt := range g.participantOrder {
+		p[i] = pt.participantJSON(g, true)
 	}
 
 	return &gameLog{
 		Participants: p,
 		Community:    g.community,
-		Pot:          g.pot,
+		Pot:          g.potManager.Pots().Total(),
 	}
 }

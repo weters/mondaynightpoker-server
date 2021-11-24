@@ -37,3 +37,11 @@ func Get(name string) (GameFactory, error) {
 
 	return factory, nil
 }
+
+func getPlayersFromPlayerTableList(players []*model.PlayerTable) []playable.Player {
+	p := make([]playable.Player, len(players))
+	for i, player := range players {
+		p[i] = player
+	}
+	return p
+}
