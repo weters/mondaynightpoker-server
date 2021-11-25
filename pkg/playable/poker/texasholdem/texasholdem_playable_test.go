@@ -13,16 +13,17 @@ func TestGame_Name(t *testing.T) {
 	p := setupParticipants(1000, 1000)
 	g, err := NewGame(logrus.StandardLogger(), p, DefaultOptions())
 	assert.NoError(t, err)
-	assert.Equal(t, "Pot-Limit Texas Hold'em (${25}/${50})", g.Name())
+	assert.Equal(t, "Texas Hold'em (${25}/${50})", g.Name())
 
 	g, err = NewGame(logrus.StandardLogger(), p, Options{
+		Variant:    Standard,
 		SmallBlind: 50,
 		BigBlind:   100,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, "Pot-Limit Texas Hold'em (${50}/${100})", g.Name())
+	assert.Equal(t, "Texas Hold'em (${50}/${100})", g.Name())
 
-	g, err = NewGame(logrus.StandardLogger(), p, Options{Ante: -1})
+	g, err = NewGame(logrus.StandardLogger(), p, Options{Variant: Standard, Ante: -1})
 	assert.EqualError(t, err, "ante must be at least ${0}")
 	assert.Nil(t, g)
 }
@@ -33,6 +34,17 @@ func TestGame_Key(t *testing.T) {
 
 func TestNameFromOptions(t *testing.T) {
 	assert.Equal(t, "", NameFromOptions(Options{Ante: -1}))
+
+	opts := DefaultOptions()
+	assert.Equal(t, "Texas Hold'em (${25}/${50})", NameFromOptions(opts))
+
+	opts.Variant = Pineapple
+	assert.Equal(t, "Pineapple (${25}/${50})", NameFromOptions(opts))
+
+	opts.Variant = LazyPineapple
+	opts.SmallBlind = 75
+	opts.BigBlind = 125
+	assert.Equal(t, "Lazy Pineapple (${75}/${125})", NameFromOptions(opts))
 }
 
 func TestGame_GetPlayerState_nonParticipantID(t *testing.T) {
@@ -59,7 +71,7 @@ func TestGame_validateBetOrRaise(t *testing.T) {
 	newGame := func(t *testing.T, ante, smallBlind, bigBlind, tableStake int) *Game {
 		t.Helper()
 
-		game := setupNewGame(Options{ante, smallBlind, bigBlind}, tableStake, tableStake)
+		game := setupNewGame(Options{Standard, ante, smallBlind, bigBlind}, tableStake, tableStake)
 		assertTick(t, game)
 		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
 

@@ -30,7 +30,7 @@ func Test_texasHoldEmFactory_Details(t *testing.T) {
 	a := assert.New(t)
 	name, ante, err := factories["texas-hold-em"].Details(playable.AdditionalData{})
 	a.NoError(err)
-	a.Equal("Pot-Limit Texas Hold'em (${25}/${50})", name)
+	a.Equal("Texas Hold'em (${25}/${50})", name)
 	a.Equal(25, ante)
 
 	name, ante, err = factories["texas-hold-em"].Details(playable.AdditionalData{
@@ -39,6 +39,6 @@ func Test_texasHoldEmFactory_Details(t *testing.T) {
 		"bigBlind":   float64(100),
 	})
 	a.NoError(err)
-	a.Equal("Pot-Limit Texas Hold'em (${75}/${100})", name)
+	a.Equal("Texas Hold'em (${75}/${100})", name)
 	a.Equal(0, ante)
 }

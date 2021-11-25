@@ -16,6 +16,7 @@ func TestNewGame(t *testing.T) {
 		t.Helper()
 
 		opts := Options{
+			Variant:    Standard,
 			Ante:       ante,
 			SmallBlind: smallBlind,
 			BigBlind:   bigBlind,
@@ -56,6 +57,7 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 	// community will be 5h, 6H, 7H, 9S, 10S
 
 	opts := Options{
+		Variant:    Standard,
 		Ante:       25,
 		SmallBlind: 25,
 		BigBlind:   50,
@@ -262,6 +264,7 @@ func TestGame__multiplePots(t *testing.T) {
 	a := assert.New(t)
 
 	opts := Options{
+		Variant:    Standard,
 		Ante:       0,
 		SmallBlind: 25,
 		BigBlind:   50,
@@ -352,6 +355,7 @@ func TestGame_playersFolded(t *testing.T) {
 	a := assert.New(t)
 
 	opts := Options{
+		Variant:    Standard,
 		Ante:       25,
 		SmallBlind: 25,
 		BigBlind:   50,
@@ -419,6 +423,7 @@ func TestGame_endsInTie(t *testing.T) {
 	a := assert.New(t)
 
 	opts := Options{
+		Variant:    Standard,
 		Ante:       25,
 		SmallBlind: 25,
 		BigBlind:   50,
@@ -540,6 +545,7 @@ func TestNewGame_withFailures(t *testing.T) {
 	a := assert.New(t)
 
 	opts := Options{
+		Variant:    Standard,
 		Ante:       50,
 		BigBlind:   25,
 		SmallBlind: 50,
@@ -557,16 +563,16 @@ func TestNewGame_withFailures(t *testing.T) {
 	a.Nil(game)
 }
 
-func TestGame_dealTwoCardsToEachParticipant_errorStates(t *testing.T) {
+func TestGame_dealStartingCardsToEachParticipant__errorStates(t *testing.T) {
 	// these errors shouldn't happen
 	a := assert.New(t)
 	game := setupNewGame(DefaultOptions(), 1000, 1000, 1000)
 	game.dealerState = DealerStatePreFlopBettingRound
-	a.EqualError(game.dealTwoCardsToEachParticipant(), "cannot deal cards from state 1")
+	a.EqualError(game.dealStartingCardsToEachParticipant(), "cannot deal cards from state 1")
 
 	game.dealerState = DealerStateStart
 	game.deck.Cards = deck.CardsFromString("")
-	a.EqualError(game.dealTwoCardsToEachParticipant(), "end of deck reached")
+	a.EqualError(game.dealStartingCardsToEachParticipant(), "end of deck reached")
 }
 
 func TestGame_GetCurrentTurn(t *testing.T) {
@@ -594,12 +600,12 @@ func TestGame_GetCurrentTurn(t *testing.T) {
 
 func Test_validateOptions(t *testing.T) {
 	a := assert.New(t)
-	a.NoError(validateOptions(Options{}))
-	a.EqualError(validateOptions(Options{Ante: -1}), "ante must be at least ${0}")
-	a.EqualError(validateOptions(Options{Ante: 26}), "ante must be in increments of ${25}")
-	a.EqualError(validateOptions(Options{Ante: 75}), "ante must be at most ${50}")
-	a.EqualError(validateOptions(Options{SmallBlind: -1}), "small blind must be at least ${0}")
-	a.EqualError(validateOptions(Options{SmallBlind: 25, BigBlind: 0}), "big blind must be at least ${25}")
+	a.NoError(validateOptions(Options{Variant: Standard}))
+	a.EqualError(validateOptions(Options{Variant: Standard, Ante: -1}), "ante must be at least ${0}")
+	a.EqualError(validateOptions(Options{Variant: Standard, Ante: 26}), "ante must be in increments of ${25}")
+	a.EqualError(validateOptions(Options{Variant: Standard, Ante: 75}), "ante must be at most ${50}")
+	a.EqualError(validateOptions(Options{Variant: Standard, SmallBlind: -1}), "small blind must be at least ${0}")
+	a.EqualError(validateOptions(Options{Variant: Standard, SmallBlind: 25, BigBlind: 0}), "big blind must be at least ${25}")
 }
 
 func assertSnapshots(t *testing.T, game *Game, msgAndArgs ...interface{}) {

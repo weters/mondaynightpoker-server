@@ -42,6 +42,7 @@ type Game struct {
 
 // Options configures how Texas Hold'em is played
 type Options struct {
+	Variant    Variant
 	Ante       int
 	SmallBlind int
 	BigBlind   int
@@ -50,6 +51,7 @@ type Options struct {
 // DefaultOptions returns the default options for Texas Hold'em
 func DefaultOptions() Options {
 	return Options{
+		Variant:    Standard,
 		Ante:       25,
 		SmallBlind: 25,
 		BigBlind:   50,
@@ -111,12 +113,17 @@ func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options)
 	}, nil
 }
 
-func (g *Game) dealTwoCardsToEachParticipant() error {
+func (g *Game) dealStartingCardsToEachParticipant() error {
 	if g.dealerState != DealerStateStart {
 		return fmt.Errorf("cannot deal cards from state %d", g.dealerState)
 	}
 
-	for i := 0; i < 2; i++ {
+	nCards := 2
+	if g.options.Variant == Pineapple || g.options.Variant == LazyPineapple {
+		nCards = 3
+	}
+
+	for i := 0; i < nCards; i++ {
 		for _, p := range g.participantOrder {
 			card, err := g.deck.Draw()
 			if err != nil {
@@ -148,6 +155,10 @@ func validateAmount(desc string, number, min, max int) error {
 }
 
 func validateOptions(opts Options) error {
+	if _, ok := validVariants[opts.Variant]; !ok {
+		return fmt.Errorf("invalid variant %s", opts.Variant)
+	}
+
 	if err := validateAmount("ante", opts.Ante, anteMin, anteMax); err != nil {
 		return err
 	}

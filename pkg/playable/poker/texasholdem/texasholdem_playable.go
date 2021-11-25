@@ -119,7 +119,17 @@ func NameFromOptions(opts Options) string {
 		return ""
 	}
 
-	return fmt.Sprintf("Pot-Limit Texas Hold'em (${%d}/${%d})", opts.SmallBlind, opts.BigBlind)
+	var name string
+	switch opts.Variant {
+	case Standard:
+		name = "Texas Hold'em"
+	case Pineapple:
+		name = "Pineapple"
+	case LazyPineapple:
+		name = "Lazy Pineapple"
+	}
+
+	return fmt.Sprintf("%s (${%d}/${%d})", name, opts.SmallBlind, opts.BigBlind)
 }
 
 // LogChan returns a channel log messages must be sent on

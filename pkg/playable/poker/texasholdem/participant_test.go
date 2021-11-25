@@ -10,6 +10,7 @@ import (
 
 func TestGame_ActionsForParticipant(t *testing.T) {
 	opts := Options{
+		Variant:    Standard,
 		Ante:       25,
 		SmallBlind: 100,
 		BigBlind:   200,

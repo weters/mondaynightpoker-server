@@ -17,6 +17,8 @@ type ParticipantState struct {
 // GameState represents the state of the game
 type GameState struct {
 	Name         string             `json:"name"`
+	Variant      Variant            `json:"variant"`
+	HoleCards    int                `json:"holeCards"`
 	DealerState  DealerState        `json:"dealerState"`
 	Participants []*participantJSON `json:"participants"`
 	CurrentTurn  int64              `json:"currentTurn"`
@@ -40,6 +42,7 @@ func (g *Game) getGameState() *GameState {
 		Participants: p,
 		CurrentTurn:  currentTurn,
 		LastAction:   g.lastAction,
+		Variant:      g.options.Variant,
 	}
 }
 

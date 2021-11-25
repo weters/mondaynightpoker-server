@@ -30,7 +30,13 @@
       "winnings": 0
     },
     "gameState": {
-      "name": "Pot-Limit Texas Hold'em (${25}/${50})",
+      "name": "Texas Hold'em (${25}/${50})",
+      "variant": {
+        "id": "standard",
+        "name": "Standard",
+        "holeCards": 2
+      },
+      "holeCards": 0,
       "dealerState": 0,
       "participants": [
         {

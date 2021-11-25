@@ -33,7 +33,7 @@ func (g *Game) Tick() (bool, error) {
 
 	switch g.dealerState {
 	case DealerStateStart:
-		if err := g.dealTwoCardsToEachParticipant(); err != nil {
+		if err := g.dealStartingCardsToEachParticipant(); err != nil {
 			return false, err
 		}
 

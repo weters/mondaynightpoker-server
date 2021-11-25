@@ -28,6 +28,14 @@ func (t texasHoldEmFactory) Details(additionalData playable.AdditionalData) (nam
 func texasHoldEmOptions(additionData playable.AdditionalData) texasholdem.Options {
 	opts := texasholdem.DefaultOptions()
 
+	if variantStr, _ := additionData.GetString("variant"); variantStr != "" {
+		if variant, err := texasholdem.VariantFromString(variantStr); err != nil {
+			logrus.WithError(err).Error("invalid variant")
+		} else {
+			opts.Variant = variant
+		}
+	}
+
 	if ante, ok := additionData.GetInt("ante"); ok && ante >= 0 {
 		opts.Ante = ante
 	}
