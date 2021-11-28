@@ -17,13 +17,14 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 	}
 
 	game := setupNewGame(opts, 1000, 1000, 1000, 1000)
+	assertTick(t, game)
 
 	a := assert.New(t)
 
 	a.Nil(game.ActionsForParticipant(1))
-
-	game.dealerState = DealerStatePreFlopBettingRound
 	{
+		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
+
 		a.Nil(game.ActionsForParticipant(1))
 		a.Nil(game.ActionsForParticipant(2))
 		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(3))
@@ -62,6 +63,22 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 
 		a.Equal([]action.Action{action.Call, action.Fold}, game.ActionsForParticipant(1))
 	}
+
+	// pineapple discards
+	{
+		opts := Options{
+			Variant:    Pineapple,
+			Ante:       25,
+			SmallBlind: 50,
+			BigBlind:   100,
+		}
+		game := setupNewGame(opts, 25, 25, 25)
+		assertTick(t, game)
+
+		a.Equal([]action.Action{action.Discard}, game.ActionsForParticipant(1))
+		a.Nil(game.ActionsForParticipant(2))
+		a.Nil(game.ActionsForParticipant(3))
+	}
 }
 
 func TestParticipant_getHandAnalyzer(t *testing.T) {
@@ -88,11 +105,13 @@ func TestParticipant_participantJSON(t *testing.T) {
 		reveal: false,
 	}
 
+	// cards are shown
 	record := p.participantJSON(game, true)
-	assert.NotNil(t, record.Cards)
+	assert.Equal(t, "2c,3c", deck.CardsToString(record.Cards))
 
+	// cards are null
 	record = p.participantJSON(game, false)
-	assert.Nil(t, record.Cards)
+	assert.Equal(t, ",", deck.CardsToString(record.Cards))
 
 	p.reveal = true
 	record = p.participantJSON(game, false)
@@ -103,6 +122,10 @@ func TestGame_FutureActionsForParticipant(t *testing.T) {
 	a := assert.New(t)
 
 	game := setupNewGame(DefaultOptions(), 1000, 1000, 1000, 1000)
+
+	assertTick(t, game)
+	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
+
 	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(1))
 	a.Equal([]action.Action{action.Check, action.Fold}, game.FutureActionsForParticipant(2))
 	a.Nil(game.FutureActionsForParticipant(3))
@@ -110,4 +133,15 @@ func TestGame_FutureActionsForParticipant(t *testing.T) {
 
 	game.dealerState = DealerStateRevealWinner
 	a.Nil(game.FutureActionsForParticipant(1))
+
+	// pineapple
+	{
+		opts := DefaultOptions()
+		opts.Variant = Pineapple
+		game := setupNewGame(opts, 1000, 1000, 1000)
+		assertTick(t, game)
+		a.Nil(game.FutureActionsForParticipant(1))
+		a.Equal([]action.Action{action.Discard}, game.FutureActionsForParticipant(2))
+		a.Equal([]action.Action{action.Discard}, game.FutureActionsForParticipant(3))
+	}
 }

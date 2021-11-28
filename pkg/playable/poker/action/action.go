@@ -10,21 +10,23 @@ type Action string
 
 // action constants
 const (
-	Trade Action = "trade"
-	Fold  Action = "fold"
-	Check Action = "check"
-	Call  Action = "call"
-	Bet   Action = "bet"
-	Raise Action = "raise"
+	Discard Action = "discard"
+	Trade   Action = "trade"
+	Fold    Action = "fold"
+	Check   Action = "check"
+	Call    Action = "call"
+	Bet     Action = "bet"
+	Raise   Action = "raise"
 )
 
 var allowedActions = map[Action]bool{
-	Trade: true,
-	Fold:  true,
-	Check: true,
-	Call:  true,
-	Bet:   true,
-	Raise: true,
+	Discard: true,
+	Trade:   true,
+	Fold:    true,
+	Check:   true,
+	Call:    true,
+	Bet:     true,
+	Raise:   true,
 }
 
 // FromString returns an action for the given string
@@ -38,6 +40,8 @@ func FromString(s string) (Action, error) {
 
 func (a Action) String() string {
 	switch a {
+	case Discard:
+		return "Discard"
 	case Trade:
 		return "Trade"
 	case Fold:
@@ -75,6 +79,8 @@ func (a Action) IsValid() bool {
 // LogMessage returns a message formatted for the log
 func (a Action) LogMessage(amount int) string {
 	switch a {
+	case Discard:
+		return "discarded a card"
 	case Fold:
 		return "folded"
 	case Check:

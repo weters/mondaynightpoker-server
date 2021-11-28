@@ -49,12 +49,20 @@
         "holeCards": 2
       },
       "holeCards": 0,
-      "dealerState": 6,
+      "dealerState": {
+        "id": 7,
+        "name": "deal-river"
+      },
       "participants": [
         {
           "playerId": 1,
           "balance": 925,
-          "cards": null,
+          "cards": [
+            null,
+            null,
+            null,
+            null
+          ],
           "folded": false,
           "currentBet": 0,
           "minBet": 0,
@@ -66,7 +74,12 @@
         {
           "playerId": 2,
           "balance": 925,
-          "cards": null,
+          "cards": [
+            null,
+            null,
+            null,
+            null
+          ],
           "folded": false,
           "currentBet": 0,
           "minBet": 0,
@@ -78,7 +91,12 @@
         {
           "playerId": 3,
           "balance": 925,
-          "cards": null,
+          "cards": [
+            null,
+            null,
+            null,
+            null
+          ],
           "folded": false,
           "currentBet": 0,
           "minBet": 0,
@@ -89,7 +107,8 @@
         }
       ],
       "currentTurn": 0,
-      "lastAction": null
+      "lastAction": null,
+      "dealer": 3
     },
     "pokerState": {
       "ante": 25,

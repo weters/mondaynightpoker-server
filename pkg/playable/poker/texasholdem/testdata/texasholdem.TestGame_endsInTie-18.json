@@ -49,7 +49,10 @@
         "holeCards": 2
       },
       "holeCards": 0,
-      "dealerState": 9,
+      "dealerState": {
+        "id": 10,
+        "name": "end"
+      },
       "participants": [
         {
           "playerId": 1,
@@ -164,7 +167,8 @@
         }
       ],
       "currentTurn": 0,
-      "lastAction": null
+      "lastAction": null,
+      "dealer": 3
     },
     "pokerState": {
       "ante": 25,

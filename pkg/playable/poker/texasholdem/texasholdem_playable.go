@@ -1,9 +1,12 @@
 package texasholdem
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"math"
+	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/action"
 	"mondaynightpoker-server/pkg/playable/poker/potmanager"
@@ -36,6 +39,10 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	amount, _ := message.AdditionalData.GetInt("amount")
 
 	switch foundAction {
+	case action.Discard:
+		if err := g.discardCardForParticipant(p, message.Cards); err != nil {
+			return nil, false, err
+		}
 	case action.Check:
 		if err := g.potManager.ParticipantChecks(p); err != nil {
 			return nil, false, err
@@ -234,6 +241,43 @@ func (g *Game) validateBetOrRaise(p *Participant, amount int) error { // nolint:
 		return fmt.Errorf("bet must be at most ${%d}", potLimit)
 	} else if amount < allInAmont && amount < minBet {
 		return fmt.Errorf("bet must be at least ${%d}", minBet)
+	}
+
+	return nil
+}
+
+func (g *Game) discardCardForParticipant(p *Participant, cards deck.Hand) error {
+	if g.options.Variant != Pineapple {
+		return errors.New("this game does not have trade ins")
+	}
+
+	if g.dealerState != DealerStateDiscardRound {
+		return errors.New("not in the trade-in round")
+	}
+
+	pt, err := g.potManager.GetInTurnParticipant()
+	if err != nil {
+		return err
+	}
+
+	if pt != p {
+		return potmanager.ErrParticipantCannotAct
+	}
+
+	if len(cards) != 1 {
+		return errors.New("you must discard exactly one card")
+	}
+
+	oldHand := p.cards.Clone()
+	if p.cards.Discard(cards[0]) != 1 {
+		return errors.New("you do not have that card")
+	}
+
+	// this should never happen, but if it does, revert the hand
+	if err := g.potManager.AdvanceDecision(); err != nil {
+		logrus.WithError(err).Error("could not advance decision")
+		p.cards = oldHand
+		return err
 	}
 
 	return nil

@@ -4,6 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/action"
 	"mondaynightpoker-server/pkg/snapshot"
 	"testing"
@@ -31,16 +32,21 @@ func TestNewGame(t *testing.T) {
 		a.NoError(err)
 		a.NotNil(game)
 
+		// ensure deck is shuffled
+		a.NotEqual(deck.New().HashCode(), game.deck.HashCode())
+
+		a.Equal(DealerStateStart, game.dealerState)
+
+		// now advance and ensure blinds are set
+
+		assertTick(t, game)
+		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
+
 		// validate small blind and big blind
 		a.Equal(pot, game.potManager.GetTotalOnTable(), "pot is good")
 		for i, eb := range expectedBalances {
 			a.Equal(eb, game.participants[int64(i+1)].balance, "%d balance", i+1)
 		}
-
-		// ensure deck is shuffled
-		a.NotEqual(deck.New().HashCode(), game.deck.HashCode())
-
-		a.Equal(DealerStateStart, game.dealerState)
 	}
 
 	runTest(t, 25, 100, 200, 350, -225, -125)
@@ -568,7 +574,7 @@ func TestGame_dealStartingCardsToEachParticipant__errorStates(t *testing.T) {
 	a := assert.New(t)
 	game := setupNewGame(DefaultOptions(), 1000, 1000, 1000)
 	game.dealerState = DealerStatePreFlopBettingRound
-	a.EqualError(game.dealStartingCardsToEachParticipant(), "cannot deal cards from state 1")
+	a.EqualError(game.dealStartingCardsToEachParticipant(), "cannot deal cards from state 2")
 
 	game.dealerState = DealerStateStart
 	game.deck.Cards = deck.CardsFromString("")
@@ -606,6 +612,95 @@ func Test_validateOptions(t *testing.T) {
 	a.EqualError(validateOptions(Options{Variant: Standard, Ante: 75}), "ante must be at most ${50}")
 	a.EqualError(validateOptions(Options{Variant: Standard, SmallBlind: -1}), "small blind must be at least ${0}")
 	a.EqualError(validateOptions(Options{Variant: Standard, SmallBlind: 25, BigBlind: 0}), "big blind must be at least ${25}")
+}
+
+func TestGame__pineapple(t *testing.T) {
+	opts := Options{
+		Variant:    Pineapple,
+		Ante:       25,
+		SmallBlind: 25,
+		BigBlind:   50,
+	}
+
+	a := assert.New(t)
+
+	// make sure all-in players can still trade in
+	game := setupNewGame(opts, 1000, 25, 1000)
+	assertTick(t, game, "advance to deal cards")
+
+	a.Equal(3, len(game.participants[1].cards))
+
+	game.deck.Cards = deck.CardsFromString("11s,10s,4d,4h,6d")
+	game.participants[1].cards = deck.CardsFromString("14s,13s,12s")
+	game.participants[2].cards = deck.CardsFromString("3d,5d,7d")
+	game.participants[3].cards = deck.CardsFromString("2c,4c,6c")
+
+	{
+		a.Equal(DealerStateDiscardRound, game.dealerState)
+
+		assertDiscard := func(t *testing.T, id int64, cards deck.Hand) {
+			t.Helper()
+
+			response, state, err := game.Action(id, &playable.PayloadIn{
+				Action: string(action.Discard),
+				Cards:  cards,
+			})
+			assert.NoError(t, err)
+			assert.True(t, state)
+			assert.Equal(t, playable.OK(), response)
+		}
+
+		assertDiscard(t, 1, deck.CardsFromString("14s"))
+		assertDiscard(t, 2, deck.CardsFromString("3d"))
+		assertDiscard(t, 3, deck.CardsFromString("2c"))
+
+		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
+	}
+
+	{
+		assertAction(t, game, 3, action.Call)
+		assertAction(t, game, 1, action.Call)
+
+		assertTickFromWaiting(t, game, DealerStateDealFlop)
+	}
+
+	{
+		assertTick(t, game)
+
+		assertAction(t, game, 1, action.Check)
+		assertAction(t, game, 3, action.Check)
+
+		assertTickFromWaiting(t, game, DealerStateDealTurn)
+	}
+
+	{
+		assertTick(t, game)
+
+		assertAction(t, game, 1, action.Check)
+		assertAction(t, game, 3, action.Check)
+
+		assertTickFromWaiting(t, game, DealerStateDealRiver)
+	}
+
+	{
+		assertTick(t, game)
+
+		assertAction(t, game, 1, action.Check)
+		assertAction(t, game, 3, action.Check)
+
+		assertTickFromWaiting(t, game, DealerStateRevealWinner)
+		assertTick(t, game)
+		assertTickFromWaiting(t, game, DealerStateEnd, "end the game")
+		assertTick(t, game)
+	}
+
+	details, isOver := game.GetEndOfGameDetails()
+	a.True(isOver)
+	a.Equal(map[int64]int{
+		1: -75,
+		2: -25,
+		3: 100,
+	}, details.BalanceAdjustments)
 }
 
 func assertSnapshots(t *testing.T, game *Game, msgAndArgs ...interface{}) {

@@ -19,10 +19,12 @@ func (g *Game) Tick() (bool, error) {
 			g.dealerState = g.pendingDealerState.NextState
 			g.pendingDealerState = nil
 
+			g.newRoundSetup()
+
 			// don't call new round setup if we are in the pre-flop betting round as are in a good state currently
 			// the initial setup was done in the constructor
-			if g.dealerState != DealerStatePreFlopBettingRound {
-				g.newRoundSetup()
+			if g.dealerState == DealerStatePreFlopBettingRound {
+				g.payBlinds()
 			}
 
 			return true, nil

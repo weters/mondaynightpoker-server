@@ -84,3 +84,11 @@ func (h Hand) LastCard() *Card {
 func (h Hand) String() string {
 	return CardsToString(h)
 }
+
+// Clone returns a clone of the hand
+func (h Hand) Clone() Hand {
+	h2 := make(Hand, len(h))
+	copy(h2, h)
+
+	return h2
+}

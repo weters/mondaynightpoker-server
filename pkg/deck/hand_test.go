@@ -56,3 +56,14 @@ func TestHand_String(t *testing.T) {
 	h := Hand(CardsFromString("2c,3d,4h"))
 	assert.Equal(t, "2c,3d,4h", h.String())
 }
+
+func TestHand_Clone(t *testing.T) {
+	a := assert.New(t)
+
+	h := Hand(CardsFromString("2c,3c,4c"))
+	h2 := h.Clone()
+
+	h[1] = CardFromString("14s")
+
+	a.NotEqual(h2, h)
+}

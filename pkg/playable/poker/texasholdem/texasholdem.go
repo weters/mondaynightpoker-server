@@ -76,10 +76,8 @@ func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options)
 
 	logs := make([]*playable.LogMessage, 0)
 	logs = append(logs, playable.SimpleLogMessage(0, "started a new game of %s", NameFromOptions(opts)))
-	blindLogs := make([]*playable.LogMessage, 2)
 
 	mgr := potmanager.New(opts.Ante)
-
 	for i, player := range players {
 		id := player.GetPlayerID()
 		p := newParticipant(id, player.GetTableStake())
@@ -93,12 +91,8 @@ func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options)
 	}
 	mgr.FinishSeatingParticipants()
 
-	sb, bb := mgr.PayBlinds(opts.SmallBlind, opts.BigBlind)
-	blindLogs[0] = playable.SimpleLogMessage(sb.ID(), "{} paid the small blind of ${%d}", opts.SmallBlind)
-	blindLogs[1] = playable.SimpleLogMessage(bb.ID(), "{} paid the big blind of ${%d}", opts.BigBlind)
-
 	lc := make(chan []*playable.LogMessage, 256)
-	lc <- append(logs, blindLogs...)
+	lc <- logs
 
 	return &Game{
 		options:            opts,
@@ -111,6 +105,16 @@ func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options)
 		logChan:            lc,
 		potManager:         mgr,
 	}, nil
+}
+
+func (g *Game) payBlinds() {
+	sb, bb := g.potManager.PayBlinds(g.options.SmallBlind, g.options.BigBlind)
+
+	logs := make([]*playable.LogMessage, 2)
+	logs[0] = playable.SimpleLogMessage(sb.ID(), "{} paid the small blind of ${%d}", g.options.SmallBlind)
+	logs[1] = playable.SimpleLogMessage(bb.ID(), "{} paid the big blind of ${%d}", g.options.BigBlind)
+
+	g.logChan <- logs
 }
 
 func (g *Game) dealStartingCardsToEachParticipant() error {
@@ -132,6 +136,12 @@ func (g *Game) dealStartingCardsToEachParticipant() error {
 
 			p.cards.AddCard(card)
 		}
+	}
+
+	if g.options.Variant == Pineapple {
+		g.dealerState = DealerStateDiscardRound
+		g.potManager.StartDecisionRound()
+		return nil
 	}
 
 	g.setPendingDealerState(DealerStatePreFlopBettingRound, time.Second)
@@ -177,7 +187,7 @@ func validateOptions(opts Options) error {
 // GetCurrentTurn returns the participant who is currently making a decision
 // Returns an error unless the game is in a betting round
 func (g *Game) GetCurrentTurn() (*Participant, error) {
-	if !g.InBettingRound() {
+	if g.dealerState != DealerStateDiscardRound && !g.InBettingRound() {
 		return nil, errors.New("not in a betting round")
 	}
 

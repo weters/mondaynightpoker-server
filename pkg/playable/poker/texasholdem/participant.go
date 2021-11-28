@@ -68,6 +68,10 @@ func (g *Game) FutureActionsForParticipant(id int64) []action.Action {
 		return nil
 	}
 
+	if g.dealerState == DealerStateDiscardRound {
+		return []action.Action{action.Discard}
+	}
+
 	currentBet := g.potManager.GetBet()
 
 	if currentBet == p.bet {
@@ -86,6 +90,10 @@ func (g *Game) ActionsForParticipant(id int64) []action.Action {
 
 	if turn.PlayerID != id {
 		return nil
+	}
+
+	if g.dealerState == DealerStateDiscardRound {
+		return []action.Action{action.Discard}
 	}
 
 	currentBet := g.potManager.GetBet()
@@ -135,6 +143,9 @@ func (p *Participant) participantJSON(game *Game, forceReveal bool) *participant
 		if ha := p.getHandAnalyzer(game.community); ha != nil {
 			handRank = ha.GetHand().String()
 		}
+	} else {
+		// make a null hand
+		cards = make(deck.Hand, len(p.cards))
 	}
 
 	return &participantJSON{

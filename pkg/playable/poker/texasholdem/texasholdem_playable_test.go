@@ -113,3 +113,42 @@ func TestGame_validateBetOrRaise(t *testing.T) {
 		a.NoError(game.validateBetOrRaise(game.participants[2], 275), "allow all-in")
 	}
 }
+
+func TestGame_discardCardForParticipant(t *testing.T) {
+	setup := func(variant Variant) *Game {
+		opts := DefaultOptions()
+		opts.Variant = variant
+		game := setupNewGame(opts, 1000, 1000)
+		assertTick(t, game)
+
+		if variant == Standard {
+			assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
+		} else {
+			assert.Equal(t, DealerStateDiscardRound, game.dealerState)
+		}
+
+		game.participants[1].cards = deck.CardsFromString("2c,3c,4c")
+		game.participants[2].cards = deck.CardsFromString("2d,3d,4d")
+
+		return game
+	}
+
+	a := assert.New(t)
+
+	game := setup(Standard)
+	a.EqualError(game.discardCardForParticipant(game.participants[1], deck.CardsFromString("14s")), "this game does not have trade ins")
+
+	game = setup(Pineapple)
+	game.dealerState = DealerStatePreFlopBettingRound
+	a.EqualError(game.discardCardForParticipant(game.participants[1], deck.CardsFromString("14s")), "not in the trade-in round")
+	game.dealerState = DealerStateDiscardRound
+
+	a.EqualError(game.discardCardForParticipant(game.participants[2], deck.CardsFromString("2d")), "it is not your turn")
+
+	a.EqualError(game.discardCardForParticipant(game.participants[1], deck.CardsFromString("12d")), "you do not have that card")
+	a.EqualError(game.discardCardForParticipant(game.participants[1], deck.CardsFromString("2c,3c")), "you must discard exactly one card")
+	a.NoError(game.discardCardForParticipant(game.participants[1], deck.CardsFromString("2c")))
+	a.NoError(game.discardCardForParticipant(game.participants[2], deck.CardsFromString("2d")))
+
+	a.EqualError(game.discardCardForParticipant(game.participants[2], deck.CardsFromString("2d")), "round is over")
+}

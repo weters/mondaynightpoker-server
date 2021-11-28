@@ -23,6 +23,7 @@ type GameState struct {
 	Participants []*participantJSON `json:"participants"`
 	CurrentTurn  int64              `json:"currentTurn"`
 	LastAction   *lastAction        `json:"lastAction"`
+	Dealer       int64              `json:"dealer"`
 }
 
 func (g *Game) getGameState() *GameState {
@@ -43,6 +44,7 @@ func (g *Game) getGameState() *GameState {
 		CurrentTurn:  currentTurn,
 		LastAction:   g.lastAction,
 		Variant:      g.options.Variant,
+		Dealer:       g.participantOrder[len(g.participantOrder)-1].ID(),
 	}
 }
 
