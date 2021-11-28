@@ -157,6 +157,8 @@ func (p *PotManager) ParticipantCalls(pt Participant) error {
 
 // PayBlinds will have the participants pay the blinds
 func (p *PotManager) PayBlinds(sbAmt, bbAmt int) (smallBlind Participant, bigBlind Participant) {
+	// Reminder: the dealer is the last player in tableOrder
+
 	if bbAmt < sbAmt {
 		panic(fmt.Sprintf("big blind (%d) must be more than small blind (%d)", bbAmt, sbAmt))
 	}
@@ -164,12 +166,14 @@ func (p *PotManager) PayBlinds(sbAmt, bbAmt int) (smallBlind Participant, bigBli
 	var sbPip, bbPip *participantInPot
 
 	if len(p.tableOrder) == 2 {
+		// dealer is small blind
+		sbPip = p.tableOrder[1]
+		bbPip = p.tableOrder[0]
+		p.actionStartIndex = 1
+	} else {
 		sbPip = p.tableOrder[0]
 		bbPip = p.tableOrder[1]
-	} else {
-		sbPip = p.tableOrder[1]
-		bbPip = p.tableOrder[2]
-		p.actionStartIndex = 3 % len(p.tableOrder) // dealer is 0, sb is 1, bb is 2
+		p.actionStartIndex = 2
 	}
 
 	p.actionAmount = bbAmt

@@ -26,20 +26,20 @@ func TestGame_ActionsForParticipant(t *testing.T) {
 	{
 		a.Nil(game.ActionsForParticipant(1))
 		a.Nil(game.ActionsForParticipant(2))
-		a.Nil(game.ActionsForParticipant(3))
-		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(4))
-
-		assertAction(t, game, 4, action.Call)
-
-		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(1))
-		a.Nil(game.ActionsForParticipant(2))
-		a.Nil(game.ActionsForParticipant(3))
+		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(3))
 		a.Nil(game.ActionsForParticipant(4))
 
+		assertAction(t, game, 3, action.Call)
+
+		a.Equal([]action.Action{action.Call, action.Raise, action.Fold}, game.ActionsForParticipant(4))
+		a.Nil(game.ActionsForParticipant(1))
+		a.Nil(game.ActionsForParticipant(2))
+		a.Nil(game.ActionsForParticipant(3))
+
+		assertAction(t, game, 4, action.Call)
 		assertAction(t, game, 1, action.Call)
-		assertAction(t, game, 2, action.Call)
-		a.Equal([]action.Action{action.Check, action.Raise, action.Fold}, game.ActionsForParticipant(3))
-		assertAction(t, game, 3, action.Check)
+		a.Equal([]action.Action{action.Check, action.Raise, action.Fold}, game.ActionsForParticipant(2))
+		assertAction(t, game, 2, action.Check)
 
 		a.True(game.potManager.IsRoundOver())
 	}
@@ -104,9 +104,9 @@ func TestGame_FutureActionsForParticipant(t *testing.T) {
 
 	game := setupNewGame(DefaultOptions(), 1000, 1000, 1000, 1000)
 	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(1))
-	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(2))
-	a.Equal([]action.Action{action.Check, action.Fold}, game.FutureActionsForParticipant(3))
-	a.Nil(game.FutureActionsForParticipant(4))
+	a.Equal([]action.Action{action.Check, action.Fold}, game.FutureActionsForParticipant(2))
+	a.Nil(game.FutureActionsForParticipant(3))
+	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(4))
 
 	game.dealerState = DealerStateRevealWinner
 	a.Nil(game.FutureActionsForParticipant(1))

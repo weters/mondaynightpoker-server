@@ -43,9 +43,9 @@ func TestNewGame(t *testing.T) {
 		a.Equal(DealerStateStart, game.dealerState)
 	}
 
-	runTest(t, 25, 100, 200, 350, -125, -225)
-	runTest(t, 25, 100, 200, 375, -25, -125, -225)
-	runTest(t, 50, 50, 100, 300, -50, -100, -150)
+	runTest(t, 25, 100, 200, 350, -225, -125)
+	runTest(t, 25, 100, 200, 350, -225, -125)
+	runTest(t, 50, 50, 100, 250, -150, -100)
 }
 
 func TestGame_basicGameWithWinner(t *testing.T) {
@@ -93,11 +93,26 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 			action.Call,
 			action.Raise,
 			action.Fold,
-		}, game.ActionsForParticipant(1))
+		}, game.ActionsForParticipant(3))
 
 		_, _, err := game.Action(2, payload(action.Call))
 		a.EqualError(err, "you cannot perform call")
 
+		assertAction(t, game, 3, action.Call, "third position can call")
+		a.Equal(lastAction{
+			Action:   action.Call,
+			PlayerID: 3,
+		}, *game.lastAction, "last action is correct")
+
+		a.Equal([]action.Action{
+			action.Call,
+			action.Raise,
+			action.Fold,
+		}, game.ActionsForParticipant(1))
+		a.Nil(game.ActionsForParticipant(2), "nothing to do for 2")
+		a.Nil(game.ActionsForParticipant(3), "nothing to do for 3")
+
+		assertActionFailed(t, game, 1, "bad-action", "unknown action for identifier: bad-action", "verify bad action is rejected")
 		assertAction(t, game, 1, action.Call, "first player can call")
 		a.Equal(lastAction{
 			Action:   action.Call,
@@ -105,30 +120,15 @@ func TestGame_basicGameWithWinner(t *testing.T) {
 		}, *game.lastAction, "last action is correct")
 
 		a.Equal([]action.Action{
-			action.Call,
-			action.Raise,
-			action.Fold,
-		}, game.ActionsForParticipant(2))
-		a.Nil(game.ActionsForParticipant(1), "nothing to do for 1")
-		a.Nil(game.ActionsForParticipant(3), "nothing to do for 3")
-
-		assertActionFailed(t, game, 1, "bad-action", "unknown action for identifier: bad-action", "verify bad action is rejected")
-		assertAction(t, game, 2, action.Call, "second player can call")
-		a.Equal(lastAction{
-			Action:   action.Call,
-			PlayerID: 2,
-		}, *game.lastAction, "last action is correct")
-
-		a.Equal([]action.Action{
 			action.Check,
 			action.Raise,
 			action.Fold,
-		}, game.ActionsForParticipant(3))
+		}, game.ActionsForParticipant(2))
 
 		_, _, err = game.Action(2, payload(action.Call))
 		a.EqualError(err, "you cannot perform call")
 
-		assertAction(t, game, 3, action.Check, "third player checks to end round")
+		assertAction(t, game, 2, action.Check, "second player checks to end round")
 
 		assertTickFromWaiting(t, game, DealerStateDealFlop, "state advanced to the flop")
 	}
@@ -295,11 +295,11 @@ func TestGame__multiplePots(t *testing.T) {
 
 	// betting round pre-flop
 	{
+		assertAction(t, game, 3, action.Call)
 		assertAction(t, game, 4, action.Call)
 		assertAction(t, game, 5, action.Call)
 		assertAction(t, game, 1, action.Call)
-		assertAction(t, game, 2, action.Call)
-		a.Nil(game.ActionsForParticipant(3), "all-in, so no actions")
+		a.Nil(game.ActionsForParticipant(2), "all-in, so no actions")
 
 		assertTickFromWaiting(t, game, DealerStateDealFlop)
 		assertTick(t, game)
@@ -369,9 +369,9 @@ func TestGame_playersFolded(t *testing.T) {
 		assertTick(t, game, "game progresses to waiting")
 		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
 
+		assertAction(t, game, 3, action.Call)
 		assertAction(t, game, 1, action.Call)
-		assertAction(t, game, 2, action.Call)
-		assertAction(t, game, 3, action.Check)
+		assertAction(t, game, 2, action.Check)
 
 		assertTickFromWaiting(t, game, DealerStateDealFlop)
 	}
@@ -453,9 +453,9 @@ func TestGame_endsInTie(t *testing.T) {
 		assertTick(t, game, "start game")
 		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
 		assertSnapshots(t, game, "ensure currentTurn is set")
+		assertAction(t, game, 3, action.Call)
 		assertAction(t, game, 1, action.Call)
-		assertAction(t, game, 2, action.Call)
-		assertAction(t, game, 3, action.Check)
+		assertAction(t, game, 2, action.Check)
 		assertTickFromWaiting(t, game, DealerStateDealFlop)
 	}
 
@@ -528,9 +528,9 @@ func TestGame_firstPlayerFolds(t *testing.T) {
 
 	assertTick(t, game)
 	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound, "now at pre-flop betting round")
+	assertAction(t, game, 3, action.Call)
 	assertAction(t, game, 1, action.Fold)
-	assertAction(t, game, 2, action.Call)
-	assertAction(t, game, 3, action.Check)
+	assertAction(t, game, 2, action.Check)
 	assertTickFromWaiting(t, game, DealerStateDealFlop)
 	assertTick(t, game)
 	assert.Equal(t, DealerStateFlopBettingRound, game.dealerState)
@@ -587,7 +587,7 @@ func TestGame_GetCurrentTurn(t *testing.T) {
 	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
 	p, err = game.GetCurrentTurn()
 	a.NoError(err)
-	a.Equal(int64(1), p.ID())
+	a.Equal(int64(3), p.ID())
 
 	_ = game.potManager.AdvanceDecision()
 	_ = game.potManager.AdvanceDecision()

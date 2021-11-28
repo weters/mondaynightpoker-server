@@ -75,8 +75,8 @@ func TestGame_validateBetOrRaise(t *testing.T) {
 		assertTick(t, game)
 		assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
 
-		assertAction(t, game, 1, game.ActionsForParticipant(1)[0])
-		assertAction(t, game, 2, action.Check)
+		assertAction(t, game, 2, game.ActionsForParticipant(2)[0])
+		assertAction(t, game, 1, action.Check)
 
 		assertTickFromWaiting(t, game, DealerStateDealFlop)
 		assertTick(t, game)

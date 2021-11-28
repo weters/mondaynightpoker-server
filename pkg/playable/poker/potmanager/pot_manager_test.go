@@ -597,20 +597,20 @@ func TestPotManager_PayBlinds(t *testing.T) {
 		pm := setupPotManager(25, 100, 100, 100, 100)
 
 		sb, bb := pm.PayBlinds(25, 50)
-		a.Equal(pm.tableOrder[1], sb)
-		a.Equal(pm.tableOrder[2], bb)
-		a.Equal(75, pm.tableOrder[0].Balance())
-		a.Equal(50, pm.tableOrder[1].Balance())
-		a.Equal(25, pm.tableOrder[2].Balance())
+		a.Equal(pm.tableOrder[0], sb)
+		a.Equal(pm.tableOrder[1], bb)
+		a.Equal(50, pm.tableOrder[0].Balance())
+		a.Equal(25, pm.tableOrder[1].Balance())
+		a.Equal(75, pm.tableOrder[2].Balance())
 		a.Equal(75, pm.tableOrder[3].Balance())
 		a.Equal(175, pm.GetTotalOnTable())
 
 		a.Equal(50, pm.GetRaise())
 
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[2]))
 		a.NoError(pm.ParticipantCalls(pm.tableOrder[3]))
 		a.NoError(pm.ParticipantCalls(pm.tableOrder[0]))
-		a.NoError(pm.ParticipantCalls(pm.tableOrder[1]))
-		a.NoError(pm.ParticipantChecks(pm.tableOrder[2]))
+		a.NoError(pm.ParticipantChecks(pm.tableOrder[1]))
 		a.True(pm.IsRoundOver())
 	}
 
@@ -619,15 +619,15 @@ func TestPotManager_PayBlinds(t *testing.T) {
 		pm := setupPotManager(25, 100, 100, 100)
 
 		sb, bb := pm.PayBlinds(25, 50)
-		a.Equal(pm.tableOrder[1], sb)
-		a.Equal(pm.tableOrder[2], bb)
-		a.Equal(75, pm.tableOrder[0].Balance())
-		a.Equal(50, pm.tableOrder[1].Balance())
-		a.Equal(25, pm.tableOrder[2].Balance())
+		a.Equal(pm.tableOrder[0], sb)
+		a.Equal(pm.tableOrder[1], bb)
+		a.Equal(50, pm.tableOrder[0].Balance())
+		a.Equal(25, pm.tableOrder[1].Balance())
+		a.Equal(75, pm.tableOrder[2].Balance())
 
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[2]))
 		a.NoError(pm.ParticipantCalls(pm.tableOrder[0]))
-		a.NoError(pm.ParticipantCalls(pm.tableOrder[1]))
-		a.NoError(pm.ParticipantChecks(pm.tableOrder[2]))
+		a.NoError(pm.ParticipantChecks(pm.tableOrder[1]))
 		a.True(pm.IsRoundOver())
 	}
 
@@ -636,13 +636,13 @@ func TestPotManager_PayBlinds(t *testing.T) {
 		pm := setupPotManager(25, 100, 100)
 
 		sb, bb := pm.PayBlinds(25, 50)
-		a.Equal(pm.tableOrder[0], sb)
-		a.Equal(pm.tableOrder[1], bb)
-		a.Equal(50, pm.tableOrder[0].Balance())
-		a.Equal(25, pm.tableOrder[1].Balance())
+		a.Equal(pm.tableOrder[1], sb)
+		a.Equal(pm.tableOrder[0], bb)
+		a.Equal(25, pm.tableOrder[0].Balance())
+		a.Equal(50, pm.tableOrder[1].Balance())
 
-		a.NoError(pm.ParticipantCalls(pm.tableOrder[0]))
-		a.NoError(pm.ParticipantChecks(pm.tableOrder[1]))
+		a.NoError(pm.ParticipantCalls(pm.tableOrder[1]))
+		a.NoError(pm.ParticipantChecks(pm.tableOrder[0]))
 		a.True(pm.IsRoundOver())
 	}
 

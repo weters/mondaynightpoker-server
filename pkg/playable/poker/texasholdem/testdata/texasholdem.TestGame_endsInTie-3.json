@@ -2,24 +2,20 @@
   "key": "game",
   "value": "texas-hold-em",
   "data": {
-    "actions": [
+    "actions": null,
+    "futureActions": [
       {
         "id": "call",
         "name": "Call"
-      },
-      {
-        "id": "raise",
-        "name": "Raise"
       },
       {
         "id": "fold",
         "name": "Fold"
       }
     ],
-    "futureActions": null,
     "participant": {
       "playerId": 1,
-      "balance": 975,
+      "balance": 950,
       "cards": [
         {
           "rank": 2,
@@ -47,7 +43,7 @@
         }
       ],
       "folded": false,
-      "currentBet": 0,
+      "currentBet": 25,
       "minBet": 0,
       "maxBet": 0,
       "handRank": "Full house",
@@ -66,18 +62,6 @@
       "participants": [
         {
           "playerId": 1,
-          "balance": 975,
-          "cards": null,
-          "folded": false,
-          "currentBet": 0,
-          "minBet": 0,
-          "maxBet": 0,
-          "handRank": "",
-          "result": "",
-          "winnings": 0
-        },
-        {
-          "playerId": 2,
           "balance": 950,
           "cards": null,
           "folded": false,
@@ -89,7 +73,7 @@
           "winnings": 0
         },
         {
-          "playerId": 3,
+          "playerId": 2,
           "balance": 925,
           "cards": null,
           "folded": false,
@@ -99,9 +83,21 @@
           "handRank": "",
           "result": "",
           "winnings": 0
+        },
+        {
+          "playerId": 3,
+          "balance": 975,
+          "cards": null,
+          "folded": false,
+          "currentBet": 0,
+          "minBet": 0,
+          "maxBet": 0,
+          "handRank": "",
+          "result": "",
+          "winnings": 0
         }
       ],
-      "currentTurn": 1,
+      "currentTurn": 3,
       "lastAction": null
     },
     "pokerState": {

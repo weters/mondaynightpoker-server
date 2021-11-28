@@ -24,8 +24,8 @@ func TestGame__lazyPineapple(t *testing.T) {
 	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
 
 	{
-		assertAction(t, game, 1, action.Call)
-		assertAction(t, game, 2, action.Check)
+		assertAction(t, game, 2, action.Call)
+		assertAction(t, game, 1, action.Check)
 
 		assertTickFromWaiting(t, game, DealerStateDealFlop)
 	}
