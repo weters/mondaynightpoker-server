@@ -443,7 +443,7 @@ func (g *Game) sendEndOfGameLogMessages() {
 	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
 	for winner, amount := range g.winners {
 		hand := winner.GetBestHand(community).analyzer.GetHand().String()
-		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, amount))
+		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d} (${%d})", hand, amount, winner.balance))
 	}
 
 	for _, playerID := range g.playerIDs {
