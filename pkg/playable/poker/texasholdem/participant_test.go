@@ -126,6 +126,10 @@ func TestGame_FutureActionsForParticipant(t *testing.T) {
 	assertTick(t, game)
 	assertTickFromWaiting(t, game, DealerStatePreFlopBettingRound)
 
+	game.dealerState = DealerStateDealFlop
+	a.Nil(game.FutureActionsForParticipant(1))
+
+	game.dealerState = DealerStatePreFlopBettingRound
 	a.Equal([]action.Action{action.Call, action.Fold}, game.FutureActionsForParticipant(1))
 	a.Equal([]action.Action{action.Check, action.Fold}, game.FutureActionsForParticipant(2))
 	a.Nil(game.FutureActionsForParticipant(3))

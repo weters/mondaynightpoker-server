@@ -187,7 +187,7 @@ func validateOptions(opts Options) error {
 // GetCurrentTurn returns the participant who is currently making a decision
 // Returns an error unless the game is in a betting round
 func (g *Game) GetCurrentTurn() (*Participant, error) {
-	if g.dealerState != DealerStateDiscardRound && !g.InBettingRound() {
+	if !g.InDecisionRound() {
 		return nil, errors.New("not in a betting round")
 	}
 
@@ -205,6 +205,11 @@ func (g *Game) InBettingRound() bool {
 		g.dealerState == DealerStateFlopBettingRound ||
 		g.dealerState == DealerStateTurnBettingRound ||
 		g.dealerState == DealerStateFinalBettingRound
+}
+
+// InDecisionRound is true if the players can make a decision such as a discard or bet
+func (g *Game) InDecisionRound() bool {
+	return g.InBettingRound() || g.dealerState == DealerStateDiscardRound
 }
 
 func (g *Game) newRoundSetup() {

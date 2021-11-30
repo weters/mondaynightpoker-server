@@ -64,6 +64,10 @@ func (g *Game) FutureActionsForParticipant(id int64) []action.Action {
 		return nil
 	}
 
+	if !g.InDecisionRound() {
+		return nil
+	}
+
 	if g.dealerState >= DealerStateRevealWinner {
 		return nil
 	}
