@@ -11,8 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const playersLimit = 8
-
 type playedCard struct {
 	card   *deck.Card
 	player *Player
@@ -273,8 +271,16 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 }
 
 func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Player, opts Options) (*Game, error) {
-	if len(players) < 2 || len(players) > playersLimit {
-		return nil, PlayerCountError(len(players))
+	limit := 8
+	if opts.FiveSuit {
+		limit = 10
+	}
+
+	if len(players) < 2 || len(players) > limit {
+		return nil, PlayerCountError{
+			Max: limit,
+			Got: len(players),
+		}
 	}
 
 	pot := opts.InitialPot

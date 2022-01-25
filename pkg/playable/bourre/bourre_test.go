@@ -39,21 +39,20 @@ func Test_newGame(t *testing.T) {
 	assert.Nil(t, g)
 	assert.EqualError(t, err, "expected 2–8 players, got 1")
 
-	players := make([]*Player, 0)
-	for i := 0; i <= playersLimit; i++ {
-		players = append(players, NewPlayer(1))
+	createPlayers := func(count int) []*Player {
+		players := make([]*Player, 0)
+		for i := 0; i < count; i++ {
+			players = append(players, NewPlayer(1))
+		}
+
+		return players
 	}
 
-	g, err = newGame(logrus.StandardLogger(), players, nil, Options{})
+	g, err = newGame(logrus.StandardLogger(), createPlayers(9), nil, Options{})
 	assert.Nil(t, g)
 	assert.EqualError(t, err, "expected 2–8 players, got 9")
 
-	testPlayers := []*Player{
-		NewPlayer(1),
-		NewPlayer(1),
-		NewPlayer(1),
-		NewPlayer(1),
-	}
+	testPlayers := createPlayers(4)
 	g, err = newGame(logrus.StandardLogger(), testPlayers, nil, Options{Ante: 50})
 	assert.NotNil(t, g)
 	assert.NoError(t, err)
@@ -64,6 +63,18 @@ func Test_newGame(t *testing.T) {
 		assert.Equal(t, -50, player.balance)
 		assert.Equal(t, 5, len(player.hand))
 	}
+
+	g, err = newGame(logrus.StandardLogger(), createPlayers(11), nil, Options{
+		FiveSuit: true,
+	})
+	assert.Nil(t, g)
+	assert.EqualError(t, err, "expected 2–10 players, got 11")
+
+	g, err = newGame(logrus.StandardLogger(), createPlayers(10), nil, Options{
+		FiveSuit: true,
+	})
+	assert.NotNil(t, g)
+	assert.NoError(t, err)
 }
 
 // this will test that cards are played to win

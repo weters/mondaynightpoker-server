@@ -54,8 +54,11 @@ var ErrCannotDiscardTheSameCard = errors.New("you cannot discard the same card")
 var ErrCannotCreateGame = errors.New("cannot create a new game from an existing game")
 
 // PlayerCountError is an error on the number of players in the game
-type PlayerCountError int
+type PlayerCountError struct {
+	Max int
+	Got int
+}
 
 func (p PlayerCountError) Error() string {
-	return fmt.Sprintf("expected 2–%d players, got %d", playersLimit, p)
+	return fmt.Sprintf("expected 2–%d players, got %d", p.Max, p.Got)
 }
