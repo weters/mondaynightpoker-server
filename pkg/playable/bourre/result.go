@@ -9,6 +9,7 @@ import (
 type Result struct {
 	Parent *Result
 
+	Options       Options
 	PaidAnte      []*Player
 	PaidPot       []*Player
 	Winners       []*Player
@@ -66,7 +67,11 @@ func (r *Result) NewGame() (*Game, error) {
 
 	folded := append(r.Folded, r.Booted...)
 
-	g, err := newGame(r.logger, nextPlayers, folded, Options{InitialPot: r.NewPot, Ante: r.Ante})
+	opts := r.Options
+	opts.InitialPot = r.NewPot
+	opts.Ante = r.Ante
+
+	g, err := newGame(r.logger, nextPlayers, folded, opts)
 	if err != nil {
 		return nil, err
 	}

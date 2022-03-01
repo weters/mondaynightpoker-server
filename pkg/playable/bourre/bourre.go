@@ -18,6 +18,7 @@ type playedCard struct {
 
 // Game is a game of bourré
 type Game struct {
+	options       Options
 	pot           int
 	ante          int
 	deck          *deck.Deck
@@ -315,6 +316,7 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 	}
 
 	g := &Game{
+		options:        opts,
 		deck:           d,
 		pot:            pot,
 		ante:           opts.Ante,

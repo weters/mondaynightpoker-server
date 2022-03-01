@@ -70,6 +70,35 @@ func TestResult_NewGame(t *testing.T) {
 	assert.Equal(t, 0, p3.winCount)
 }
 
+func TestResult_NewGame_fiveSuit(t *testing.T) {
+	game, _ := setupGame("14S", []string{
+		"14c,14d,13h,12s,2s",
+		"13c,13d,14h,14s,3s",
+		"12c,12d,12h,13s,4s",
+	})
+
+	r := &Result{
+		Options:     Options{FiveSuit: true},
+		playerOrder: game.playerOrder,
+		NewPot:      25,
+	}
+
+	a := assert.New(t)
+	game, err := r.NewGame()
+	a.NoError(err)
+	a.Equal(65, game.deck.CardsLeft())
+
+	r = &Result{
+		Options:     Options{FiveSuit: false},
+		playerOrder: game.playerOrder,
+		NewPot:      25,
+	}
+
+	game, err = r.NewGame()
+	a.NoError(err)
+	a.Equal(52, game.deck.CardsLeft())
+}
+
 func TestResult_NewGame_Booted(t *testing.T) {
 	game, players := setupGame("14S", []string{
 		"14c,14d,13h,12s,2s",
