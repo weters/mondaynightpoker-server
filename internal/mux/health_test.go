@@ -1,7 +1,7 @@
 package mux
 
 import (
-	"github.com/prometheus/common/log"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/internal/config"
 	"net/http/httptest"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestHealthHandler(t *testing.T) {
-	log.Warn(config.Instance().Email.TemplatesDir)
+	logrus.Warn(config.Instance().Email.TemplatesDir)
 	ts := httptest.NewServer(NewMux("v1.2.3"))
 	defer ts.Close()
 
