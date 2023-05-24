@@ -128,11 +128,27 @@ func (p *Participant) getHandAnalyzer(community []*deck.Card) *handanalyzer.Hand
 		return nil
 	}
 
-	hand := append(p.cards, community...)
-	key := hand.String()
+	key := append(p.cards, community...).String()
 	if p.handAnalyzerCacheKey != key {
-		p.handAnalyzer = handanalyzer.New(5, hand)
 		p.handAnalyzerCacheKey = key
+
+		// handle the case of lazy pineapple
+		if p.cards.Len() == 3 {
+			var bestHA *handanalyzer.HandAnalyzer
+			for _, index := range [][]int{{0, 1}, {0, 2}, {1, 2}} {
+				cards := deck.Hand{p.cards[index[0]], p.cards[index[1]]}
+				hand := append(cards, community...)
+				ha := handanalyzer.New(5, hand)
+				if bestHA == nil || ha.GetStrength() > bestHA.GetStrength() {
+					bestHA = ha
+				}
+			}
+
+			p.handAnalyzer = bestHA
+		} else {
+			hand := append(p.cards, community...)
+			p.handAnalyzer = handanalyzer.New(5, hand)
+		}
 	}
 
 	return p.handAnalyzer

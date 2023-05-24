@@ -98,6 +98,25 @@ func TestParticipant_getHandAnalyzer(t *testing.T) {
 	a.Equal("Four of a kind", p.getHandAnalyzer(deck.CardsFromString("9d")).GetHand().String(), "cache is busted")
 }
 
+func TestParticipant_getHandAnalyzer_lazyPineapple(t *testing.T) {
+	a := assert.New(t)
+
+	p := newParticipant(1, 100)
+	p.cards = deck.CardsFromString("2c,3c,4c")
+	hand := p.getHandAnalyzer(deck.CardsFromString("4s,5c,6c,9s,10s")).GetHand().String()
+	a.Equal("Straight", hand) // ensure not a flush
+
+	// ensure we are using cards 1 and 3
+	p.cards = deck.CardsFromString("2c,13d,4c")
+	hand = p.getHandAnalyzer(deck.CardsFromString("3c,5c,6c,13s,13d")).GetHand().String()
+	a.Equal("Straight flush", hand) // ensure not a flush
+
+	// ensure we are using cards 2 and 3
+	p.cards = deck.CardsFromString("13d,2c,4c")
+	hand = p.getHandAnalyzer(deck.CardsFromString("3c,5c,6c,13s,13d")).GetHand().String()
+	a.Equal("Straight flush", hand) // ensure not a flush
+}
+
 func TestParticipant_participantJSON(t *testing.T) {
 	game := &Game{community: make(deck.Hand, 0)}
 	p := &Participant{
