@@ -6,7 +6,7 @@ on:
     paths:
       - '**.go'
 env:
-  IMAGE: docker.pkg.github.com/weters/mondaynightpoker-server/mondaynightpoker-server
+  IMAGE: ghcr.io/weters/mondaynightpoker-server/mondaynightpoker-server
 jobs:
   ci:
     name: 'CI'
