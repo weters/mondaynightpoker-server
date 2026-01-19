@@ -27,7 +27,7 @@ func TestLowCardWild_ParticipantReceivedCard(t *testing.T) {
 		return card
 	}
 
-	p := newParticipant(1, 25)
+	p := newParticipant(1, 0, 25)
 
 	assertCard := func(n int, expects string, isPrivateWild bool) {
 		card := p.hand[n]

@@ -7,9 +7,10 @@ import (
 
 // participant is an individual player in seven-card poker
 type participant struct {
-	PlayerID int64
-	hand     deck.Hand
-	didFold  bool
+	PlayerID   int64
+	hand       deck.Hand
+	didFold    bool
+	tableStake int
 
 	balance    int
 	currentBet int
@@ -20,12 +21,18 @@ type participant struct {
 	handAnalyzerCacheKey string
 }
 
-func newParticipant(playerID int64, ante int) *participant {
+func newParticipant(playerID int64, tableStake int, ante int) *participant {
 	return &participant{
-		PlayerID: playerID,
-		hand:     make(deck.Hand, 0, 11), // room for 7 cards, plus potential 4 extras (e.g., Baseball)
-		balance:  -1 * ante,
+		PlayerID:   playerID,
+		hand:       make(deck.Hand, 0, 11), // room for 7 cards, plus potential 4 extras (e.g., Baseball)
+		tableStake: tableStake,
+		balance:    -1 * ante,
 	}
+}
+
+// Balance returns the current balance (table stake + balance adjustments)
+func (p *participant) Balance() int {
+	return p.tableStake + p.balance
 }
 
 func (p *participant) resetForNewRound() {

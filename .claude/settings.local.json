@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(npm run build:*)",
+      "Bash(NODE_OPTIONS=--openssl-legacy-provider npm run build:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(go build:*)"
+    ]
+  }
+}

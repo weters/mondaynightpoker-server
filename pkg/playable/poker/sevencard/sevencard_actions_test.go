@@ -24,7 +24,7 @@ func TestGame_participantFolds(t *testing.T) {
 	a.True(p(2).didFold)
 	a.False(p(3).didFold)
 	a.True(game.isGameOver())
-	a.Equal([]*participant{p(3)}, game.winners)
+	a.Equal(map[*participant]int{p(3): 75}, game.winners)
 
 	game, p = createTestGame()
 	p(2).didFold = true

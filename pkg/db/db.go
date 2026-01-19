@@ -3,11 +3,12 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"mondaynightpoker-server/internal/config"
+
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file" // needed
 	"github.com/sirupsen/logrus"
-	"mondaynightpoker-server/internal/config"
 )
 
 var instance *sql.DB
@@ -54,7 +55,7 @@ func MigrateTo(version uint) {
 }
 
 func getMigrate() *migrate.Migrate {
-	migrationsPath := config.Instance().Database.MigrationsPath
+	migrationsPath := fmt.Sprintf("file://%s", config.Instance().Database.MigrationsPath)
 	db := Instance()
 
 	logrus.WithField("migrationsPath", migrationsPath).Info("running migrations")
@@ -63,7 +64,7 @@ func getMigrate() *migrate.Migrate {
 		panic(err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", migrationsPath), "postgres", driver)
+	m, err := migrate.NewWithDatabaseInstance(migrationsPath, "postgres", driver)
 	if err != nil {
 		panic(err)
 	}

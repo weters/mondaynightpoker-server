@@ -56,7 +56,7 @@ func TestGame_getPlayerStateByPlayerID(t *testing.T) {
 	a.True(game.isGameOver())
 
 	playerState = game.getPlayerStateByPlayerID(2)
-	a.Equal([]int64{1}, playerState.GameState.Winners)
+	a.Equal(map[int64]int{1: 100}, playerState.GameState.Winners)
 	a.Equal("14c,14d,14h", playerState.GameState.Participants[0].Hand.String())
 	a.Equal("", playerState.GameState.Participants[1].Hand.String())
 	a.Equal("", playerState.GameState.Participants[2].Hand.String())

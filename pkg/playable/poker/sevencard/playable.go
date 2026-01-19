@@ -65,6 +65,12 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
 	}
 
+	// Track the last action for UI feedback
+	g.lastAction = &lastAction{
+		PlayerID: playerID,
+		Action:   action,
+	}
+
 	if len(g.pendingLogs) > 0 {
 		g.logChan <- g.pendingLogs
 		g.pendingLogs = make([]*playable.LogMessage, 0)

@@ -196,7 +196,7 @@ func TestGame_happyPath(t *testing.T) {
 
 	logs := game.pendingLogs
 	a.NotContains(logs[len(logs)-1].Message, "is first to act")
-	a.Equal([]*participant{p(1)}, game.winners)
+	a.Equal(map[*participant]int{p(1): 325}, game.winners)
 	a.Equal(175, p(1).balance)
 	a.Equal(-150, p(2).balance)
 	a.Equal(-25, p(3).balance)
@@ -230,7 +230,7 @@ func TestGame_endGame(t *testing.T) {
 	p(3).hand = deck.CardsFromString("7d,7h,8d,8h,11c,12d,13h")
 	game.endGame()
 
-	a.Equal([]*participant{p(2)}, game.winners)
+	a.Equal(map[*participant]int{p(2): 75}, game.winners)
 	a.Equal(-25, p(1).balance)
 	a.Equal(50, p(2).balance)
 	a.Equal(-25, p(3).balance)
@@ -241,7 +241,7 @@ func TestGame_endGame(t *testing.T) {
 
 	m := game.pendingLogs
 	a.Equal(3, len(m))
-	a.Equal("{} had a Full house and won ${50}", m[0].Message)
+	a.Equal("{} had a Full house and won ${75}", m[0].Message)
 	a.Equal([]int64{2}, m[0].PlayerIDs)
 
 	a.Equal("{} folded and lost ${25}", m[1].Message)
@@ -265,7 +265,11 @@ func TestGame_endGame_withTie(t *testing.T) {
 	p(3).hand = deck.CardsFromString("14d,13d,12d,11c,10c,3s,3h")
 	game.endGame()
 
-	a.Equal([]*participant{p(2), p(3)}, game.winners)
+	// Both p(2) and p(3) should be winners - check they're in the map
+	a.Len(game.winners, 2)
+	a.Contains(game.winners, p(2))
+	a.Contains(game.winners, p(3))
+
 	a.Equal(-25, p(1).balance)
 	a.Equal(13, p(2).balance)
 	a.Equal(12, p(3).balance)

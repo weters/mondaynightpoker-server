@@ -15,6 +15,12 @@ const maxParticipants = 7
 
 var errNotPlayersTurn = errors.New("it is not your turn")
 
+// lastAction tracks the most recent action taken by a player
+type lastAction struct {
+	PlayerID int64  `json:"playerId"`
+	Action   Action `json:"action"`
+}
+
 // Game is a single game of seven-card poker
 type Game struct {
 	deck            *deck.Deck
@@ -27,11 +33,13 @@ type Game struct {
 	// TODO: possibly refactor with Little L
 	decisionStartIndex int
 	decisionCount      int
+	dealerIndex        int
 
 	currentBet int
 	pot        int
 
-	winners []*participant
+	lastAction *lastAction
+	winners    map[*participant]int
 
 	pendingLogs []*playable.LogMessage
 	logChan     chan []*playable.LogMessage
@@ -44,16 +52,36 @@ type Game struct {
 }
 
 // NewGame returns a new seven-card poker Game
+// Deprecated: Use NewGameV2 instead for proper table stake support
 func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
+	// Create players with 0 table stake for backwards compatibility
+	players := make([]playable.Player, len(playerIDs))
+	for i, id := range playerIDs {
+		players[i] = &simplePlayer{id: id, tableStake: 0}
+	}
+	return NewGameV2(logger, players, options)
+}
+
+// simplePlayer implements playable.Player for backwards compatibility
+type simplePlayer struct {
+	id         int64
+	tableStake int
+}
+
+func (s *simplePlayer) GetPlayerID() int64  { return s.id }
+func (s *simplePlayer) GetTableStake() int { return s.tableStake }
+
+// NewGameV2 returns a new seven-card poker Game with table stake support
+func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Options) (*Game, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err
 	}
 
-	if len(playerIDs) < 2 {
+	if len(players) < 2 {
 		return nil, errors.New("you must have at least two participants")
 	}
 
-	if len(playerIDs) > maxParticipants {
+	if len(players) > maxParticipants {
 		return nil, fmt.Errorf("seven-card allows at most %d participants", maxParticipants)
 	}
 
@@ -62,16 +90,28 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 
 	options.Variant.Start()
 
-	game := &Game{
-		deck:        d,
-		options:     options,
-		playerIDs:   append([]int64{}, playerIDs...), // copy
-		pendingLogs: make([]*playable.LogMessage, 0),
-		logChan:     make(chan []*playable.LogMessage, 256),
-		logger:      logger,
+	playerIDs := make([]int64, len(players))
+	idToParticipant := make(map[int64]*participant)
+	for i, player := range players {
+		playerIDs[i] = player.GetPlayerID()
+		idToParticipant[player.GetPlayerID()] = newParticipant(
+			player.GetPlayerID(),
+			player.GetTableStake(),
+			options.Ante,
+		)
 	}
 
-	game.setupParticipantsAndPot()
+	game := &Game{
+		deck:            d,
+		options:         options,
+		playerIDs:       playerIDs,
+		idToParticipant: idToParticipant,
+		dealerIndex:     len(players) - 1, // dealer is last player
+		pot:             options.Ante * len(players),
+		pendingLogs:     make([]*playable.LogMessage, 0),
+		logChan:         make(chan []*playable.LogMessage, 256),
+		logger:          logger,
+	}
 
 	return game, nil
 }
@@ -256,18 +296,13 @@ func (g *Game) dealCards(faceDown bool) error {
 	return nil
 }
 
-func (g *Game) setupParticipantsAndPot() {
-	i2p := make(map[int64]*participant)
-	for _, pid := range g.playerIDs {
-		i2p[pid] = newParticipant(pid, g.options.Ante)
-	}
-
-	g.idToParticipant = i2p
-	g.pot = g.options.Ante * len(i2p)
-}
-
 func (g *Game) isGameOver() bool {
 	return g.winners != nil
+}
+
+// GetDealerID returns the player ID of the dealer
+func (g *Game) GetDealerID() int64 {
+	return g.playerIDs[g.dealerIndex]
 }
 
 func (g *Game) endGame() {
@@ -277,7 +312,7 @@ func (g *Game) endGame() {
 
 	g.round = revealWinner
 
-	winners := make([]*participant, 0)
+	winnerList := make([]*participant, 0)
 	bestStrength := math.MinInt64
 
 	for _, id := range g.playerIDs {
@@ -288,22 +323,27 @@ func (g *Game) endGame() {
 
 		ha := handanalyzer.New(5, p.hand)
 		if s := ha.GetStrength(); s > bestStrength {
-			winners = []*participant{p}
+			winnerList = []*participant{p}
 			bestStrength = s
 		} else if s == bestStrength {
-			winners = append(winners, p)
+			winnerList = append(winnerList, p)
 		}
 	}
 
-	g.winners = winners
+	// Calculate winnings per winner
+	winAmount := g.pot / len(winnerList)
+	g.winners = make(map[*participant]int)
 
-	for _, winner := range winners {
+	for _, winner := range winnerList {
 		winner.didWin = true
-		winner.balance += g.pot / len(winners)
+		winner.balance += winAmount
+		g.winners[winner] = winAmount
 	}
 
-	if remainder := g.pot % len(winners); remainder > 0 {
-		winners[0].balance += remainder
+	// Handle remainder
+	if remainder := g.pot % len(winnerList); remainder > 0 {
+		winnerList[0].balance += remainder
+		g.winners[winnerList[0]] += remainder
 	}
 
 	g.sendEndOfGameLogMessages()
@@ -311,9 +351,9 @@ func (g *Game) endGame() {
 
 func (g *Game) sendEndOfGameLogMessages() {
 	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
-	for _, winner := range g.winners {
+	for winner, amount := range g.winners {
 		hand := winner.getHandAnalyzer().GetHand().String()
-		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, winner.balance))
+		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, amount))
 	}
 
 	for _, playerID := range g.playerIDs {

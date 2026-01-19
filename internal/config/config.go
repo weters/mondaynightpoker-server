@@ -1,9 +1,10 @@
 package config
 
 import (
+	"os"
+
 	"github.com/kelseyhightower/envconfig"
 	"gopkg.in/yaml.v2"
-	"os"
 )
 
 var defaultConfig = Config{
