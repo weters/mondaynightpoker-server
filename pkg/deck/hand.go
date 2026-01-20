@@ -41,12 +41,12 @@ func (h *Hand) HasCard(card *Card) bool {
 }
 
 // Discard will discard the specified card
-// If max is provided and > 0, then limit to max discards (useful for mega-decks)
-func (h *Hand) Discard(card *Card, max ...int) int {
+// If maxCount is provided and > 0, then limit to maxCount discards (useful for mega-decks)
+func (h *Hand) Discard(card *Card, maxCount ...int) int {
 	count := 0
 	m := math.MaxInt32
-	if len(max) == 1 && max[0] > 0 {
-		m = max[0]
+	if len(maxCount) == 1 && maxCount[0] > 0 {
+		m = maxCount[0]
 	}
 
 	newHand := make([]*Card, 0, len(*h))

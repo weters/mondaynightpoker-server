@@ -236,7 +236,7 @@ func (g *Game) validateBetOrRaise(p *Participant, amount int) error { // nolint:
 		return nil
 	}
 
-	minBet := max(g.options.Ante, g.options.BigBlind, 25)
+	minBet := maxInt(g.options.Ante, g.options.BigBlind, 25)
 	if amount > potLimit {
 		return fmt.Errorf("bet must be at most ${%d}", potLimit)
 	} else if amount < allInAmont && amount < minBet {
@@ -283,13 +283,13 @@ func (g *Game) discardCardForParticipant(p *Participant, cards deck.Hand) error 
 	return nil
 }
 
-func max(numbers ...int) int {
-	max := math.MinInt
+func maxInt(numbers ...int) int {
+	result := math.MinInt
 	for _, i := range numbers {
-		if i > max {
-			max = i
+		if i > result {
+			result = i
 		}
 	}
 
-	return max
+	return result
 }

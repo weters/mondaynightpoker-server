@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
@@ -91,7 +90,6 @@ func Test_postPlayer(t *testing.T) {
 
 	// test random name
 	var pObj *playerWithEmail
-	rand.Seed(0)
 	assertPost(t, ts, "/player", postPlayerPayload{
 		Email:    email,
 		Password: "123456",

@@ -77,13 +77,13 @@ func (g *Game) participantRaises(p *participant, amount int) error {
 	return g.bet(p, "raise", amount, g.currentBet*2)
 }
 
-func (g *Game) bet(p *participant, betType string, amount, min int) error {
+func (g *Game) bet(p *participant, betType string, amount, minAmount int) error {
 	if g.getCurrentTurn() != p {
 		return errNotPlayersTurn
 	}
 
-	if amount < min {
-		return fmt.Errorf("your %s must be at least %d", betType, min)
+	if amount < minAmount {
+		return fmt.Errorf("your %s must be at least %d", betType, minAmount)
 	}
 
 	if amount%g.options.Ante > 0 {

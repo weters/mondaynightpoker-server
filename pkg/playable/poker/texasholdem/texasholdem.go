@@ -148,17 +148,17 @@ func (g *Game) dealStartingCardsToEachParticipant() error {
 	return nil
 }
 
-func validateAmount(desc string, number, min, max int) error {
+func validateAmount(desc string, number, minVal, maxVal int) error {
 	if number%25 > 0 {
 		return fmt.Errorf("%s must be in increments of ${25}", desc)
 	}
 
-	if number < min {
-		return fmt.Errorf("%s must be at least ${%d}", desc, min)
+	if number < minVal {
+		return fmt.Errorf("%s must be at least ${%d}", desc, minVal)
 	}
 
-	if number > max {
-		return fmt.Errorf("%s must be at most ${%d}", desc, max)
+	if number > maxVal {
+		return fmt.Errorf("%s must be at most ${%d}", desc, maxVal)
 	}
 
 	return nil

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,7 +26,7 @@ func ValidateSnapshot(t *testing.T, obj interface{}, depth int, msgAndArgs ...in
 
 	filename := filepath.Join("testdata", fmt.Sprintf("%s-%d.json", funcName, call))
 
-	expects, err := ioutil.ReadFile(filename)
+	expects, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			create(filename, obj)

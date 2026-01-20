@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -137,7 +136,7 @@ func assertDo(t *testing.T, req *http.Request, respObj interface{}, statusCode i
 	defer resp.Body.Close()
 
 	if statusCode != resp.StatusCode {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		t.Log(string(b))
 		assert.Equal(t, statusCode, resp.StatusCode)
 		return nil
