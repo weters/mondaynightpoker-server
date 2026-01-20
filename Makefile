@@ -16,7 +16,7 @@ keys: .keys/public.pem
 
 .PHONY: dev-database
 dev-database:
-	-docker run --name mondaynightpoker -e POSTGRES_HOST_AUTH_METHOD=trust -d -p 5432:5432 postgres:9.4
+	-docker run --name mondaynightpoker -e POSTGRES_HOST_AUTH_METHOD=trust -d -p 5432:5432 postgres:16
 	go run ./cmd/migrate
 
 clean:
