@@ -6,7 +6,15 @@
       "Bash(NODE_OPTIONS=--openssl-legacy-provider npm run build:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "WebSearch",
+      "WebFetch(domain:golangci-lint.run)",
+      "Bash(golangci-lint run:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(go install:*)",
+      "Bash(make test:*)",
+      "Bash(gofmt:*)",
+      "Bash(go clean:*)"
     ]
   }
 }

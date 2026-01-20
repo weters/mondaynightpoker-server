@@ -14,7 +14,7 @@ func (t texasHoldEmFactory) CreateGameV2(logger logrus.FieldLogger, players []*m
 	return texasholdem.NewGame(logger, p, texasHoldEmOptions(additionalData))
 }
 
-func (t texasHoldEmFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (t texasHoldEmFactory) CreateGame(_ logrus.FieldLogger, _ []int64, _ playable.AdditionalData) (playable.Playable, error) {
 	panic("use CreateGameV2")
 }
 

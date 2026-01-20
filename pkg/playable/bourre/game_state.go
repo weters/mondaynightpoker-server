@@ -62,7 +62,7 @@ func (g *Game) getGameState() *GameState {
 		}
 	}
 
-	foldedPlayers := make([]*GameStatePlayer, 0)
+	foldedPlayers := make([]*GameStatePlayer, 0, len(g.foldedPlayers))
 	for player := range g.foldedPlayers {
 		foldedPlayers = append(foldedPlayers, &GameStatePlayer{
 			Balance:  player.balance,

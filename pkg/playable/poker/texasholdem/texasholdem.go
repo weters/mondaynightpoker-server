@@ -59,7 +59,7 @@ func DefaultOptions() Options {
 }
 
 // NewGame returns a new game of Texas Hold'em
-func NewGame(logger logrus.FieldLogger, players []playable.Player, opts Options) (*Game, error) {
+func NewGame(_ logrus.FieldLogger, players []playable.Player, opts Options) (*Game, error) {
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}

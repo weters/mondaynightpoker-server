@@ -22,7 +22,7 @@ const (
 	roundBeforeFirstTurn
 	roundBeforeSecondTurn
 	roundBeforeThirdTurn
-	roundFinalBettingRound // nolint:deadcode,varcheck
+	roundFinalBettingRound //nolint:unused
 	roundRevealWinner
 )
 

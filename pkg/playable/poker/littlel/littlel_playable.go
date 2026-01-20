@@ -77,7 +77,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 // GetPlayerState returns the state of the player
 func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
-	var action int64 = 0
+	var action int64
 	if currentTurn := g.GetCurrentTurn(); currentTurn != nil {
 		action = currentTurn.PlayerID
 	}

@@ -442,7 +442,7 @@ func (g *Game) nextRound() error {
 }
 
 func (g *Game) startingHand() []*GameLogHand {
-	hands := make([]*GameLogHand, len(g.participants))
+	hands := make([]*GameLogHand, len(g.participants), len(g.participants)+1)
 	for i, p := range g.participants {
 		hands[i] = &GameLogHand{
 			PlayerID: p.PlayerID,

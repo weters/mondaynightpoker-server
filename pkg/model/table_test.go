@@ -189,6 +189,7 @@ func TestTable_Save(t *testing.T) {
 	a.False(table.Deleted)
 
 	now := time.Now()
+	time.Sleep(time.Millisecond)
 	assert.True(t, table.Modified.Before(now))
 
 	origName := table.Name

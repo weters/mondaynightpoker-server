@@ -14,7 +14,7 @@ func (l *LowCardWild) Start() {
 }
 
 // ParticipantReceivedCard updates wilds based on the lowest hole card
-func (l *LowCardWild) ParticipantReceivedCard(game *Game, p *participant, c *deck.Card) {
+func (l *LowCardWild) ParticipantReceivedCard(_ *Game, p *participant, _ *deck.Card) {
 	lowestRank := math.MaxInt32
 	for _, card := range p.hand {
 		if card.IsBitSet(faceUp) {

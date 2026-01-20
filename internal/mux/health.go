@@ -13,7 +13,7 @@ func (m *Mux) getHealth() http.HandlerFunc {
 		Version: m.version,
 	}
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, payload)
 	}
 }

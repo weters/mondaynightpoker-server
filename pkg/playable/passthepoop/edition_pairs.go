@@ -17,7 +17,7 @@ func (p *PairsEdition) Name() string {
 }
 
 // ParticipantWasPassed is a no-op in pairs edition
-func (p *PairsEdition) ParticipantWasPassed(participant *Participant, nextCard *deck.Card) {
+func (p *PairsEdition) ParticipantWasPassed(_ *Participant, _ *deck.Card) {
 	// noop
 }
 

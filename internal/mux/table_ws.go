@@ -18,7 +18,7 @@ const pingPeriod = pongWait * 9 / 10
 
 func (m *Mux) getTableUUIDWS() http.HandlerFunc {
 	upgrader := &websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
+		CheckOrigin: func(_ *http.Request) bool {
 			return true
 		},
 	}

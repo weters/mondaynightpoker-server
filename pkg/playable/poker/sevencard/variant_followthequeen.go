@@ -22,7 +22,7 @@ func (f *FollowTheQueen) Start() {
 }
 
 // ParticipantReceivedCard will update the wilds
-func (f *FollowTheQueen) ParticipantReceivedCard(game *Game, p *participant, c *deck.Card) {
+func (f *FollowTheQueen) ParticipantReceivedCard(game *Game, _ *participant, c *deck.Card) {
 	wildDidChange := false
 	if c.IsBitSet(faceUp) && c.Rank == deck.Queen {
 		f.queenWasFlipped = true

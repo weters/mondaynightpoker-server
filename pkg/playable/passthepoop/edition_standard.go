@@ -79,6 +79,6 @@ func (s *StandardEdition) Name() string {
 }
 
 // ParticipantWasPassed is a no-op in standard edition
-func (s *StandardEdition) ParticipantWasPassed(participant *Participant, nextCard *deck.Card) {
+func (s *StandardEdition) ParticipantWasPassed(_ *Participant, _ *deck.Card) {
 	// noop
 }

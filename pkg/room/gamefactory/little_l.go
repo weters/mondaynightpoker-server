@@ -19,7 +19,7 @@ func (l littleLFactory) Details(additionalData playable.AdditionalData) (string,
 	return name, opts.Ante, nil
 }
 
-func (l littleLFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (l littleLFactory) CreateGame(_ logrus.FieldLogger, _ []int64, _ playable.AdditionalData) (playable.Playable, error) {
 	panic("use CreateGameV2")
 }
 

@@ -18,7 +18,7 @@ func Test_authRouter(t *testing.T) {
 	setupJWT()
 	m := NewMux("")
 
-	m.authRouter.Path("/test").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m.authRouter.Path("/test").HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, "OK")
 	})
 
@@ -60,7 +60,7 @@ func Test_adminRouter(t *testing.T) {
 	setupJWT()
 	m := NewMux("")
 
-	m.adminRouter.Path("/test").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m.adminRouter.Path("/test").HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, "OK")
 	})
 

@@ -32,7 +32,7 @@ func (g *Game) getGameState() *GameState {
 		p[i] = g.participants[pt.ID()].participantJSON(g, false)
 	}
 
-	var currentTurn int64 = 0
+	var currentTurn int64
 	if turn, _ := g.GetCurrentTurn(); turn != nil {
 		currentTurn = turn.PlayerID
 	}

@@ -68,7 +68,7 @@ type simplePlayer struct {
 	tableStake int
 }
 
-func (s *simplePlayer) GetPlayerID() int64  { return s.id }
+func (s *simplePlayer) GetPlayerID() int64 { return s.id }
 func (s *simplePlayer) GetTableStake() int { return s.tableStake }
 
 // NewGameV2 returns a new seven-card poker Game with table stake support

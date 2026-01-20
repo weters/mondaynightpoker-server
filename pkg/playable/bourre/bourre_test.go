@@ -534,7 +534,7 @@ func cardsFromString(s string) []*deck.Card {
 	return cards
 }
 
-//noinspection SpellCheckingInspection
+// noinspection SpellCheckingInspection
 var cardRx = regexp.MustCompile(`^(?i)(\d{1,2})([cdhs])$`)
 
 func cardFromString(s string) *deck.Card {
