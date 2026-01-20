@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	jwtgo "github.com/golang-jwt/jwt"
+	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
@@ -26,10 +26,10 @@ func TestValidUserID_InvalidAudience(t *testing.T) {
 	publicKey = loadPublicKey(filepath.Join("testdata", "public.pem"))
 	privateKey = loadPrivateKey(filepath.Join("testdata", "private.key"))
 
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.StandardClaims{
-		Audience: "different-audience",
-		Id:       uuid.New().String(),
-		IssuedAt: time.Now().Unix(),
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.RegisteredClaims{
+		Audience: jwtgo.ClaimStrings{"different-audience"},
+		ID:       uuid.New().String(),
+		IssuedAt: jwtgo.NewNumericDate(time.Now()),
 		Issuer:   Issuer,
 		Subject:  "15",
 	})
@@ -49,10 +49,10 @@ func TestValidUserID_InvalidIssuer(t *testing.T) {
 	publicKey = loadPublicKey(filepath.Join("testdata", "public.pem"))
 	privateKey = loadPrivateKey(filepath.Join("testdata", "private.key"))
 
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.StandardClaims{
-		Audience: Audience,
-		Id:       uuid.New().String(),
-		IssuedAt: time.Now().Unix(),
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.RegisteredClaims{
+		Audience: jwtgo.ClaimStrings{Audience},
+		ID:       uuid.New().String(),
+		IssuedAt: jwtgo.NewNumericDate(time.Now()),
 		Issuer:   "invalid-issuer",
 		Subject:  "15",
 	})
@@ -72,12 +72,12 @@ func TestValidUserID_Expired(t *testing.T) {
 	publicKey = loadPublicKey(filepath.Join("testdata", "public.pem"))
 	privateKey = loadPrivateKey(filepath.Join("testdata", "private.key"))
 
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.StandardClaims{
-		Audience:  Audience,
-		Id:        uuid.New().String(),
-		IssuedAt:  time.Now().Unix(),
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.RegisteredClaims{
+		Audience:  jwtgo.ClaimStrings{Audience},
+		ID:        uuid.New().String(),
+		IssuedAt:  jwtgo.NewNumericDate(time.Now()),
 		Issuer:    Issuer,
-		ExpiresAt: time.Now().Add(time.Hour * -1).Unix(),
+		ExpiresAt: jwtgo.NewNumericDate(time.Now().Add(time.Hour * -1)),
 		Subject:   "15",
 	})
 
@@ -89,7 +89,7 @@ func TestValidUserID_Expired(t *testing.T) {
 
 	id, err := ValidUserID(signedToken)
 	if err != nil {
-		assert.Regexp(t, "^token is expired", err.Error())
+		assert.Contains(t, err.Error(), "token is expired")
 	} else {
 		t.Error("expected an error")
 	}

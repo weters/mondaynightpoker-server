@@ -4,12 +4,12 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"mondaynightpoker-server/internal/config"
+	"os"
 	"strconv"
 	"time"
 
-	jwtgo "github.com/golang-jwt/jwt"
+	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -37,10 +37,10 @@ func Sign(userID int64) (string, error) {
 		panic("LoadKeys() not called")
 	}
 
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.StandardClaims{
-		Audience: Audience,
-		Id:       uuid.New().String(),
-		IssuedAt: time.Now().Unix(),
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.RegisteredClaims{
+		Audience: jwtgo.ClaimStrings{Audience},
+		ID:       uuid.New().String(),
+		IssuedAt: jwtgo.NewNumericDate(time.Now()),
 		Issuer:   Issuer,
 		Subject:  strconv.FormatInt(userID, 10),
 	})
@@ -54,7 +54,7 @@ func ValidUserID(signedString string) (int64, error) {
 		panic("LoadKeys() not called")
 	}
 
-	token, err := jwtgo.ParseWithClaims(signedString, &jwtgo.StandardClaims{}, func(token *jwtgo.Token) (interface{}, error) {
+	token, err := jwtgo.ParseWithClaims(signedString, &jwtgo.RegisteredClaims{}, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodRSA); !ok {
 			return nil, errors.New("expected RS256 signing method")
 		}
@@ -67,8 +67,8 @@ func ValidUserID(signedString string) (int64, error) {
 	}
 
 	if token.Valid {
-		if claims, ok := token.Claims.(*jwtgo.StandardClaims); ok {
-			if claims.Audience != Audience {
+		if claims, ok := token.Claims.(*jwtgo.RegisteredClaims); ok {
+			if !containsAudience(claims.Audience, Audience) {
 				return 0, errors.New("invalid audience")
 			}
 
@@ -79,7 +79,7 @@ func ValidUserID(signedString string) (int64, error) {
 			return strconv.ParseInt(claims.Subject, 10, 64)
 		}
 
-		return 0, fmt.Errorf("expected jwt.StandardClaims, got %T", token.Claims)
+		return 0, fmt.Errorf("expected jwt.RegisteredClaims, got %T", token.Claims)
 	}
 
 	logrus.Warn("token claims were not valid. did not expect to reach this code")
@@ -87,7 +87,7 @@ func ValidUserID(signedString string) (int64, error) {
 }
 
 func loadPublicKey(path string) *rsa.PublicKey {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not read file")
 	}
@@ -101,7 +101,7 @@ func loadPublicKey(path string) *rsa.PublicKey {
 }
 
 func loadPrivateKey(path string) *rsa.PrivateKey {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not read file")
 	}
@@ -112,4 +112,13 @@ func loadPrivateKey(path string) *rsa.PrivateKey {
 	}
 
 	return pem
+}
+
+func containsAudience(audiences jwtgo.ClaimStrings, target string) bool {
+	for _, aud := range audiences {
+		if aud == target {
+			return true
+		}
+	}
+	return false
 }

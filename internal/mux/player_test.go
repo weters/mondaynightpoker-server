@@ -231,7 +231,7 @@ func Test_getPlayerAuthJWT_BadRequests(t *testing.T) {
 
 	var errObj errorResponse
 	assertGet(t, ts, "/player/auth/bad", &errObj, 401)
-	assert.Equal(t, "token contains an invalid number of segments", errObj.Message)
+	assert.Equal(t, "token is malformed: token contains an invalid number of segments", errObj.Message)
 
 	// this should only happen if user is deleted from database
 	signedToken, _ := jwt.Sign(-1)

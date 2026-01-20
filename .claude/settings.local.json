@@ -15,7 +15,9 @@
       "Bash(make test:*)",
       "Bash(gofmt:*)",
       "Bash(go clean:*)",
-      "Bash(go run:*)"
+      "Bash(go run:*)",
+      "Bash(xargs cat:*)",
+      "Bash(go mod tidy:*)"
     ]
   }
 }
