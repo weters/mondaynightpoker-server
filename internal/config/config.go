@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"sync"
 
 	"github.com/kelseyhightower/envconfig"
 	"gopkg.in/yaml.v2"
@@ -74,22 +75,41 @@ type Email struct {
 	Disable bool
 }
 
-var config Config
+var (
+	config   Config
+	configMu sync.RWMutex
+)
 
 // Instance returns a singleton instance
 // If the config hasn't been loaded, it will be loaded
 func Instance() Config {
+	configMu.RLock()
+	if config.loaded {
+		defer configMu.RUnlock()
+		return config
+	}
+	configMu.RUnlock()
+
+	configMu.Lock()
+	defer configMu.Unlock()
 	if !config.loaded {
-		if err := Load(); err != nil {
+		if err := loadInternal(); err != nil {
 			panic(err)
 		}
 	}
-
 	return config
 }
 
 // Load will load the configuration
 func Load() error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	return loadInternal()
+}
+
+// loadInternal loads the configuration without acquiring a lock.
+// Caller must hold configMu.
+func loadInternal() error {
 	config = defaultConfig
 
 	if cfgFile, ok := getConfigFile(); ok {

@@ -155,7 +155,7 @@ func GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayer
 SELECT ` + tableColumns + `, players.email
 FROM tables
 INNER JOIN players ON tables.player_id = players.id
-ORDER BY tables.created DESC
+ORDER BY tables.created DESC, tables.uuid DESC
 OFFSET $1
 LIMIT $2`
 
