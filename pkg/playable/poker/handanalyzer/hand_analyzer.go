@@ -20,6 +20,9 @@ type HandAnalyzer struct {
 
 	hand     Hand
 	strength int
+
+	// assignment tracks wild mode assignments for constrained wild analysis
+	assignment []WildAssignment
 }
 
 // New will return a new HandAnalyzer instance
@@ -40,17 +43,96 @@ func New(size int, cards []*deck.Card) *HandAnalyzer {
 		}
 	}
 
-	h := &HandAnalyzer{
-		size:      size,
-		cards:     nonWilds,
-		wildCards: wilds,
+	var best *HandAnalyzer
+	if len(wilds) == 0 {
+		// No wilds - use existing fast path
+		best = &HandAnalyzer{
+			size:      size,
+			cards:     nonWilds,
+			wildCards: wilds,
+		}
+		best.analyzeHand()
+	} else {
+		// Try all 2^N wild mode combinations and pick the best
+		best = findBestConstrainedHand(size, nonWilds, wilds)
 	}
 
-	// the method order here is required
-	h.analyzeHand()
-	h.calculateHand()
+	best.calculateHand()
+	return best
+}
 
+// findBestConstrainedHand tries all wild mode combinations and returns the best hand
+func findBestConstrainedHand(size int, nonWilds, wilds deck.Hand) *HandAnalyzer {
+	combinations := generateWildCombinations(wilds)
+	var best *HandAnalyzer
+	bestStrength := -1
+
+	for _, assignment := range combinations {
+		h := analyzeWithAssignment(size, nonWilds, wilds, assignment)
+		h.calculateHand()
+		if s := h.GetStrength(); s > bestStrength {
+			bestStrength = s
+			best = h
+		}
+	}
+	return best
+}
+
+// analyzeWithAssignment analyzes a hand with a specific wild mode assignment
+func analyzeWithAssignment(size int, nonWilds, wilds deck.Hand, assignment []WildAssignment) *HandAnalyzer {
+	h := &HandAnalyzer{
+		size:       size,
+		cards:      nonWilds,
+		wildCards:  wilds,
+		assignment: assignment,
+	}
+
+	h.analyzeHandConstrained()
 	return h
+}
+
+// analyzeHandConstrained analyzes a hand with constrained wild cards
+func (h *HandAnalyzer) analyzeHandConstrained() {
+	// keeps track of flushes
+	suitCounts := make(map[deck.Suit][]int)
+
+	// keeps track of pairs, trips, and quads
+	prevRank := math.MaxInt8
+	numOfRank := 1
+
+	nCards := len(h.cards)
+	for i, card := range h.cards {
+		if h.flush == nil {
+			h.checkFlushConstrained(card, suitCounts)
+		}
+
+		isLastCard := i+1 == nCards
+		h.checkPairs(card, isLastCard, &prevRank, &numOfRank)
+	}
+
+	h.updatePairsWithWildsConstrained()
+
+	// Check straights using the simplified algorithm
+	// Try high ace first
+	h.straight = checkStraightSimple(h.cards, h.assignment, h.size, false, "", deck.HighAce)
+	if h.straight == 0 {
+		// Try low ace (wheel)
+		h.straight = checkStraightSimple(h.cards, h.assignment, h.size, false, "", deck.LowAce)
+	}
+
+	// Check straight flushes for each suit
+	for _, suit := range []deck.Suit{deck.Clubs, deck.Diamonds, deck.Hearts, deck.Spades} {
+		// Try high ace
+		sf := checkStraightSimple(h.cards, h.assignment, h.size, true, suit, deck.HighAce)
+		if sf > h.straightFlush {
+			h.straightFlush = sf
+		}
+		// Try low ace
+		sf = checkStraightSimple(h.cards, h.assignment, h.size, true, suit, deck.LowAce)
+		if sf > h.straightFlush {
+			h.straightFlush = sf
+		}
+	}
 }
 
 // analyzeHand will loop through a players hand and calculate the various combinations
@@ -399,6 +481,79 @@ func (h *HandAnalyzer) checkFlush(card *deck.Card, suitCounts map[deck.Suit][]in
 	}
 }
 
+// checkFlushConstrained checks for a flush with constrained wild cards
+// Suit-mode wilds can contribute to ANY suit
+// Rank-mode wilds can ONLY contribute to their original suit
+func (h *HandAnalyzer) checkFlushConstrained(card *deck.Card, suitCounts map[deck.Suit][]int) {
+	ranks, ok := suitCounts[card.Suit]
+	if !ok {
+		ranks = make([]int, 0, 1)
+	}
+	ranks = append(ranks, card.Rank)
+	suitCounts[card.Suit] = ranks
+
+	// Count wilds that can contribute to this suit:
+	// - Suit-mode wilds: can contribute to ANY suit (change suit, keep rank)
+	//   BUT only one wild per rank can contribute (can't have two 2♦ in a deck)
+	// - Rank-mode wilds: can ONLY contribute to their original suit (change rank, keep suit)
+	suitModeWilds := getSuitModeWilds(h.assignment)
+	rankModeWildsForSuit := getRankModeWildsForSuit(h.assignment, card.Suit)
+
+	// Build unique suit-mode wild ranks (deduplicate same-rank wilds)
+	// Also exclude ranks that are already in the flush from non-wilds
+	suitModeRanks := make(map[int]bool)
+	existingRanks := make(map[int]bool)
+	for _, r := range ranks {
+		existingRanks[r] = true
+	}
+	for _, wa := range suitModeWilds {
+		if !existingRanks[wa.Card.Rank] && !suitModeRanks[wa.Card.Rank] {
+			suitModeRanks[wa.Card.Rank] = true
+		}
+	}
+
+	availableWilds := len(suitModeRanks) + len(rankModeWildsForSuit)
+
+	if len(ranks)+availableWilds >= h.size {
+		// Build the flush with wilds contributing
+		wildRanks := make([]int, 0, availableWilds)
+
+		// Add unique suit-mode wild ranks
+		for r := range suitModeRanks {
+			wildRanks = append(wildRanks, r)
+		}
+
+		// Add rank-mode wilds as aces (they can be any rank)
+		for range rankModeWildsForSuit {
+			wildRanks = append(wildRanks, deck.Ace)
+		}
+
+		// Sort wilds by rank descending
+		sort.Sort(sort.Reverse(sort.IntSlice(wildRanks)))
+
+		// Merge sorted wilds with sorted ranks
+		allRanks := make([]int, 0, len(wildRanks)+len(ranks))
+		wi, ri := 0, 0
+		for wi < len(wildRanks) || ri < len(ranks) {
+			if wi >= len(wildRanks) {
+				allRanks = append(allRanks, ranks[ri])
+				ri++
+			} else if ri >= len(ranks) {
+				allRanks = append(allRanks, wildRanks[wi])
+				wi++
+			} else if wildRanks[wi] >= ranks[ri] {
+				allRanks = append(allRanks, wildRanks[wi])
+				wi++
+			} else {
+				allRanks = append(allRanks, ranks[ri])
+				ri++
+			}
+		}
+
+		h.flush = allRanks[0:h.size]
+	}
+}
+
 func (h *HandAnalyzer) checkPairs(card *deck.Card, isLastCard bool, prevRank, numOfRank *int) {
 	if card.Rank == *prevRank {
 		*numOfRank++
@@ -458,27 +613,9 @@ func getBestRank(ranks []int) int {
 	return math.MinInt32
 }
 
-func (h *HandAnalyzer) updatePairsWithWilds() {
-	nWilds := len(h.wildCards)
-	if nWilds == 0 {
-		return
-	}
-
-	quadRank := getBestRank(h.quads)
-	tripsRank := getBestRank(h.trips)
-	pairsRank := getBestRank(h.pairs)
-	highCard := 0
-	if len(h.cards) > 0 {
-		highCard = h.cards[0].Rank
-	}
-
-	// make four-of-a-kind
-	if nWilds >= 4 {
-		h.quads = []int{deck.Ace}
-		return
-	}
-
-	switch nWilds {
+// distributeWildsForPairs distributes wilds to optimize pairs/trips/quads
+func (h *HandAnalyzer) distributeWildsForPairs(wildCount int, quadRank, tripsRank, pairsRank, highCard int) {
+	switch wildCount {
 	case 3:
 		if quadRank > tripsRank && quadRank > pairsRank && quadRank >= highCard {
 			return
@@ -520,6 +657,121 @@ func (h *HandAnalyzer) updatePairsWithWilds() {
 			h.pairs = []int{highCard}
 		}
 	}
+}
+
+func (h *HandAnalyzer) updatePairsWithWilds() {
+	nWilds := len(h.wildCards)
+	if nWilds == 0 {
+		return
+	}
+
+	quadRank := getBestRank(h.quads)
+	tripsRank := getBestRank(h.trips)
+	pairsRank := getBestRank(h.pairs)
+	highCard := 0
+	if len(h.cards) > 0 {
+		highCard = h.cards[0].Rank
+	}
+
+	// make four-of-a-kind
+	if nWilds >= 4 {
+		h.quads = []int{deck.Ace}
+		return
+	}
+
+	h.distributeWildsForPairs(nWilds, quadRank, tripsRank, pairsRank, highCard)
+}
+
+// updatePairsWithWildsConstrained updates pairs/trips/quads with constrained wild cards
+// Rank-mode wilds: flexible, can match any rank (like current behavior)
+// Suit-mode wilds: can ONLY count toward their original rank
+func (h *HandAnalyzer) updatePairsWithWildsConstrained() {
+	if len(h.assignment) == 0 {
+		return
+	}
+
+	// First, count suit-mode wilds and add them to their fixed rank counts
+	// This is done by re-examining the cards with suit-mode wilds included
+	rankCounts := make(map[int]int)
+
+	// Count non-wild cards
+	for _, card := range h.cards {
+		rankCounts[card.Rank]++
+	}
+
+	// Add suit-mode wilds to their fixed rank
+	for _, wa := range h.assignment {
+		if wa.Mode == SuitMode {
+			rankCounts[wa.Card.Rank]++
+		}
+	}
+
+	// Count rank-mode wilds (these are flexible)
+	rankModeWildCount := 0
+	for _, wa := range h.assignment {
+		if wa.Mode == RankMode {
+			rankModeWildCount++
+		}
+	}
+
+	// Rebuild pairs, trips, quads from the updated rank counts
+	h.quads = nil
+	h.trips = nil
+	h.pairs = nil
+
+	// Get all ranks sorted by count descending, then by rank descending
+	type rankInfo struct {
+		rank  int
+		count int
+	}
+	ranksInfo := make([]rankInfo, 0, len(rankCounts))
+	for rank, count := range rankCounts {
+		if count > 4 {
+			count = 4 // cap at four-of-a-kind
+		}
+		ranksInfo = append(ranksInfo, rankInfo{rank, count})
+	}
+
+	// Sort by count descending, then rank descending
+	sort.Slice(ranksInfo, func(i, j int) bool {
+		if ranksInfo[i].count != ranksInfo[j].count {
+			return ranksInfo[i].count > ranksInfo[j].count
+		}
+		return ranksInfo[i].rank > ranksInfo[j].rank
+	})
+
+	// Categorize the rank counts
+	for _, ri := range ranksInfo {
+		switch ri.count {
+		case 4:
+			h.quads = append(h.quads, ri.rank)
+		case 3:
+			h.trips = append(h.trips, ri.rank)
+		case 2:
+			h.pairs = append(h.pairs, ri.rank)
+		}
+	}
+
+	// Now distribute rank-mode wilds optimally
+	if rankModeWildCount == 0 {
+		return
+	}
+
+	quadRank := getBestRank(h.quads)
+	tripsRank := getBestRank(h.trips)
+	pairsRank := getBestRank(h.pairs)
+	highCard := 0
+	if len(h.cards) > 0 {
+		highCard = h.cards[0].Rank
+	}
+
+	// Special case: four or more rank-mode wilds
+	if rankModeWildCount >= 4 {
+		h.quads = []int{deck.Ace}
+		return
+	}
+
+	h.distributeWildsForPairs(rankModeWildCount, quadRank, tripsRank, pairsRank, highCard)
 }
 
 // calculateHand will determine the best hand

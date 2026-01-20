@@ -213,16 +213,25 @@ func TestHandAnalyzer_GetFlush_withWilds(t *testing.T) {
 	a.False(ok)
 	a.Nil(rank)
 
+	// With constrained wilds:
+	// Wild !6d can either: keep suit (diamond) and change rank, OR keep rank (6) and change suit
+	// For a club flush, suit-mode gives us a 6 of clubs
 	h = New(5, deck.CardsFromString("2c,4c,!6d,8c,10c"))
 	rank, ok = h.GetFlush()
 	a.True(ok)
-	a.Equal([]int{14, 10, 8, 4, 2}, rank)
+	// Suit-mode wild keeps rank 6, becomes 6c → flush is [10, 8, 6, 4, 2]
+	a.Equal([]int{10, 8, 6, 4, 2}, rank)
 
+	// Two wilds: !6d and !8c
+	// - !6d suit-mode → 6 of clubs
+	// - !8c is already clubs, rank-mode → Ace of clubs
 	h = New(5, deck.CardsFromString("2c,4c,!6d,!8c,10c"))
 	rank, ok = h.GetFlush()
 	a.True(ok)
-	a.Equal([]int{14, 14, 10, 4, 2}, rank)
+	// Best flush: rank-mode 8c→Ace, suit-mode 6d→6c: [14, 10, 6, 4, 2]
+	a.Equal([]int{14, 10, 6, 4, 2}, rank)
 
+	// Not enough cards of same suit even with wilds
 	h = New(5, deck.CardsFromString("2c,4c,!6d,!8c,10d"))
 	rank, ok = h.GetFlush()
 	a.False(ok)
@@ -246,8 +255,19 @@ func TestHandAnalyzer_GetRoyalFlush(t *testing.T) {
 func TestHandAnalyzer_GetRoyalFlush_withWilds(t *testing.T) {
 	a := assert.New(t)
 
+	// With constrained wilds:
+	// Wild !2d can: keep suit (diamond) and change rank, OR keep rank (2) and change suit
+	// For a royal flush in clubs, we need 10c,Jc,Qc,Kc,Ac
+	// Suit-mode: 2d becomes 2c → not helpful for royal
+	// Rank-mode: 2 becomes Ace but stays diamond → not helpful for clubs
+	// This CANNOT make a royal flush with constrained wilds!
 	h := New(5, deck.CardsFromString("10c,11c,12c,13c,!2d"))
-	a.True(h.GetRoyalFlush())
+	a.False(h.GetRoyalFlush(), "Wild 2d cannot fill the Ace gap for royal flush")
+
+	// For royal flush to work, the wild needs to be at the right rank (10-A)
+	// Wild !14d (Ace) in suit-mode becomes Ac → royal flush!
+	h = New(5, deck.CardsFromString("10c,11c,12c,13c,!14d"))
+	a.True(h.GetRoyalFlush(), "Wild Ace in suit-mode becomes Ac for royal flush")
 
 	h = New(5, deck.CardsFromString("9c,10c,11c,12c,!2d"))
 	a.False(h.GetRoyalFlush())
@@ -289,20 +309,39 @@ func TestHandAnalyzer_GetStraightFlush_withWilds(t *testing.T) {
 	a.False(ok)
 	a.Equal(0, r)
 
+	// With constrained wilds:
+	// For straight flush 2c-3c-4c-5c-6c:
+	// - !5d in suit-mode becomes 5c (keeps rank 5, changes suit)
+	// - !6d in suit-mode becomes 6c (keeps rank 6, changes suit)
+	// This works! Both wilds in suit-mode complete the straight flush.
 	h = New(5, deck.CardsFromString("2c,3c,4c,!5d,!6d"))
 	r, ok = h.GetStraightFlush()
 	a.True(ok)
 	a.Equal(6, r)
 
+	// With constrained wilds:
+	// 2s, Ac, 4c, !5d, 2c, !6d
+	// For a low-ace straight flush in clubs (Ac-2c-3c-4c-5c):
+	// - !5d suit-mode → 5c ✓
+	// - But we don't have 3c, and !6d can't become 3c (wrong rank)
+	// So this should NOT make a straight flush
 	h = New(5, deck.CardsFromString("2s,14c,4c,!5d,2c,!6d"))
 	r, ok = h.GetStraightFlush()
-	a.True(ok)
-	a.Equal(5, r)
+	a.False(ok, "Missing 3c and wilds can't fill that gap")
+	a.Equal(0, r)
 
+	// One wild can't complete straight flush when it needs wrong rank/suit
 	h = New(5, deck.CardsFromString("2c,3c,4c,!5d,6d"))
 	r, ok = h.GetStraightFlush()
+	// !5d suit-mode → 5c, but 6d is not wild and stays diamond
 	a.False(ok)
 	a.Equal(0, r)
+
+	// Test case where suit-mode wild completes straight flush
+	h = New(5, deck.CardsFromString("2c,3c,4c,5c,!6d"))
+	r, ok = h.GetStraightFlush()
+	a.True(ok, "Wild 6d in suit-mode becomes 6c")
+	a.Equal(6, r)
 }
 
 // nolint:dupl

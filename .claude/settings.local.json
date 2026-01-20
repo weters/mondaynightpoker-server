@@ -14,7 +14,8 @@
       "Bash(go install:*)",
       "Bash(make test:*)",
       "Bash(gofmt:*)",
-      "Bash(go clean:*)"
+      "Bash(go clean:*)",
+      "Bash(go run:*)"
     ]
   }
 }

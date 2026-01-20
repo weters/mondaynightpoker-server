@@ -134,3 +134,91 @@ func (h *HandAnalyzer) checkStraight(card *deck.Card, st *straightTracker, aceVa
 		*val = rank
 	}
 }
+
+// checkStraightSimple is a simplified straight check using a different algorithm
+// that's easier to reason about with constrained wilds
+func checkStraightSimple(nonWilds deck.Hand, assignment []WildAssignment, size int, isStraightFlush bool, suit deck.Suit, aceValue int) int {
+	// Build a set of filled ranks
+	filledRanks := make(map[int]bool)
+
+	// Add non-wild cards
+	for _, card := range nonWilds {
+		if isStraightFlush && card.Suit != suit {
+			continue
+		}
+		rank := card.Rank
+		if rank == deck.Ace && aceValue == deck.LowAce {
+			// For low ace check, add both positions if ace
+			filledRanks[deck.LowAce] = true
+		} else if rank == deck.Ace {
+			filledRanks[deck.Ace] = true
+		} else {
+			filledRanks[rank] = true
+		}
+	}
+
+	// Separate wilds by mode and applicability
+	var flexibleWildCount int
+	lockedWildRanks := make(map[int]bool)
+
+	for _, wa := range assignment {
+		if wa.Mode == RankMode {
+			if isStraightFlush {
+				// For straight flush, rank-mode wilds can only help their original suit
+				if wa.Card.Suit == suit {
+					flexibleWildCount++
+				}
+			} else {
+				flexibleWildCount++
+			}
+		} else {
+			// Suit-mode: locked to their rank position
+			rank := wa.Card.Rank
+			if rank == deck.Ace && aceValue == deck.LowAce {
+				lockedWildRanks[deck.LowAce] = true
+			} else if rank == deck.Ace {
+				lockedWildRanks[deck.Ace] = true
+			} else {
+				lockedWildRanks[rank] = true
+			}
+		}
+	}
+
+	// Merge locked wilds into filled ranks
+	for r := range lockedWildRanks {
+		filledRanks[r] = true
+	}
+
+	// Find the best straight
+	// Check all possible starting points for a straight of `size`
+	bestHigh := 0
+
+	// For ace-low, check 1-5, for ace-high check 10-14, etc.
+	minStart := 2
+	maxStart := deck.Ace - size + 1
+	if aceValue == deck.LowAce {
+		minStart = deck.LowAce
+		maxStart = 5 - size + 1 // Only check A-2-3-4-5 type straights
+	}
+
+	for start := maxStart; start >= minStart; start-- {
+		needed := 0
+
+		for i := 0; i < size; i++ {
+			rank := start + i
+			if !filledRanks[rank] {
+				needed++
+			}
+		}
+
+		if needed <= flexibleWildCount {
+			high := start + size - 1
+			if high > bestHigh {
+				bestHigh = high
+			}
+			break // Since we're going from high to low, first success is best
+		}
+	}
+
+	return bestHigh
+}
