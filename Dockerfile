@@ -5,12 +5,12 @@ RUN go mod download
 COPY ./cmd/ ./cmd/
 COPY ./internal/ ./internal/
 COPY ./pkg/ ./pkg/
-ARG version
+ARG VERSION
 RUN CGO_ENABLED=0 \
     GOOS=linux \
     go build \
         -o server \
-        -ldflags "-X main.Version=$version" \
+        -ldflags "-X main.Version=$VERSION" \
         ./cmd/server
 
 FROM alpine:latest
