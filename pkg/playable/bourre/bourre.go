@@ -574,6 +574,7 @@ func (g *Game) buildResults() error {
 
 	g.result = &Result{
 		Parent:        g.parentResult,
+		Options:       g.options,
 		PaidAnte:      payAnte,
 		PaidPot:       payPot,
 		Winners:       winners,
