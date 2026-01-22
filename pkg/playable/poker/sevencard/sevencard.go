@@ -330,30 +330,88 @@ func (g *Game) endGame() {
 		}
 	}
 
-	// Calculate winnings per winner
-	winAmount := g.pot / len(winnerList)
 	g.winners = make(map[*participant]int)
 
+	// Check if this is a split pot variant
+	splitPotVariant, isSplitPot := g.options.Variant.(SplitPotVariant)
+	var splitWinners []*participant
+	var splitCard *deck.Card
+	var splitDescription string
+
+	if isSplitPot {
+		splitWinners, splitCard, splitDescription = splitPotVariant.GetSplitPotWinners(g)
+	}
+
+	// Calculate pot amounts
+	handPot := g.pot
+	splitPot := 0
+
+	if isSplitPot && len(splitWinners) > 0 {
+		// Split pot in half
+		splitPot = g.pot / 2
+		handPot = g.pot - splitPot
+	}
+
+	// Track hand and split winnings separately for logging
+	handWinnings := make(map[*participant]int)
+	splitWinnings := make(map[*participant]int)
+
+	// Award hand winner(s)
+	winAmount := handPot / len(winnerList)
 	for _, winner := range winnerList {
 		winner.didWin = true
 		winner.balance += winAmount
 		g.winners[winner] = winAmount
+		handWinnings[winner] = winAmount
 	}
 
-	// Handle remainder
-	if remainder := g.pot % len(winnerList); remainder > 0 {
+	// Handle remainder for hand pot
+	if remainder := handPot % len(winnerList); remainder > 0 {
 		winnerList[0].balance += remainder
 		g.winners[winnerList[0]] += remainder
+		handWinnings[winnerList[0]] += remainder
 	}
 
-	g.sendEndOfGameLogMessages()
+	// Award split pot winner(s)
+	if len(splitWinners) > 0 {
+		splitWinAmount := splitPot / len(splitWinners)
+		for _, winner := range splitWinners {
+			winner.didWin = true
+			winner.balance += splitWinAmount
+			g.winners[winner] += splitWinAmount
+			splitWinnings[winner] = splitWinAmount
+		}
+
+		// Handle remainder for split pot
+		if remainder := splitPot % len(splitWinners); remainder > 0 {
+			splitWinners[0].balance += remainder
+			g.winners[splitWinners[0]] += remainder
+			splitWinnings[splitWinners[0]] += remainder
+		}
+	}
+
+	g.sendEndOfGameLogMessages(handWinnings, splitWinnings, splitCard, splitDescription)
 }
 
-func (g *Game) sendEndOfGameLogMessages() {
+func (g *Game) sendEndOfGameLogMessages(handWinnings, splitWinnings map[*participant]int, splitCard *deck.Card, splitDescription string) {
 	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
-	for winner, amount := range g.winners {
+
+	// Log hand winners
+	for winner, amount := range handWinnings {
 		hand := winner.getHandAnalyzer().GetHand().String()
 		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, amount))
+	}
+
+	// Log split pot winners (with card in the log message)
+	for winner, amount := range splitWinnings {
+		lms = append(lms, playable.SimpleLogMessageWithCard(
+			winner.PlayerID,
+			splitCard,
+			"{} won ${%d} with %s (%s)",
+			amount,
+			splitDescription,
+			splitCard.String(),
+		))
 	}
 
 	for _, playerID := range g.playerIDs {
