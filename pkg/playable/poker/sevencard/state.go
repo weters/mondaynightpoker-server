@@ -18,6 +18,7 @@ type GameState struct {
 	MaxBet       int                `json:"maxBet"`
 	LastAction   *lastAction        `json:"lastAction"`
 	Winners      map[int64]int      `json:"winners"`
+	VariantState interface{}        `json:"variantState,omitempty"`
 }
 
 func (g *Game) getGameState() GameState {
@@ -43,18 +44,23 @@ func (g *Game) getGameState() GameState {
 		var hand deck.Hand
 		var handRank string
 		if !p.didFold {
-			hand = make(deck.Hand, len(p.hand))
-			for i, card := range p.hand {
+			hand = make(deck.Hand, 0, len(p.hand))
+			for _, card := range p.hand {
+				// Skip discarded cards (e.g., used antidotes, flipped mushrooms)
+				if card.IsBitSet(wasDiscarded) {
+					continue
+				}
 				if isGameOver || card.IsBitSet(faceUp) {
-					hand[i] = card.Clone()
+					clonedCard := card.Clone()
 
 					// if it's a private wild (i.e., based on a low-card in the hole),
 					// then we don't want to show it to all players
 					if !isGameOver && card.IsBitSet(privateWild) {
-						hand[i].IsWild = false
+						clonedCard.IsWild = false
 					}
+					hand = append(hand, clonedCard)
 				} else {
-					hand[i] = nil
+					hand = append(hand, nil)
 				}
 			}
 
@@ -73,6 +79,11 @@ func (g *Game) getGameState() GameState {
 		}
 	}
 
+	var variantState interface{}
+	if iv, ok := g.options.Variant.(InteractiveVariant); ok {
+		variantState = iv.GetVariantState()
+	}
+
 	gs := GameState{
 		Name:         g.Name(),
 		Participants: participants,
@@ -85,6 +96,7 @@ func (g *Game) getGameState() GameState {
 		MaxBet:       g.getMaxBet(),
 		LastAction:   g.lastAction,
 		Winners:      winners,
+		VariantState: variantState,
 	}
 
 	return gs
@@ -104,17 +116,31 @@ func (g *Game) getPlayerStateByPlayerID(playerID int64) PlayerState {
 	var actions []Action
 	var futureActions []Action
 	if p, ok := g.idToParticipant[playerID]; ok {
+		// Filter out discarded cards (e.g., used antidotes, flipped mushrooms)
+		filteredHand := make(deck.Hand, 0, len(p.hand))
+		for _, card := range p.hand {
+			if !card.IsBitSet(wasDiscarded) {
+				filteredHand = append(filteredHand, card)
+			}
+		}
+
 		pJSON = &participantJSON{
 			PlayerID:   p.PlayerID,
 			DidFold:    p.didFold,
 			Balance:    p.Balance(),
 			CurrentBet: p.currentBet,
-			Hand:       p.hand,
+			Hand:       filteredHand,
 			HandRank:   p.getHandAnalyzer().GetHand().String(),
 		}
 
 		actions = g.getActionsForParticipant(p)
 		futureActions = g.getFutureActionsForParticipant(p)
+
+		// Add variant-specific actions
+		if iv, ok := g.options.Variant.(InteractiveVariant); ok {
+			variantActions := iv.GetVariantActions(g, p)
+			actions = append(actions, variantActions...)
+		}
 	}
 
 	return PlayerState{

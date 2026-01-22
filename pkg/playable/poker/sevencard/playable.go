@@ -12,14 +12,29 @@ func (g *Game) Name() string {
 
 // Action performs a game action on behalf of the player
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
-	action, err := ActionFromString(message.Action)
-	if err != nil {
-		return nil, false, err
-	}
-
 	p, ok := g.idToParticipant[playerID]
 	if !ok {
 		return nil, false, errors.New("you are not in the game")
+	}
+
+	// Check for variant-specific actions first
+	if iv, ok := g.options.Variant.(InteractiveVariant); ok {
+		handled, err := iv.HandleVariantAction(g, p, Action(message.Action))
+		if err != nil {
+			return nil, false, err
+		}
+		if handled {
+			if len(g.pendingLogs) > 0 {
+				g.logChan <- g.pendingLogs
+				g.pendingLogs = make([]*playable.LogMessage, 0)
+			}
+			return playable.OK(), true, nil
+		}
+	}
+
+	action, err := ActionFromString(message.Action)
+	if err != nil {
+		return nil, false, err
 	}
 
 	switch action {

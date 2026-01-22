@@ -29,12 +29,20 @@ const (
 	ActionCall  Action = "call"
 )
 
+// Variant-specific action constants
+const (
+	ActionFlipMushroom Action = "flip-mushroom"
+	ActionPlayAntidote Action = "play-antidote"
+)
+
 var allowedActions = map[Action]bool{
-	ActionFold:  true,
-	ActionCheck: true,
-	ActionBet:   true,
-	ActionRaise: true,
-	ActionCall:  true,
+	ActionFold:         true,
+	ActionCheck:        true,
+	ActionBet:          true,
+	ActionRaise:        true,
+	ActionCall:         true,
+	ActionFlipMushroom: true,
+	ActionPlayAntidote: true,
 }
 
 func (a Action) String() string {
@@ -42,8 +50,15 @@ func (a Action) String() string {
 		panic(fmt.Sprintf("unknown action: %s", string(a)))
 	}
 
-	raw := []rune(a)
-	return strings.ToTitle(string(raw[0])) + string(raw[1:])
+	// Handle hyphenated actions (e.g., "flip-mushroom" -> "Flip Mushroom")
+	parts := strings.Split(string(a), "-")
+	for i, part := range parts {
+		if len(part) > 0 {
+			raw := []rune(part)
+			parts[i] = strings.ToTitle(string(raw[0])) + string(raw[1:])
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // ActionFromString returns an action from a string
@@ -58,6 +73,13 @@ func ActionFromString(a string) (Action, error) {
 }
 
 func (g *Game) getActionsForParticipant(p *participant) []Action {
+	// Don't show betting actions if variant phase is pending
+	if iv, ok := g.options.Variant.(InteractiveVariant); ok {
+		if iv.IsVariantPhasePending() {
+			return make([]Action, 0)
+		}
+	}
+
 	actions := make([]Action, 0)
 	if g.getCurrentTurn() == p {
 		if g.currentBet == 0 {
@@ -71,6 +93,13 @@ func (g *Game) getActionsForParticipant(p *participant) []Action {
 }
 
 func (g *Game) getFutureActionsForParticipant(p *participant) []Action {
+	// Don't show future betting actions if variant phase is pending
+	if iv, ok := g.options.Variant.(InteractiveVariant); ok {
+		if iv.IsVariantPhasePending() {
+			return make([]Action, 0)
+		}
+	}
+
 	actions := make([]Action, 0)
 	if g.getCurrentTurn() != p && !p.didFold {
 		if g.currentBet == 0 {

@@ -83,3 +83,42 @@ func TestGame_getGameState_withPrivateWilds(t *testing.T) {
 	gs = game.getGameState()
 	a.Equal("!2c,3c,!2d,!5c,6d,8h,9s", gs.Participants[0].Hand.String())
 }
+
+func TestGame_getGameState_filtersDiscardedCards(t *testing.T) {
+	a := assert.New(t)
+
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
+	a.NoError(game.Start())
+
+	p := createParticipantGetter(game)
+	p(1).hand = deck.CardsFromString("2c,3c,4c,5c,6c")
+	for i := range p(1).hand {
+		p(1).hand[i].SetBit(faceUp)
+	}
+
+	// Mark one card as discarded
+	p(1).hand[2].SetBit(wasDiscarded)
+
+	gs := game.getGameState()
+	// Should only have 4 cards, not 5
+	a.Len(gs.Participants[0].Hand, 4, "discarded card should be filtered out")
+	a.Equal("2c,3c,5c,6c", gs.Participants[0].Hand.String())
+}
+
+func TestGame_getPlayerStateByPlayerID_filtersDiscardedCards(t *testing.T) {
+	a := assert.New(t)
+
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
+	a.NoError(game.Start())
+
+	p := createParticipantGetter(game)
+	p(1).hand = deck.CardsFromString("2c,3c,4c,5c,6c")
+
+	// Mark one card as discarded
+	p(1).hand[2].SetBit(wasDiscarded)
+
+	playerState := game.getPlayerStateByPlayerID(1)
+	// Should only have 4 cards in player's own view
+	a.Len(playerState.Participant.Hand, 4, "discarded card should be filtered out")
+	a.Equal("2c,3c,5c,6c", playerState.Participant.Hand.String())
+}

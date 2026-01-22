@@ -40,9 +40,18 @@ func (p *participant) resetForNewRound() {
 }
 
 func (p *participant) getHandAnalyzer() *handanalyzer.HandAnalyzer {
-	key := p.hand.String()
+	// Filter out discarded cards (e.g., used antidotes, flipped mushrooms)
+	filteredHand := make(deck.Hand, 0, len(p.hand))
+	for _, card := range p.hand {
+		if !card.IsBitSet(wasDiscarded) {
+			filteredHand = append(filteredHand, card)
+		}
+	}
+
+	key := filteredHand.String()
 	if p.handAnalyzerCacheKey != key {
-		p.handAnalyzer = handanalyzer.New(5, p.hand)
+		p.handAnalyzer = handanalyzer.New(5, filteredHand)
+		p.handAnalyzerCacheKey = key
 	}
 
 	return p.handAnalyzer

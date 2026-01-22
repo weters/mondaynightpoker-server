@@ -102,6 +102,11 @@ func (g *Game) bet(p *participant, betType string, amount, minAmount int) error 
 	p.balance -= diff
 	p.currentBet = amount
 
+	// Notify variant that a bet was placed
+	if bav, ok := g.options.Variant.(BetAwareVariant); ok {
+		bav.OnBetPlaced(g)
+	}
+
 	g.setDecisionIndexToCurrentTurn()
 	g.advanceDecision()
 	return nil

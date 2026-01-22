@@ -1,3 +1,4 @@
 /.keys
 /scratch.go
 /config.yaml
+/pkg/deck/deck_debug.go

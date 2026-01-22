@@ -19,7 +19,8 @@
       "Bash(xargs cat:*)",
       "Bash(go mod tidy:*)",
       "Bash(go get:*)",
-      "Bash(go fmt:*)"
+      "Bash(go fmt:*)",
+      "Bash(npm run lint:*)"
     ]
   }
 }

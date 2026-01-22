@@ -3,12 +3,13 @@ package sevencard
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 const maxParticipants = 7

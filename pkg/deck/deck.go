@@ -5,10 +5,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
-	"github.com/sirupsen/logrus"
 	"math/rand"
 	"mondaynightpoker-server/internal/rng"
 	"runtime/debug"
+
+	"github.com/sirupsen/logrus"
 )
 
 type deckType int
