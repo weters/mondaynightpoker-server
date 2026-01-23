@@ -14,6 +14,7 @@ var factories = map[string]GameFactory{
 	"little-l":      littleLFactory{},
 	"acey-deucey":   aceyDeuceyFactory{},
 	"texas-hold-em": texasHoldEmFactory{},
+	"guts":          gutsFactory{},
 }
 
 // GameFactory is a factory for creating games that implement the Playable interface

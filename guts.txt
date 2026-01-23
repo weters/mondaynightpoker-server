@@ -1,0 +1,15 @@
+I am adding a new game type called Guts (specifically 2-card Guts) to my poker platform, mondaynight.bid. I need help designing the game logic and state management.
+
+The Deal: Each player is dealt 2 cards face down. There are no community cards.
+
+The Declaration Phase: Players must declare if they are "In" or "Out." Other players must not see what the players have decided until everyone has made their choice.
+
+The Showdown: > * If no one goes "In," the dealer button moves, and everyone re-antes for a new hand.
+
+If only one person goes "In," they take the current pot.
+
+If two or more people go "In," the best 2-card hand wins the pot.
+
+The Penalty (The "Guts" Mechanic): Any player who went "In" but lost must pay an amount equal to the current pot into the pot for the next round. The max pot limit must be configurable. The default is $10. When selecting the game, you can set this in whole dollar increments between $5 and $25
+
+Winning Condition: The game continues until the pot is empty (i.e., only one person goes "In" and wins, or everyone else folds).
