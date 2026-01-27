@@ -20,7 +20,8 @@
       "Bash(go mod tidy:*)",
       "Bash(go get:*)",
       "Bash(go fmt:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Bash(ls:*)"
     ]
   }
 }

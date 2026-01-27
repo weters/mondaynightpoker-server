@@ -78,6 +78,8 @@ func (s sevenCardFactory) getOptions(additionalData playable.AdditionalData) (se
 			opts.Variant = &sevencard.HighChicago{}
 		case "chiggs":
 			opts.Variant = &sevencard.Chiggs{}
+		case "coupons-and-clippings":
+			opts.Variant = &sevencard.CouponsAndClippings{}
 		default:
 			return sevencard.Options{}, fmt.Errorf("unknown seven-card variant: %s", variant)
 		}
