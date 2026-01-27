@@ -258,12 +258,8 @@ func (g *Game) submitDecision(playerID int64, goIn bool) error {
 	g.decisions[playerID] = goIn
 	delete(g.pendingDecisions, playerID)
 
-	// Log the decision (hidden from others until all decide)
-	decision := "Out"
-	if goIn {
-		decision = "In"
-	}
-	g.sendLogMessages(newLogMessage(playerID, "{} has decided: %s", decision))
+	// Log that player has decided (without revealing the decision)
+	g.sendLogMessages(newLogMessage(playerID, "{} has decided"))
 
 	// Only reveal when ALL have decided
 	if len(g.pendingDecisions) == 0 {
@@ -279,6 +275,15 @@ func (g *Game) submitDecision(playerID int64, goIn bool) error {
 // calculateShowdown determines winners and losers
 func (g *Game) calculateShowdown() {
 	g.phase = PhaseShowdown
+
+	// Reveal all decisions now that everyone has decided
+	for _, p := range g.participants {
+		decision := "Out"
+		if g.decisions[p.PlayerID] {
+			decision = "In"
+		}
+		g.sendLogMessages(newLogMessage(p.PlayerID, "{} was %s", decision))
+	}
 
 	// Find players who went in
 	playersIn := make([]*Participant, 0)
