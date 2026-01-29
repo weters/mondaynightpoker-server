@@ -1,39 +1,35 @@
 package sevencard
 
 import (
+	"fmt"
+
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 )
 
-// CouponsAndClippings is a seven-card variant themed around couponing and nail clippings
-// 3s are wild (coupons) unless 10♠ is dealt face-up (expired)
-// 2s become wild (meal comp'd) after 10♦ is dealt face-up (nail clippings)
+// CouponsAndClippings is a seven-card variant with BOGO wild mechanics and nail clipping refunds
+// - No wilds to start
+// - BOGO: When a second face-up card of the same rank appears, ALL cards of that rank become wild
+// - New BOGO triggers remove wild status from the previous wild rank (only one wild rank at a time)
+// - Nail Clipping: Any face-up 10 refunds the player's ante from the pot
 type CouponsAndClippings struct {
-	// couponsExpired is true after 10♠ is dealt face-up
-	couponsExpired bool
-	// mealComped is true after 10♦ is dealt face-up
-	mealComped bool
-
-	// Track ALL players who triggered splash events in current deal round
-	// Arrays are used because multiple players can receive splash-worthy cards
-	// (e.g., multiple 3s can be dealt face-up in the same round)
-	couponPlayerIDs       []int64 // Players who got face-up 3s (before expiration)
-	mealCompPlayerIDs     []int64 // Players who got face-up 2s (after meal comp)
-	expiredPlayerID       int64   // Only one 10♠ can trigger this
-	nailClippingsPlayerID int64   // Only one 10♦ can trigger this
-
-	// Track which round we last dealt cards in (to know when to reset arrays)
+	// faceUpRankCounts tracks how many face-up cards of each rank have been dealt
+	faceUpRankCounts map[int]int
+	// currentWildRank is the rank that is currently wild (0 if none)
+	currentWildRank int
+	// bogoPlayerID is the player who triggered the latest BOGO
+	bogoPlayerID int64
+	// nailClippingPlayerIDs are players who got ante refunds this round
+	nailClippingPlayerIDs []int64
+	// lastDealRound tracks which round we last dealt cards in (to know when to reset splash arrays)
 	lastDealRound round
 }
 
 // CouponsAndClippingsState is the variant state sent to clients
 type CouponsAndClippingsState struct {
-	CouponsExpired        bool    `json:"couponsExpired"`
-	MealComped            bool    `json:"mealComped"`
-	CouponPlayerIDs       []int64 `json:"couponPlayerIds,omitempty"`
-	MealCompPlayerIDs     []int64 `json:"mealCompPlayerIds,omitempty"`
-	ExpiredPlayerID       int64   `json:"expiredPlayerId,omitempty"`
-	NailClippingsPlayerID int64   `json:"nailClippingsPlayerId,omitempty"`
+	CurrentWildRank       int     `json:"currentWildRank"`
+	BogoPlayerID          int64   `json:"bogoPlayerId,omitempty"`
+	NailClippingPlayerIDs []int64 `json:"nailClippingPlayerIds,omitempty"`
 }
 
 // Name returns "Coupons and Clippings"
@@ -43,94 +39,89 @@ func (c *CouponsAndClippings) Name() string {
 
 // Start resets all variant state
 func (c *CouponsAndClippings) Start() {
-	c.couponsExpired = false
-	c.mealComped = false
-	c.couponPlayerIDs = nil
-	c.mealCompPlayerIDs = nil
-	c.expiredPlayerID = 0
-	c.nailClippingsPlayerID = 0
+	c.faceUpRankCounts = make(map[int]int)
+	c.currentWildRank = 0
+	c.bogoPlayerID = 0
+	c.nailClippingPlayerIDs = nil
 	c.lastDealRound = 0
 }
 
 // ParticipantReceivedCard is called after a participant receives a card
-// Sets wilds and triggers special events
+// Handles BOGO wild triggers and nail clipping ante refunds
 func (c *CouponsAndClippings) ParticipantReceivedCard(game *Game, p *participant, card *deck.Card) {
 	// Reset splash state when entering a new deal round
-	// This ensures all players who receive splash-worthy cards in the same round
-	// are tracked (fixing the bug where only the last player's splash showed)
 	if game.round != c.lastDealRound {
 		c.lastDealRound = game.round
-		c.couponPlayerIDs = nil
-		c.mealCompPlayerIDs = nil
-		c.expiredPlayerID = 0
-		c.nailClippingsPlayerID = 0
+		c.bogoPlayerID = 0
+		c.nailClippingPlayerIDs = nil
 	}
 
-	// 10♠ face-up = Coupons Expired
-	if card.Rank == 10 && card.Suit == deck.Spades && card.IsBitSet(faceUp) {
-		c.expireCoupons(game)
-		c.expiredPlayerID = p.PlayerID
-		game.logChan <- playable.SimpleLogMessageSlice(0, "The 10 of Spades was dealt! All coupons (3s) have expired!")
-		return
-	}
-
-	// 10♦ face-up = Nail Clippings (meal comp)
-	if card.Rank == 10 && card.Suit == deck.Diamonds && card.IsBitSet(faceUp) {
-		c.activateMealComp(game)
-		c.nailClippingsPlayerID = p.PlayerID
-		game.logChan <- playable.SimpleLogMessageSlice(0, "Nail clippings found! All 2s are now wild!")
-		return
-	}
-
-	// 3s are wild (if not expired)
-	if card.Rank == 3 {
-		if !c.couponsExpired {
+	// Handle face-down cards: just check if they match current wild rank
+	if !card.IsBitSet(faceUp) {
+		if c.currentWildRank > 0 && card.Rank == c.currentWildRank {
 			card.IsWild = true
-			if card.IsBitSet(faceUp) {
-				c.couponPlayerIDs = append(c.couponPlayerIDs, p.PlayerID)
-			}
 		}
 		return
 	}
 
-	// 2s are wild (if meal comped)
-	if card.Rank == 2 {
-		if c.mealComped {
-			card.IsWild = true
-			if card.IsBitSet(faceUp) {
-				c.mealCompPlayerIDs = append(c.mealCompPlayerIDs, p.PlayerID)
-			}
-		}
+	// Face-up card processing
+
+	// Handle nail clipping (face-up 10 refunds ante)
+	if card.Rank == 10 {
+		c.handleNailClipping(game, p)
+	}
+
+	// Increment face-up rank count
+	c.faceUpRankCounts[card.Rank]++
+	count := c.faceUpRankCounts[card.Rank]
+
+	// Check for BOGO trigger (second face-up card of same rank)
+	if count == 2 {
+		c.triggerBogo(game, card.Rank, p)
 		return
+	}
+
+	// If card matches current wild rank, make it wild
+	if c.currentWildRank > 0 && card.Rank == c.currentWildRank {
+		card.IsWild = true
 	}
 }
 
-// expireCoupons removes wild status from all 3s
-func (c *CouponsAndClippings) expireCoupons(game *Game) {
-	c.couponsExpired = true
+// handleNailClipping refunds the player's ante from the pot if sufficient balance
+func (c *CouponsAndClippings) handleNailClipping(game *Game, p *participant) {
+	ante := game.options.Ante
+	if game.pot >= ante {
+		game.pot -= ante
+		p.balance += ante
+		c.nailClippingPlayerIDs = append(c.nailClippingPlayerIDs, p.PlayerID)
+		game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} found a nail clipping! Ante refunded.")
+	} else {
+		game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} found a nail clipping but the pot is too small for a refund.")
+	}
+}
 
-	// Remove wild status from all 3s in all hands
+// triggerBogo triggers a BOGO event, making all cards of the given rank wild
+// and removing wild status from the previous wild rank
+func (c *CouponsAndClippings) triggerBogo(game *Game, rank int, p *participant) {
+	previousWildRank := c.currentWildRank
+	c.currentWildRank = rank
+	c.bogoPlayerID = p.PlayerID
+
+	// Iterate all players' hands and update wild status
 	for _, participant := range game.idToParticipant {
 		for _, card := range participant.hand {
-			if card.Rank == 3 {
+			// Remove wild from previous rank
+			if previousWildRank > 0 && card.Rank == previousWildRank {
 				card.IsWild = false
 			}
-		}
-	}
-}
-
-// activateMealComp makes all 2s wild
-func (c *CouponsAndClippings) activateMealComp(game *Game) {
-	c.mealComped = true
-
-	// Make all 2s wild in all hands
-	for _, participant := range game.idToParticipant {
-		for _, card := range participant.hand {
-			if card.Rank == 2 {
+			// Add wild to new rank
+			if card.Rank == rank {
 				card.IsWild = true
 			}
 		}
 	}
+
+	game.logChan <- playable.SimpleLogMessageSlice(0, "BOGO! All %ss are now wild!", rankName(rank))
 }
 
 // GetVariantActions returns additional actions for the player (CouponsAndClippings has none)
@@ -155,11 +146,24 @@ func (c *CouponsAndClippings) IsVariantPhasePending() bool {
 // GetVariantState returns the variant state for clients
 func (c *CouponsAndClippings) GetVariantState() interface{} {
 	return &CouponsAndClippingsState{
-		CouponsExpired:        c.couponsExpired,
-		MealComped:            c.mealComped,
-		CouponPlayerIDs:       c.couponPlayerIDs,
-		MealCompPlayerIDs:     c.mealCompPlayerIDs,
-		ExpiredPlayerID:       c.expiredPlayerID,
-		NailClippingsPlayerID: c.nailClippingsPlayerID,
+		CurrentWildRank:       c.currentWildRank,
+		BogoPlayerID:          c.bogoPlayerID,
+		NailClippingPlayerIDs: c.nailClippingPlayerIDs,
+	}
+}
+
+// rankName converts a rank integer to a display name
+func rankName(rank int) string {
+	switch rank {
+	case deck.Jack:
+		return "Jack"
+	case deck.Queen:
+		return "Queen"
+	case deck.King:
+		return "King"
+	case deck.Ace:
+		return "Ace"
+	default:
+		return fmt.Sprintf("%d", rank)
 	}
 }
