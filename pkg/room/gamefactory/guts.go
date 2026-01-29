@@ -48,5 +48,9 @@ func getGutsOptions(additionalData playable.AdditionalData) guts.Options {
 		}
 	}
 
+	if bloodyGuts, ok := additionalData.GetBool("bloodyGuts"); ok {
+		opts.BloodyGuts = bloodyGuts
+	}
+
 	return opts
 }

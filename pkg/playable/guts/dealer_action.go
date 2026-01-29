@@ -7,6 +7,8 @@ type dealerAction int
 
 const (
 	dealerActionShowdown dealerAction = iota
+	dealerActionRevealDeckCard
+	dealerActionResolveBloodyGuts
 	dealerActionNextRound
 	dealerActionEndGame
 )

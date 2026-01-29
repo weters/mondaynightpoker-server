@@ -15,11 +15,18 @@ type GameState struct {
 	MaxOwed      int                     `json:"maxOwed"`
 	Ante         int                     `json:"ante"`
 	CardCount    int                     `json:"cardCount"`
+	BloodyGuts   bool                    `json:"bloodyGuts"`
 	IsGameOver   bool                    `json:"isGameOver"`
 	// Decisions is only populated during/after showdown
 	Decisions map[int64]bool `json:"decisions,omitempty"`
 	// ShowdownResult is only populated after showdown
 	ShowdownResult *ShowdownResultState `json:"showdownResult,omitempty"`
+	// DeckHand is shown when Bloody Guts is triggered (only revealed cards)
+	DeckHand []*deck.Card `json:"deckHand,omitempty"`
+	// DeckCardsRevealed is the number of deck cards revealed so far
+	DeckCardsRevealed int `json:"deckCardsRevealed"`
+	// DeckCardsTotal is the total number of deck cards (only set during reveal)
+	DeckCardsTotal int `json:"deckCardsTotal,omitempty"`
 }
 
 // GameStateParticipant is the state of an individual participant
@@ -36,13 +43,15 @@ type GameStateParticipant struct {
 
 // ShowdownResultState is the showdown result for the state
 type ShowdownResultState struct {
-	WinnerIDs    []int64 `json:"winnerIds"`
-	LoserIDs     []int64 `json:"loserIds"`
-	PlayersInIDs []int64 `json:"playersInIds"`
-	PotWon       int     `json:"potWon"`
-	PenaltyPaid  int     `json:"penaltyPaid"`
-	NextPot      int     `json:"nextPot"`
-	AllFolded    bool    `json:"allFolded"`
+	WinnerIDs    []int64      `json:"winnerIds"`
+	LoserIDs     []int64      `json:"loserIds"`
+	PlayersInIDs []int64      `json:"playersInIds"`
+	PotWon       int          `json:"potWon"`
+	PenaltyPaid  int          `json:"penaltyPaid"`
+	NextPot      int          `json:"nextPot"`
+	AllFolded    bool         `json:"allFolded"`
+	DeckHand     []*deck.Card `json:"deckHand,omitempty"`
+	DeckWon      bool         `json:"deckWon,omitempty"`
 }
 
 // Response is the response format for this game
@@ -95,15 +104,29 @@ func (g *Game) getGameState() *GameState {
 		participants[i] = gsp
 	}
 
+	// Only include revealed deck cards
+	var revealedDeckHand []*deck.Card
+	var deckCardsTotal int
+	if g.deckHand != nil {
+		deckCardsTotal = len(g.deckHand)
+		if g.deckCardsRevealed > 0 {
+			revealedDeckHand = g.deckHand[:g.deckCardsRevealed]
+		}
+	}
+
 	state := &GameState{
-		Participants: participants,
-		Pot:          g.pot,
-		Round:        g.roundNumber,
-		Phase:        g.phaseName(),
-		MaxOwed:      g.options.MaxOwed,
-		Ante:         g.options.Ante,
-		CardCount:    g.options.CardCount,
-		IsGameOver:   g.phase == PhaseGameOver,
+		Participants:      participants,
+		Pot:               g.pot,
+		Round:             g.roundNumber,
+		Phase:             g.phaseName(),
+		MaxOwed:           g.options.MaxOwed,
+		Ante:              g.options.Ante,
+		CardCount:         g.options.CardCount,
+		BloodyGuts:        g.options.BloodyGuts,
+		IsGameOver:        g.phase == PhaseGameOver,
+		DeckHand:          revealedDeckHand,
+		DeckCardsRevealed: g.deckCardsRevealed,
+		DeckCardsTotal:    deckCardsTotal,
 	}
 
 	// Only show decisions after all have decided
@@ -118,6 +141,8 @@ func (g *Game) getGameState() *GameState {
 			PenaltyPaid: g.showdownResult.PenaltyPaid,
 			NextPot:     g.showdownResult.NextPot,
 			AllFolded:   g.showdownResult.AllFolded,
+			DeckHand:    g.showdownResult.DeckHand,
+			DeckWon:     g.showdownResult.DeckWon,
 		}
 
 		winnerIDs := make([]int64, len(g.showdownResult.Winners))

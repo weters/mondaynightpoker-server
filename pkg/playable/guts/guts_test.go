@@ -581,3 +581,543 @@ func setupTestGame(t *testing.T, hands []string) *Game {
 
 	return g
 }
+
+// Helper function to set up a Bloody Guts test game with specific hands and deck
+func setupBloodyGutsTestGameWithCardCount(t *testing.T, hands []string, deckCards string, cardCount int) *Game {
+	t.Helper()
+
+	playerIDs := make([]int64, len(hands))
+	for i := range hands {
+		playerIDs[i] = int64(i + 1)
+	}
+
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: cardCount, BloodyGuts: true}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	// Set up specific hands
+	for i, handStr := range hands {
+		cards := deck.CardsFromString(handStr)
+		g.participants[i].hand = cards
+	}
+
+	// Set up deck so the first cards drawn match what we want
+	deckCardsList := deck.CardsFromString(deckCards)
+	g.deck = deck.New()
+	g.deck.Cards = append(deckCardsList, g.deck.Cards...)
+
+	// Set up for declaration phase
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = make(map[int64]bool)
+	g.decisions = make(map[int64]bool)
+	for _, p := range g.participants {
+		g.pendingDecisions[p.PlayerID] = true
+	}
+
+	return g
+}
+
+func setupBloodyGutsTestGame(t *testing.T, hands []string, deckCards string) *Game {
+	return setupBloodyGutsTestGameWithCardCount(t, hands, deckCards, 2)
+}
+
+func setupBloodyGutsTestGame3Card(t *testing.T, hands []string, deckCards string) *Game {
+	return setupBloodyGutsTestGameWithCardCount(t, hands, deckCards, 3)
+}
+
+// runBloodyGutsRevealSequence runs through the entire Bloody Guts reveal sequence
+// This should be called after calculateShowdown() when testing Bloody Guts with one player in
+func runBloodyGutsRevealSequence(t *testing.T, g *Game) {
+	t.Helper()
+
+	// Execute all pending actions until we get past resolution
+	for g.pendingDealerAction != nil {
+		action := g.pendingDealerAction.Action
+		g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+		_, err := g.Tick()
+		assert.NoError(t, err)
+
+		// Stop after we've resolved (next action will be next round or end game)
+		if action == dealerActionResolveBloodyGuts {
+			break
+		}
+	}
+}
+
+func TestBloodyGuts_PlayerBeatsDeck(t *testing.T) {
+	// Player has Ace-King, deck has Queen-Jack
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "12h,11h")
+	initialPot := g.pot
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.NotNil(t, g.showdownResult)
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+	assert.False(t, g.showdownResult.DeckWon)
+	assert.NotNil(t, g.showdownResult.DeckHand)
+	assert.Len(t, g.showdownResult.DeckHand, 2)
+
+	// Winner should have received the pot
+	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance)
+
+	// Game should end
+	assert.Equal(t, PhaseGameOver, g.phase)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+}
+
+func TestBloodyGuts_DeckBeatsPlayer(t *testing.T) {
+	// Player has Queen-Jack, deck has Ace-King
+	g := setupBloodyGutsTestGame(t, []string{"12c,11c", "10d,9d"}, "14h,13h")
+	initialPot := g.pot
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.NotNil(t, g.showdownResult)
+	assert.True(t, g.showdownResult.DeckWon)
+	assert.Empty(t, g.showdownResult.Winners)
+	assert.Len(t, g.showdownResult.Losers, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Losers[0].PlayerID)
+	assert.NotNil(t, g.showdownResult.DeckHand)
+
+	// Player pays penalty
+	penalty := initialPot // Penalty equals pot when below maxOwed
+	assert.Equal(t, -25-penalty, g.idToParticipant[1].balance)
+	assert.Equal(t, penalty, g.showdownResult.PenaltyPaid)
+	// In Bloody Guts, when deck wins, pot accumulates (original pot + penalty)
+	assert.Equal(t, initialPot+penalty, g.showdownResult.NextPot)
+	assert.Equal(t, initialPot+penalty, g.pot)
+
+	// Game continues to next round
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+}
+
+func TestBloodyGuts_DeckWinsOnTie(t *testing.T) {
+	// Player has Ace-King, deck has Ace-King (same strength)
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "14h,13h")
+	initialPot := g.pot
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.NotNil(t, g.showdownResult)
+	assert.True(t, g.showdownResult.DeckWon, "Deck should win on tie")
+	assert.Empty(t, g.showdownResult.Winners)
+	assert.Len(t, g.showdownResult.Losers, 1)
+
+	// Player pays penalty
+	penalty := initialPot
+	assert.Equal(t, -25-penalty, g.idToParticipant[1].balance)
+
+	// Game continues
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+}
+
+func TestBloodyGuts_MultiplePlayersIn(t *testing.T) {
+	// When multiple players go in, normal showdown occurs (no deck involved)
+	g := setupBloodyGutsTestGame(t, []string{"14c,14d", "13c,12d"}, "10h,9h")
+	initialPot := g.pot
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.calculateShowdown()
+
+	assert.NotNil(t, g.showdownResult)
+	// Player 1 wins with pair
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+	// Deck should not be involved
+	assert.Nil(t, g.showdownResult.DeckHand)
+	assert.False(t, g.showdownResult.DeckWon)
+	// Player 2 is a loser
+	assert.Len(t, g.showdownResult.Losers, 1)
+	assert.Equal(t, int64(2), g.showdownResult.Losers[0].PlayerID)
+	// Winner gets pot
+	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance)
+}
+
+func TestBloodyGuts_NoOneIn(t *testing.T) {
+	// When no one goes in, normal re-ante behavior
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "10h,9h")
+
+	// Both fold
+	_ = g.submitDecision(1, false)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+
+	assert.NotNil(t, g.showdownResult)
+	assert.True(t, g.showdownResult.AllFolded)
+	assert.Nil(t, g.showdownResult.DeckHand)
+	assert.False(t, g.showdownResult.DeckWon)
+
+	// Schedule next round for re-ante
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+}
+
+func TestBloodyGuts_3Card(t *testing.T) {
+	// Test 3-card Bloody Guts - player has straight, deck has high card
+	g := setupBloodyGutsTestGame3Card(t, []string{"12c,13d,14h", "5c,7d,9h"}, "14s,10s,5s")
+	initialPot := g.pot
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.NotNil(t, g.showdownResult)
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+	assert.False(t, g.showdownResult.DeckWon)
+	// Verify 3 cards were drawn
+	assert.Len(t, g.showdownResult.DeckHand, 3)
+	// Winner gets pot
+	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance)
+}
+
+func TestBloodyGuts_PenaltyCapped(t *testing.T) {
+	// Test that penalty is capped at MaxOwed when losing to deck
+	g := setupBloodyGutsTestGame(t, []string{"10c,9c", "8d,7d"}, "14h,13h")
+	g.pot = 2000            // Pot exceeds maxOwed
+	g.options.MaxOwed = 500 // Set low maxOwed
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.True(t, g.showdownResult.DeckWon)
+	assert.Equal(t, 500, g.showdownResult.PenaltyPaid, "Penalty should be capped at maxOwed")
+	// In Bloody Guts, pot accumulates: original pot (2000) + capped penalty (500)
+	assert.Equal(t, 2500, g.showdownResult.NextPot)
+	// Player balance: -25 ante - 500 penalty = -525
+	assert.Equal(t, -25-500, g.idToParticipant[1].balance)
+}
+
+func TestBloodyGuts_DeckHandCleared(t *testing.T) {
+	// Test that deckHand is cleared between rounds
+	g := setupBloodyGutsTestGame(t, []string{"10c,9c", "8d,7d"}, "14h,13h")
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	// Deck won, deckHand should be set
+	assert.NotNil(t, g.deckHand)
+	assert.Len(t, g.deckHand, 2)
+
+	// Simulate next round
+	g.pendingDealerAction = nil
+	err := g.nextRound()
+	assert.NoError(t, err)
+
+	// deckHand should be cleared
+	assert.Nil(t, g.deckHand)
+}
+
+func TestNameFromOptions_BloodyGuts(t *testing.T) {
+	// 2-card Bloody Guts
+	opts2Card := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, BloodyGuts: true}
+	assert.Equal(t, "Bloody 2-Card Guts", NameFromOptions(opts2Card))
+
+	// 3-card Bloody Guts
+	opts3Card := Options{Ante: 25, MaxOwed: 1000, CardCount: 3, BloodyGuts: true}
+	assert.Equal(t, "Bloody 3-Card Guts", NameFromOptions(opts3Card))
+
+	// Non-bloody versions still work
+	assert.Equal(t, "2-Card Guts", NameFromOptions(DefaultOptions()))
+	opts3CardNonBloody := Options{Ante: 25, MaxOwed: 1000, CardCount: 3, BloodyGuts: false}
+	assert.Equal(t, "3-Card Guts", NameFromOptions(opts3CardNonBloody))
+}
+
+func TestBloodyGuts_RevealSequence(t *testing.T) {
+	// Player has Ace-King, deck has Queen-Jack (player will win)
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "12h,11h")
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// After decisions, should schedule showdown
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	updated, err := g.Tick()
+	assert.NoError(t, err)
+	assert.True(t, updated)
+
+	// Should have drawn deck cards but not revealed any yet
+	assert.NotNil(t, g.deckHand)
+	assert.Len(t, g.deckHand, 2)
+	assert.Equal(t, 0, g.deckCardsRevealed)
+	assert.Equal(t, int64(1), g.bloodyGutsPlayer)
+
+	// Should schedule first card reveal
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+
+	// First reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	updated, err = g.Tick()
+	assert.NoError(t, err)
+	assert.True(t, updated)
+	assert.Equal(t, 1, g.deckCardsRevealed)
+
+	// Should schedule second card reveal
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+
+	// Second reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	updated, err = g.Tick()
+	assert.NoError(t, err)
+	assert.True(t, updated)
+	assert.Equal(t, 2, g.deckCardsRevealed)
+
+	// Should schedule resolution
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionResolveBloodyGuts, g.pendingDealerAction.Action)
+
+	// Winner should NOT be determined yet
+	assert.Nil(t, g.showdownResult.Winners)
+	assert.False(t, g.showdownResult.DeckWon)
+}
+
+func TestBloodyGuts_RevealTiming(t *testing.T) {
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "12h,11h")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// First reveal should be scheduled 2 seconds in the future
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.After(time.Now().Add(time.Second)))
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.Before(time.Now().Add(time.Second*3)))
+
+	// Execute first reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Second reveal should also be scheduled 2 seconds in the future
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.After(time.Now().Add(time.Second)))
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.Before(time.Now().Add(time.Second*3)))
+
+	// Execute second reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Resolution should be scheduled 1 second in the future
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionResolveBloodyGuts, g.pendingDealerAction.Action)
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.After(time.Now()))
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.Before(time.Now().Add(time.Second*2)))
+}
+
+func TestBloodyGuts_WinnerAfterLastCard(t *testing.T) {
+	// Player has Ace-King, deck has Queen-Jack (player wins)
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "12h,11h")
+	initialPot := g.pot
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Reveal cards
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // First card
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // Second card
+
+	// Winner should NOT be determined yet
+	assert.Empty(t, g.showdownResult.Winners)
+	assert.Equal(t, 0, g.showdownResult.PotWon)
+
+	// Execute resolution
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// NOW winner should be determined
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+	assert.False(t, g.showdownResult.DeckWon)
+	assert.Equal(t, initialPot, g.showdownResult.PotWon)
+	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance)
+	assert.Equal(t, PhaseGameOver, g.phase)
+}
+
+func TestBloodyGuts_NextRoundAfterResolve(t *testing.T) {
+	// Player has Queen-Jack, deck has Ace-King (deck wins)
+	g := setupBloodyGutsTestGame(t, []string{"12c,11c", "10d,9d"}, "14h,13h")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute through reveal sequence
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // Showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // First reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // Second reveal
+
+	// Before resolution, next round should NOT be scheduled
+	assert.Equal(t, dealerActionResolveBloodyGuts, g.pendingDealerAction.Action)
+
+	// Execute resolution
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Deck won, next round should be scheduled
+	assert.True(t, g.showdownResult.DeckWon)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+}
+
+func TestBloodyGuts_3Card_RevealSequence(t *testing.T) {
+	// 3-card game: player has straight, deck has high card
+	g := setupBloodyGutsTestGame3Card(t, []string{"12c,13d,14h", "5c,7d,9h"}, "14s,10s,5s")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	assert.Len(t, g.deckHand, 3)
+	assert.Equal(t, 0, g.deckCardsRevealed)
+
+	// First reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	assert.Equal(t, 1, g.deckCardsRevealed)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+
+	// Second reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	assert.Equal(t, 2, g.deckCardsRevealed)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+
+	// Third reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	assert.Equal(t, 3, g.deckCardsRevealed)
+	assert.Equal(t, dealerActionResolveBloodyGuts, g.pendingDealerAction.Action)
+
+	// Execute resolution
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player wins with straight
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+	assert.False(t, g.showdownResult.DeckWon)
+}
+
+func TestBloodyGuts_StateOnlyShowsRevealed(t *testing.T) {
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "12h,11h")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Before any reveals - state should show no cards
+	state := g.getGameState()
+	assert.Nil(t, state.DeckHand)
+	assert.Equal(t, 0, state.DeckCardsRevealed)
+	assert.Equal(t, 2, state.DeckCardsTotal)
+
+	// First reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	state = g.getGameState()
+	assert.Len(t, state.DeckHand, 1)
+	assert.Equal(t, 1, state.DeckCardsRevealed)
+	assert.Equal(t, 2, state.DeckCardsTotal)
+
+	// Second reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	state = g.getGameState()
+	assert.Len(t, state.DeckHand, 2)
+	assert.Equal(t, 2, state.DeckCardsRevealed)
+	assert.Equal(t, 2, state.DeckCardsTotal)
+}
+
+func TestBloodyGuts_RevealFieldsClearedOnNextRound(t *testing.T) {
+	// Deck wins so game continues
+	g := setupBloodyGutsTestGame(t, []string{"12c,11c", "10d,9d"}, "14h,13h")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute through reveal and resolution
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // Showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // First reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // Second reveal
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick() // Resolution
+
+	// Verify fields are set
+	assert.Equal(t, 2, g.deckCardsRevealed)
+	assert.Equal(t, int64(1), g.bloodyGutsPlayer)
+
+	// Execute next round
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Fields should be cleared
+	assert.Equal(t, 0, g.deckCardsRevealed)
+	assert.Equal(t, int64(0), g.bloodyGutsPlayer)
+	assert.Nil(t, g.deckHand)
+}

@@ -38,6 +38,8 @@ type ShowdownResult struct {
 	NextPot      int
 	AllFolded    bool
 	SingleWinner bool
+	DeckHand     []*deck.Card // Deck's cards when Bloody Guts triggered
+	DeckWon      bool         // True if deck beat the player in Bloody Guts
 }
 
 // Game is a game of 2-card guts
@@ -55,7 +57,10 @@ type Game struct {
 	pendingDecisions map[int64]bool // Who hasn't decided yet
 	decisions        map[int64]bool // true=In, false=Out
 
-	showdownResult *ShowdownResult
+	showdownResult    *ShowdownResult
+	deckHand          []*deck.Card // Stores deck's hand when Bloody Guts is triggered
+	deckCardsRevealed int          // Track how many deck cards have been shown
+	bloodyGutsPlayer  int64        // Track player in bloody guts showdown
 
 	done bool
 
@@ -85,6 +90,10 @@ func (g *Game) Tick() (bool, error) {
 			switch action {
 			case dealerActionShowdown:
 				g.calculateShowdown()
+			case dealerActionRevealDeckCard:
+				g.revealNextDeckCard()
+			case dealerActionResolveBloodyGuts:
+				g.resolveBloodyGuts()
 			case dealerActionNextRound:
 				if err := g.nextRound(); err != nil {
 					logrus.WithError(err).Error("could not go to the next round")
@@ -315,17 +324,25 @@ func (g *Game) calculateShowdown() {
 		return
 	}
 
-	// Case 2: Only one person goes in - they win the pot outright
+	// Case 2: Only one person goes in
 	if len(playersIn) == 1 {
-		winner := playersIn[0]
-		winner.balance += g.pot
-		result.Winners = []*Participant{winner}
-		result.WinningHand = AnalyzeHand(winner.hand)
+		player := playersIn[0]
+
+		// Bloody Guts: player must beat the deck
+		if g.options.BloodyGuts {
+			g.handleBloodyGutsShowdown(player, result)
+			return
+		}
+
+		// Regular mode: player wins automatically
+		player.balance += g.pot
+		result.Winners = []*Participant{player}
+		result.WinningHand = AnalyzeHand(player.hand)
 		result.PotWon = g.pot
 		result.SingleWinner = true
 		g.showdownResult = result
 
-		g.sendLogMessages(newLogMessage(winner.PlayerID, "{} wins ${%d} (only one in)", g.pot))
+		g.sendLogMessages(newLogMessage(player.PlayerID, "{} wins ${%d} (only one in)", g.pot))
 
 		// Game ends
 		g.phase = PhaseGameOver
@@ -438,6 +455,117 @@ func (g *Game) calculatePenalty() int {
 	return g.pot
 }
 
+// handleBloodyGutsShowdown handles the case where a single player must beat the deck
+func (g *Game) handleBloodyGutsShowdown(player *Participant, result *ShowdownResult) {
+	// Draw cards from deck (but don't reveal yet)
+	cardCount := g.options.CardCount
+	if cardCount < 2 || cardCount > 3 {
+		cardCount = 2
+	}
+
+	g.deckHand = make([]*deck.Card, cardCount)
+	for i := 0; i < cardCount; i++ {
+		card, err := g.deck.Draw()
+		if err != nil {
+			// This shouldn't happen in normal play
+			g.logger.WithError(err).Error("failed to draw deck card for Bloody Guts")
+			return
+		}
+		g.deckHand[i] = card
+	}
+
+	// Set up for staged reveal
+	g.deckCardsRevealed = 0
+	g.bloodyGutsPlayer = player.PlayerID
+	g.showdownResult = result
+
+	g.sendLogMessages(newLogMessage(player.PlayerID, "{} faces the deck..."))
+
+	// Schedule first card reveal (2 second delay)
+	g.pendingDealerAction = &pendingDealerAction{
+		Action:       dealerActionRevealDeckCard,
+		ExecuteAfter: time.Now().Add(time.Second * 2),
+	}
+}
+
+// revealNextDeckCard reveals the next deck card in a Bloody Guts showdown
+func (g *Game) revealNextDeckCard() {
+	g.deckCardsRevealed++
+
+	card := g.deckHand[g.deckCardsRevealed-1]
+	g.sendLogMessages(newLogMessage(0, "Deck reveals: %s", card.String()))
+
+	if g.deckCardsRevealed < len(g.deckHand) {
+		// More cards to reveal - schedule next reveal (2 seconds)
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionRevealDeckCard,
+			ExecuteAfter: time.Now().Add(time.Second * 2),
+		}
+	} else {
+		// All cards revealed - resolve the showdown (1 second delay)
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionResolveBloodyGuts,
+			ExecuteAfter: time.Now().Add(time.Second),
+		}
+	}
+}
+
+// resolveBloodyGuts determines the winner after all deck cards are revealed
+func (g *Game) resolveBloodyGuts() {
+	player := g.idToParticipant[g.bloodyGutsPlayer]
+	result := g.showdownResult
+
+	playerHand := AnalyzeHand(player.hand)
+	deckHandResult := AnalyzeHand(g.deckHand)
+
+	result.DeckHand = g.deckHand
+
+	// Player must strictly beat the deck (deck wins on ties)
+	if playerHand.Strength > deckHandResult.Strength {
+		// Player wins
+		player.balance += g.pot
+		result.Winners = []*Participant{player}
+		result.WinningHand = playerHand
+		result.PotWon = g.pot
+		result.SingleWinner = true
+		result.DeckWon = false
+
+		g.sendLogMessages(
+			newLogMessage(player.PlayerID, "{} beats the deck with %s and wins ${%d}",
+				HandTypeName(playerHand.Type), g.pot),
+		)
+
+		// Game ends
+		g.phase = PhaseGameOver
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionEndGame,
+			ExecuteAfter: time.Now().Add(time.Second * 2),
+		}
+	} else {
+		// Deck wins (including ties)
+		result.Losers = []*Participant{player}
+		result.DeckWon = true
+
+		penalty := g.calculatePenalty()
+		result.PenaltyPaid = penalty
+
+		player.balance -= penalty
+		result.NextPot = g.pot + penalty
+		g.pot += penalty
+
+		g.sendLogMessages(
+			newLogMessage(player.PlayerID, "The deck wins with %s! {} pays penalty of ${%d}",
+				HandTypeName(deckHandResult.Type), penalty),
+		)
+
+		// Continue to next round
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionNextRound,
+			ExecuteAfter: time.Now().Add(time.Second * 5),
+		}
+	}
+}
+
 // nextRound starts a new round
 func (g *Game) nextRound() error {
 	// If everyone folded, re-ante
@@ -451,6 +579,9 @@ func (g *Game) nextRound() error {
 
 	g.roundNumber++
 	g.showdownResult = nil
+	g.deckHand = nil
+	g.deckCardsRevealed = 0
+	g.bloodyGutsPlayer = 0
 
 	// Reshuffle deck
 	g.deck = deck.New()
@@ -486,8 +617,12 @@ func newLogMessageWithPlayers(playerIDs []int64, format string, a ...interface{}
 
 // NameFromOptions returns the name of the game based on options
 func NameFromOptions(opts Options) string {
-	if opts.CardCount == 3 {
-		return "3-Card Guts"
+	prefix := ""
+	if opts.BloodyGuts {
+		prefix = "Bloody "
 	}
-	return "2-Card Guts"
+	if opts.CardCount == 3 {
+		return prefix + "3-Card Guts"
+	}
+	return prefix + "2-Card Guts"
 }
