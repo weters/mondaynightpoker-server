@@ -11,4 +11,5 @@ func TestDefaultOptions(t *testing.T) {
 
 	assert.Equal(t, 25, opts.Ante)
 	assert.Equal(t, 1000, opts.MaxOwed)
+	assert.Equal(t, 2, opts.CardCount)
 }

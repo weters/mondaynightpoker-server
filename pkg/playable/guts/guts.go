@@ -204,13 +204,13 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 		logChan:          make(chan []*playable.LogMessage, 256),
 	}
 
-	messages = append(messages, newLogMessage(0, "New game of 2-Card Guts started with a pot of ${%d}", pot))
+	messages = append(messages, newLogMessage(0, "New game of %s started with a pot of ${%d}", NameFromOptions(opts), pot))
 	g.sendLogMessages(messages...)
 
 	return g, nil
 }
 
-// Deal will deal two cards to each participant
+// Deal will deal cards to each participant
 func (g *Game) Deal() error {
 	if len(g.participants) < 2 {
 		return ErrNotEnoughPlayers
@@ -221,8 +221,12 @@ func (g *Game) Deal() error {
 		p.ClearHand()
 	}
 
-	// Deal 2 cards to each player
-	for i := 0; i < 2; i++ {
+	// Deal cards to each player
+	cardCount := g.options.CardCount
+	if cardCount < 2 || cardCount > 3 {
+		cardCount = 2
+	}
+	for i := 0; i < cardCount; i++ {
 		for _, p := range g.participants {
 			card, err := g.deck.Draw()
 			if err != nil {
@@ -481,6 +485,9 @@ func newLogMessageWithPlayers(playerIDs []int64, format string, a ...interface{}
 }
 
 // NameFromOptions returns the name of the game based on options
-func NameFromOptions(_ Options) string {
+func NameFromOptions(opts Options) string {
+	if opts.CardCount == 3 {
+		return "3-Card Guts"
+	}
 	return "2-Card Guts"
 }

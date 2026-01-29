@@ -13,7 +13,7 @@ type Participant struct {
 func NewParticipant(playerID int64) *Participant {
 	return &Participant{
 		PlayerID: playerID,
-		hand:     make([]*deck.Card, 0, 2),
+		hand:     make([]*deck.Card, 0, 3),
 	}
 }
 
@@ -29,5 +29,5 @@ func (p *Participant) Hand() []*deck.Card {
 
 // ClearHand removes all cards from the participant's hand
 func (p *Participant) ClearHand() {
-	p.hand = make([]*deck.Card, 0, 2)
+	p.hand = make([]*deck.Card, 0, 3)
 }

@@ -42,5 +42,11 @@ func getGutsOptions(additionalData playable.AdditionalData) guts.Options {
 		}
 	}
 
+	if cardCount, ok := additionalData.GetInt("cardCount"); ok {
+		if cardCount == 2 || cardCount == 3 {
+			opts.CardCount = cardCount
+		}
+	}
+
 	return opts
 }

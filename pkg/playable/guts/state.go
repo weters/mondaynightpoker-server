@@ -14,6 +14,7 @@ type GameState struct {
 	Phase        string                  `json:"phase"`
 	MaxOwed      int                     `json:"maxOwed"`
 	Ante         int                     `json:"ante"`
+	CardCount    int                     `json:"cardCount"`
 	IsGameOver   bool                    `json:"isGameOver"`
 	// Decisions is only populated during/after showdown
 	Decisions map[int64]bool `json:"decisions,omitempty"`
@@ -101,6 +102,7 @@ func (g *Game) getGameState() *GameState {
 		Phase:        g.phaseName(),
 		MaxOwed:      g.options.MaxOwed,
 		Ante:         g.options.Ante,
+		CardCount:    g.options.CardCount,
 		IsGameOver:   g.phase == PhaseGameOver,
 	}
 

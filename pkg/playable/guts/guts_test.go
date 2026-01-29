@@ -437,6 +437,118 @@ func TestGame_Tick_AllFoldedSchedulesNextRound(t *testing.T) {
 
 func TestNameFromOptions(t *testing.T) {
 	assert.Equal(t, "2-Card Guts", NameFromOptions(DefaultOptions()))
+
+	opts3Card := Options{Ante: 25, MaxOwed: 1000, CardCount: 3}
+	assert.Equal(t, "3-Card Guts", NameFromOptions(opts3Card))
+
+	// Default to 2-card if CardCount is not set
+	optsNoCardCount := Options{Ante: 25, MaxOwed: 1000}
+	assert.Equal(t, "2-Card Guts", NameFromOptions(optsNoCardCount))
+}
+
+func TestGame_Deal_3Card(t *testing.T) {
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 3}
+	g, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
+	assert.NoError(t, err)
+
+	err = g.Deal()
+	assert.NoError(t, err)
+
+	// Each player should have 3 cards
+	for _, p := range g.participants {
+		assert.Len(t, p.hand, 3)
+	}
+}
+
+func TestGame_Deal_InvalidCardCount(t *testing.T) {
+	// CardCount of 1 should default to 2
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 1}
+	g, err := NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
+	assert.NoError(t, err)
+
+	err = g.Deal()
+	assert.NoError(t, err)
+
+	for _, p := range g.participants {
+		assert.Len(t, p.hand, 2)
+	}
+
+	// CardCount of 4 should default to 2
+	opts = Options{Ante: 25, MaxOwed: 1000, CardCount: 4}
+	g, err = NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
+	assert.NoError(t, err)
+
+	err = g.Deal()
+	assert.NoError(t, err)
+
+	for _, p := range g.participants {
+		assert.Len(t, p.hand, 2)
+	}
+}
+
+func TestGame_Showdown_3Card(t *testing.T) {
+	// Test 3-card guts showdown with straights and flushes
+	// Player 1 has a straight (Q-K-A), Player 2 has a flush (all clubs)
+	g := setupTestGame3Card(t, []string{"12c,13d,14h", "14c,10c,5c"})
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.calculateShowdown()
+
+	// Player 1 should win (straight beats flush in 3-card poker)
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+	assert.Len(t, g.showdownResult.Losers, 1)
+	assert.Equal(t, int64(2), g.showdownResult.Losers[0].PlayerID)
+}
+
+func TestGame_Showdown_3Card_ThreeOfAKind(t *testing.T) {
+	// Player 1 has three of a kind, Player 2 has a straight
+	g := setupTestGame3Card(t, []string{"7c,7d,7h", "12c,13d,14h"})
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.calculateShowdown()
+
+	// Player 1 should win (three of a kind beats straight)
+	assert.Len(t, g.showdownResult.Winners, 1)
+	assert.Equal(t, int64(1), g.showdownResult.Winners[0].PlayerID)
+}
+
+// Helper function to set up a 3-card test game
+func setupTestGame3Card(t *testing.T, hands []string) *Game {
+	t.Helper()
+
+	playerIDs := make([]int64, len(hands))
+	for i := range hands {
+		playerIDs[i] = int64(i + 1)
+	}
+
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 3}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	// Set up specific hands
+	for i, handStr := range hands {
+		cards := deck.CardsFromString(handStr)
+		g.participants[i].hand = cards
+	}
+
+	// Set up for declaration phase
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = make(map[int64]bool)
+	g.decisions = make(map[int64]bool)
+	for _, p := range g.participants {
+		g.pendingDecisions[p.PlayerID] = true
+	}
+
+	return g
 }
 
 // Helper function to set up a test game with specific hands
