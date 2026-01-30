@@ -1121,3 +1121,638 @@ func TestBloodyGuts_RevealFieldsClearedOnNextRound(t *testing.T) {
 	assert.Equal(t, int64(0), g.bloodyGutsPlayer)
 	assert.Nil(t, g.deckHand)
 }
+
+// ============================================
+// Trade Tests
+// ============================================
+
+// Helper function to set up a trade test game with specific hands
+func setupTradeTestGame(t *testing.T, hands []string) *Game {
+	t.Helper()
+
+	playerIDs := make([]int64, len(hands))
+	for i := range hands {
+		playerIDs[i] = int64(i + 1)
+	}
+
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, AllowTrades: true}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	// Set up specific hands
+	for i, handStr := range hands {
+		cards := deck.CardsFromString(handStr)
+		g.participants[i].hand = cards
+	}
+
+	// Set up for declaration phase
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = make(map[int64]bool)
+	g.decisions = make(map[int64]bool)
+	for _, p := range g.participants {
+		g.pendingDecisions[p.PlayerID] = true
+	}
+
+	return g
+}
+
+// Helper function to set up a 3-card trade test game
+func setupTradeTestGame3Card(t *testing.T, hands []string) *Game {
+	t.Helper()
+
+	playerIDs := make([]int64, len(hands))
+	for i := range hands {
+		playerIDs[i] = int64(i + 1)
+	}
+
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 3, AllowTrades: true}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	// Set up specific hands
+	for i, handStr := range hands {
+		cards := deck.CardsFromString(handStr)
+		g.participants[i].hand = cards
+	}
+
+	// Set up for declaration phase
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = make(map[int64]bool)
+	g.decisions = make(map[int64]bool)
+	for _, p := range g.participants {
+		g.pendingDecisions[p.PlayerID] = true
+	}
+
+	return g
+}
+
+func TestTrade_BasicFlow(t *testing.T) {
+	// Player 1 has Ace-King, Player 2 has Queen-Jack
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Should be in trade phase
+	assert.Equal(t, PhaseTradeIn, g.phase)
+	assert.Len(t, g.tradersIn, 2)
+	assert.Equal(t, 0, g.currentTraderIndex)
+
+	// Execute first trader notification
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 trades one card
+	err := g.submitTrade(1, deck.CardsFromString("13c"))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, g.tradesMade[1])
+	assert.Len(t, g.idToParticipant[1].hand, 2) // Still has 2 cards after replacement
+
+	// Execute next trader notification
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 2 trades both cards
+	err = g.submitTrade(2, deck.CardsFromString("12d,11d"))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, g.tradesMade[2])
+	assert.Len(t, g.idToParticipant[2].hand, 2)
+
+	// Execute final notification - should schedule showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+}
+
+func TestTrade_StandPat(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Execute first trader notification
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 stands pat (trades 0 cards)
+	originalHand := g.idToParticipant[1].Hand()
+	err := g.submitTrade(1, []*deck.Card{})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, g.tradesMade[1])
+	assert.Equal(t, originalHand, g.idToParticipant[1].Hand())
+}
+
+func TestTrade_TradeAllCards(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 trades all cards
+	err := g.submitTrade(1, deck.CardsFromString("14c,13c"))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, g.tradesMade[1])
+
+	// New hand should be different
+	newHand := g.idToParticipant[1].Hand()
+	assert.Len(t, newHand, 2)
+	// Cards should have been replaced from deck
+}
+
+func TestTrade_OutOfTurnError(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 2 tries to trade when it's player 1's turn
+	err := g.submitTrade(2, deck.CardsFromString("12d"))
+	assert.Equal(t, ErrNotYourTurnToTrade, err)
+}
+
+func TestTrade_NotInTradePhaseError(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Still in declaration phase
+	err := g.submitTrade(1, deck.CardsFromString("14c"))
+	assert.Equal(t, ErrNotInTradePhase, err)
+}
+
+func TestTrade_CardNotInHandError(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 tries to trade a card they don't have
+	err := g.submitTrade(1, deck.CardsFromString("2c"))
+	assert.Equal(t, ErrCardNotInHand, err)
+}
+
+func TestTrade_TooManyCardsError(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 tries to trade more cards than they have
+	err := g.submitTrade(1, deck.CardsFromString("14c,13c,12c"))
+	assert.Equal(t, ErrInvalidTradeCount, err)
+}
+
+func TestTrade_SkippedWithZeroPlayersIn(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Both fold
+	_ = g.submitDecision(1, false)
+	_ = g.submitDecision(2, false)
+
+	// Should skip trade phase and go directly to showdown
+	assert.NotEqual(t, PhaseTradeIn, g.phase)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+}
+
+func TestTrade_SkippedWithOnePlayerIn(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Should skip trade phase (single player in wins automatically)
+	assert.NotEqual(t, PhaseTradeIn, g.phase)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+}
+
+func TestTrade_SkippedWhenAllowTradesFalse(t *testing.T) {
+	// Create a game without trades
+	g := setupTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Both go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Should go directly to showdown (no trade phase)
+	assert.NotEqual(t, PhaseTradeIn, g.phase)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+}
+
+func TestTrade_DeckReshuffle(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d", "10h,9h"})
+
+	// Set up deck with only 1 card left
+	g.deck.Cards = g.deck.Cards[:1]
+
+	// All three go in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 trades both cards - this will exhaust deck
+	err := g.submitTrade(1, deck.CardsFromString("14c,13c"))
+	assert.NoError(t, err)
+
+	// Verify player still got replacement cards
+	assert.Len(t, g.idToParticipant[1].hand, 2)
+
+	// Discards should have been reshuffled into deck
+}
+
+func TestTrade_3CardVariant(t *testing.T) {
+	g := setupTradeTestGame3Card(t, []string{"14c,13c,12c", "11d,10d,9d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 trades 2 of 3 cards
+	err := g.submitTrade(1, deck.CardsFromString("13c,12c"))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, g.tradesMade[1])
+	assert.Len(t, g.idToParticipant[1].hand, 3)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 2 trades all 3 cards
+	err = g.submitTrade(2, deck.CardsFromString("11d,10d,9d"))
+	assert.NoError(t, err)
+	assert.Equal(t, 3, g.tradesMade[2])
+	assert.Len(t, g.idToParticipant[2].hand, 3)
+}
+
+func TestTrade_WithBloodyGuts(t *testing.T) {
+	// Test that AllowTrades + BloodyGuts work together
+	playerIDs := []int64{1, 2}
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, BloodyGuts: true, AllowTrades: true}
+	g, _ := NewGame(logrus.StandardLogger(), playerIDs, opts)
+
+	// Set up hands
+	g.participants[0].hand = deck.CardsFromString("14c,13c")
+	g.participants[1].hand = deck.CardsFromString("12d,11d")
+
+	// Set up deck for Bloody Guts
+	deckCards := deck.CardsFromString("10h,9h")
+	g.deck.Cards = append(deckCards, g.deck.Cards...)
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = map[int64]bool{1: true, 2: true}
+	g.decisions = make(map[int64]bool)
+
+	// Both go in - should enter trade phase
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	assert.Equal(t, PhaseTradeIn, g.phase)
+
+	// Execute trades
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(1, []*deck.Card{})
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(2, []*deck.Card{})
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Should proceed to showdown (regular showdown since 2 players in)
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+}
+
+func TestTrade_BloodyGuts_SinglePlayerInCanTrade(t *testing.T) {
+	// When only one player goes in with BloodyGuts+AllowTrades, allow trade phase
+	// (player can trade before facing the deck)
+	playerIDs := []int64{1, 2}
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, BloodyGuts: true, AllowTrades: true}
+	g, _ := NewGame(logrus.StandardLogger(), playerIDs, opts)
+
+	g.participants[0].hand = deck.CardsFromString("14c,13c")
+	g.participants[1].hand = deck.CardsFromString("12d,11d")
+
+	deckCards := deck.CardsFromString("10h,9h")
+	g.deck.Cards = append(deckCards, g.deck.Cards...)
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = map[int64]bool{1: true, 2: true}
+	g.decisions = make(map[int64]bool)
+
+	// Only player 1 goes in
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Should enter trade phase (not skip to showdown)
+	assert.Equal(t, PhaseTradeIn, g.phase)
+	assert.Len(t, g.tradersIn, 1)
+	assert.Equal(t, int64(1), g.tradersIn[0].PlayerID)
+
+	// Execute trader notification
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 trades a card
+	err := g.submitTrade(1, deck.CardsFromString("13c"))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, g.tradesMade[1])
+
+	// After trade, should proceed to showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	assert.Equal(t, dealerActionShowdown, g.pendingDealerAction.Action)
+
+	// Execute showdown - should trigger Bloody Guts
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Should have scheduled card reveal (Bloody Guts)
+	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
+}
+
+func TestTrade_StateVisibility(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Check game state during trade phase
+	state := g.getGameState()
+	assert.Equal(t, "tradeIn", state.Phase)
+	assert.True(t, state.AllowTrades)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Check currentTraderId is set
+	state = g.getGameState()
+	assert.Equal(t, int64(1), state.CurrentTraderID)
+
+	// Player 1 trades
+	_ = g.submitTrade(1, deck.CardsFromString("13c"))
+
+	// TradesMade should be updated
+	state = g.getGameState()
+	assert.Equal(t, 1, state.TradesMade[1])
+}
+
+func TestTrade_ResponseCanTrade(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Player 1 should be able to trade
+	resp1, _ := g.GetPlayerState(1)
+	data1 := resp1.Data.(*Response)
+	assert.True(t, data1.CanTrade)
+
+	// Player 2 should not be able to trade yet
+	resp2, _ := g.GetPlayerState(2)
+	data2 := resp2.Data.(*Response)
+	assert.False(t, data2.CanTrade)
+
+	// After player 1 trades
+	_ = g.submitTrade(1, []*deck.Card{})
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Now player 2 can trade
+	resp2, _ = g.GetPlayerState(2)
+	data2 = resp2.Data.(*Response)
+	assert.True(t, data2.CanTrade)
+}
+
+func TestTrade_TradeActionViaAction(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Test trade action through Action method
+	response, updateState, err := g.Action(1, &playable.PayloadIn{
+		Action:         "trade",
+		AdditionalData: playable.AdditionalData{"cards": []string{"13c"}},
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
+	assert.True(t, updateState)
+	assert.Equal(t, 1, g.tradesMade[1])
+}
+
+func TestTrade_TradeActionStandPatViaAction(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Trade with no cards array (stand pat)
+	response, updateState, err := g.Action(1, &playable.PayloadIn{
+		Action:         "trade",
+		AdditionalData: playable.AdditionalData{},
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
+	assert.True(t, updateState)
+	assert.Equal(t, 0, g.tradesMade[1])
+}
+
+func TestTrade_InvalidCardFormat(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Invalid card format should error
+	_, _, err := g.Action(1, &playable.PayloadIn{
+		Action:         "trade",
+		AdditionalData: playable.AdditionalData{"cards": []string{"invalid"}},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid card")
+}
+
+func TestTrade_TradeStateClearedOnNextRound(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,14d", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Execute trade phase
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(1, []*deck.Card{})
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(2, []*deck.Card{})
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Verify trade state is set
+	assert.NotNil(t, g.tradesMade)
+	assert.Len(t, g.tradesMade, 2)
+
+	// Execute next round
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Trade state should be cleared
+	assert.Nil(t, g.tradesMade)
+	assert.Nil(t, g.tradersIn)
+	assert.Equal(t, 0, g.currentTraderIndex)
+	assert.Nil(t, g.discards)
+}
+
+func TestNameFromOptions_WithTrades(t *testing.T) {
+	// 2-Card with Trades
+	opts2CardTrades := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, AllowTrades: true}
+	assert.Equal(t, "2-Card Guts with Trades", NameFromOptions(opts2CardTrades))
+
+	// 3-Card with Trades
+	opts3CardTrades := Options{Ante: 25, MaxOwed: 1000, CardCount: 3, AllowTrades: true}
+	assert.Equal(t, "3-Card Guts with Trades", NameFromOptions(opts3CardTrades))
+
+	// Bloody 2-Card with Trades
+	optsBloody2CardTrades := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, BloodyGuts: true, AllowTrades: true}
+	assert.Equal(t, "Bloody 2-Card Guts with Trades", NameFromOptions(optsBloody2CardTrades))
+
+	// Bloody 3-Card with Trades
+	optsBloody3CardTrades := Options{Ante: 25, MaxOwed: 1000, CardCount: 3, BloodyGuts: true, AllowTrades: true}
+	assert.Equal(t, "Bloody 3-Card Guts with Trades", NameFromOptions(optsBloody3CardTrades))
+
+	// Without trades - should remain unchanged
+	opts2Card := Options{Ante: 25, MaxOwed: 1000, CardCount: 2}
+	assert.Equal(t, "2-Card Guts", NameFromOptions(opts2Card))
+
+	optsBloody2Card := Options{Ante: 25, MaxOwed: 1000, CardCount: 2, BloodyGuts: true}
+	assert.Equal(t, "Bloody 2-Card Guts", NameFromOptions(optsBloody2Card))
+}
+
+func TestTrade_ParticipantHasCard(t *testing.T) {
+	p := NewParticipant(1)
+	card := deck.CardFromString("14c")
+	p.AddCard(card)
+
+	assert.True(t, p.hasCard(card))
+	assert.True(t, p.hasCard(deck.CardFromString("14c"))) // Different instance, same card
+	assert.False(t, p.hasCard(deck.CardFromString("13c")))
+}
+
+func TestTrade_ParticipantRemoveCard(t *testing.T) {
+	p := NewParticipant(1)
+	card1 := deck.CardFromString("14c")
+	card2 := deck.CardFromString("13c")
+	p.AddCard(card1)
+	p.AddCard(card2)
+
+	assert.Len(t, p.hand, 2)
+	p.removeCard(card1)
+	assert.Len(t, p.hand, 1)
+	assert.False(t, p.hasCard(card1))
+	assert.True(t, p.hasCard(card2))
+}
+
+func TestTrade_TradedFieldSetOnParticipant(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Before trade, traded should be 0
+	assert.Equal(t, 0, g.idToParticipant[1].traded)
+
+	// Player 1 trades one card
+	_ = g.submitTrade(1, deck.CardsFromString("13c"))
+
+	// After trade, traded should reflect cards traded
+	assert.Equal(t, 1, g.idToParticipant[1].traded)
+
+	// Verify it appears in game state
+	state := g.getGameState()
+	for _, p := range state.Participants {
+		if p.PlayerID == 1 {
+			assert.Equal(t, 1, p.Traded)
+		}
+	}
+}
+
+func TestTrade_TradedFieldResetOnNextRound(t *testing.T) {
+	g := setupTradeTestGame(t, []string{"14c,14d", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Execute trade phase
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(1, deck.CardsFromString("14d"))
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(2, deck.CardsFromString("12d,11d"))
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Verify traded is set
+	assert.Equal(t, 1, g.idToParticipant[1].traded)
+	assert.Equal(t, 2, g.idToParticipant[2].traded)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Execute next round
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// traded should be reset
+	assert.Equal(t, 0, g.idToParticipant[1].traded)
+	assert.Equal(t, 0, g.idToParticipant[2].traded)
+}

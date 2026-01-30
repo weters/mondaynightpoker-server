@@ -52,5 +52,9 @@ func getGutsOptions(additionalData playable.AdditionalData) guts.Options {
 		opts.BloodyGuts = bloodyGuts
 	}
 
+	if allowTrades, ok := additionalData.GetBool("allowTrades"); ok {
+		opts.AllowTrades = allowTrades
+	}
+
 	return opts
 }

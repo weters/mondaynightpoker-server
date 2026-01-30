@@ -11,6 +11,7 @@ const (
 	dealerActionResolveBloodyGuts
 	dealerActionNextRound
 	dealerActionEndGame
+	dealerActionNextTrader
 )
 
 type pendingDealerAction struct {

@@ -2,10 +2,11 @@ package guts
 
 // Options are options for creating a new guts game
 type Options struct {
-	Ante       int  // Default: 25 cents
-	MaxOwed    int  // Default: 1000 ($10), capped penalty amount
-	CardCount  int  // 2 or 3, defaults to 2
-	BloodyGuts bool // If true, single player In must beat the deck
+	Ante        int  // Default: 25 cents
+	MaxOwed     int  // Default: 1000 ($10), capped penalty amount
+	CardCount   int  // 2 or 3, defaults to 2
+	BloodyGuts  bool // If true, single player In must beat the deck
+	AllowTrades bool // If true, players who went In can trade cards before showdown
 }
 
 // DefaultOptions returns the default options for a guts game

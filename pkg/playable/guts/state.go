@@ -16,6 +16,7 @@ type GameState struct {
 	Ante         int                     `json:"ante"`
 	CardCount    int                     `json:"cardCount"`
 	BloodyGuts   bool                    `json:"bloodyGuts"`
+	AllowTrades  bool                    `json:"allowTrades"`
 	IsGameOver   bool                    `json:"isGameOver"`
 	// Decisions is only populated during/after showdown
 	Decisions map[int64]bool `json:"decisions,omitempty"`
@@ -27,6 +28,10 @@ type GameState struct {
 	DeckCardsRevealed int `json:"deckCardsRevealed"`
 	// DeckCardsTotal is the total number of deck cards (only set during reveal)
 	DeckCardsTotal int `json:"deckCardsTotal,omitempty"`
+	// CurrentTraderID is the player ID of the current trader during trade phase
+	CurrentTraderID int64 `json:"currentTraderId,omitempty"`
+	// TradesMade tracks how many cards each player traded
+	TradesMade map[int64]int `json:"tradesMade,omitempty"`
 }
 
 // GameStateParticipant is the state of an individual participant
@@ -39,6 +44,8 @@ type GameStateParticipant struct {
 	CardsInHand int `json:"cardsInHand"`
 	// Hand is only shown after showdown for players who went in
 	Hand []*deck.Card `json:"hand,omitempty"`
+	// Traded is the number of cards traded this round (for animation trigger)
+	Traded int `json:"traded,omitempty"`
 }
 
 // ShowdownResultState is the showdown result for the state
@@ -65,6 +72,8 @@ type Response struct {
 	HasDecided bool `json:"hasDecided"`
 	// MyDecision is the player's decision (only shown after all have decided)
 	MyDecision *bool `json:"myDecision,omitempty"`
+	// CanTrade is true if it's this player's turn to trade
+	CanTrade bool `json:"canTrade"`
 }
 
 func (g *Game) phaseName() string {
@@ -73,6 +82,8 @@ func (g *Game) phaseName() string {
 		return "dealing"
 	case PhaseDeclaration:
 		return "declaration"
+	case PhaseTradeIn:
+		return "tradeIn"
 	case PhaseShowdown:
 		return "showdown"
 	case PhaseRoundEnd:
@@ -94,6 +105,7 @@ func (g *Game) getGameState() *GameState {
 			Balance:     p.balance,
 			Decided:     !g.pendingDecisions[p.PlayerID],
 			CardsInHand: len(p.hand),
+			Traded:      p.traded,
 		}
 
 		// Show hands of players who went in after showdown
@@ -123,10 +135,19 @@ func (g *Game) getGameState() *GameState {
 		Ante:              g.options.Ante,
 		CardCount:         g.options.CardCount,
 		BloodyGuts:        g.options.BloodyGuts,
+		AllowTrades:       g.options.AllowTrades,
 		IsGameOver:        g.phase == PhaseGameOver,
 		DeckHand:          revealedDeckHand,
 		DeckCardsRevealed: g.deckCardsRevealed,
 		DeckCardsTotal:    deckCardsTotal,
+	}
+
+	// Include trade phase info
+	if g.phase == PhaseTradeIn && len(g.tradersIn) > 0 && g.currentTraderIndex < len(g.tradersIn) {
+		state.CurrentTraderID = g.tradersIn[g.currentTraderIndex].PlayerID
+	}
+	if len(g.tradesMade) > 0 {
+		state.TradesMade = g.tradesMade
 	}
 
 	// Only show decisions after all have decided
@@ -182,12 +203,18 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 	gameState := g.getGameState()
 	allDecided := len(g.pendingDecisions) == 0
 
+	canTrade := false
+	if g.phase == PhaseTradeIn && len(g.tradersIn) > 0 && g.currentTraderIndex < len(g.tradersIn) {
+		canTrade = g.tradersIn[g.currentTraderIndex].PlayerID == playerID
+	}
+
 	response := &Response{
 		GameState:  gameState,
 		Balance:    participant.balance,
 		Hand:       participant.Hand(),
 		CanDecide:  g.phase == PhaseDeclaration && g.pendingDecisions[playerID],
 		HasDecided: g.phase == PhaseDeclaration && !g.pendingDecisions[playerID] && g.idToParticipant[playerID] != nil,
+		CanTrade:   canTrade,
 	}
 
 	// Only show the player their decision after all have decided

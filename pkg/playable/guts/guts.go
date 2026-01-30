@@ -19,6 +19,8 @@ const (
 	PhaseDealing Phase = iota
 	// PhaseDeclaration is when players decide in/out
 	PhaseDeclaration
+	// PhaseTradeIn is when players who went In can trade cards
+	PhaseTradeIn
 	// PhaseShowdown is when hands are revealed and compared
 	PhaseShowdown
 	// PhaseRoundEnd is the end of a round before the next
@@ -62,6 +64,12 @@ type Game struct {
 	deckCardsRevealed int          // Track how many deck cards have been shown
 	bloodyGutsPlayer  int64        // Track player in bloody guts showdown
 
+	// Trade phase tracking
+	discards           []*deck.Card   // Discarded cards for reshuffling
+	tradersIn          []*Participant // Players who went In (in participant order)
+	currentTraderIndex int            // Whose turn to trade
+	tradesMade         map[int64]int  // Track cards traded per player
+
 	done bool
 
 	logger  logrus.FieldLogger
@@ -100,6 +108,8 @@ func (g *Game) Tick() (bool, error) {
 				}
 			case dealerActionEndGame:
 				g.done = true
+			case dealerActionNextTrader:
+				g.notifyNextTrader()
 			default:
 				panic(fmt.Sprintf("unknown dealer action: %d", action))
 			}
@@ -142,6 +152,19 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		if err := g.submitDecision(playerID, goIn); err != nil {
+			return nil, false, err
+		}
+
+		return playable.OK(), true, nil
+	case "trade":
+		cardsData := getStringSlice(message.AdditionalData, "cards")
+
+		cards, err := parseCards(cardsData)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if err := g.submitTrade(playerID, cards); err != nil {
 			return nil, false, err
 		}
 
@@ -276,9 +299,34 @@ func (g *Game) submitDecision(playerID int64, goIn bool) error {
 
 	// Only reveal when ALL have decided
 	if len(g.pendingDecisions) == 0 {
-		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionShowdown,
-			ExecuteAfter: time.Now().Add(time.Second),
+		// Reveal all decisions
+		for _, p := range g.participants {
+			decision := "Out"
+			if g.decisions[p.PlayerID] {
+				decision = "In"
+			}
+			g.sendLogMessages(newLogMessage(p.PlayerID, "{} was %s", decision))
+		}
+
+		// Count players who went In
+		playersInCount := 0
+		for _, goIn := range g.decisions {
+			if goIn {
+				playersInCount++
+			}
+		}
+
+		// Start trade phase if AllowTrades enabled AND:
+		// - 2+ players went In, OR
+		// - 1 player went In AND BloodyGuts enabled (trade before facing deck)
+		shouldTrade := g.options.AllowTrades && (playersInCount >= 2 || (playersInCount == 1 && g.options.BloodyGuts))
+		if shouldTrade {
+			g.startTradeInPhase()
+		} else {
+			g.pendingDealerAction = &pendingDealerAction{
+				Action:       dealerActionShowdown,
+				ExecuteAfter: time.Now().Add(time.Second),
+			}
 		}
 	}
 
@@ -288,15 +336,6 @@ func (g *Game) submitDecision(playerID int64, goIn bool) error {
 // calculateShowdown determines winners and losers
 func (g *Game) calculateShowdown() {
 	g.phase = PhaseShowdown
-
-	// Reveal all decisions now that everyone has decided
-	for _, p := range g.participants {
-		decision := "Out"
-		if g.decisions[p.PlayerID] {
-			decision = "In"
-		}
-		g.sendLogMessages(newLogMessage(p.PlayerID, "{} was %s", decision))
-	}
 
 	// Find players who went in
 	playersIn := make([]*Participant, 0)
@@ -415,8 +454,8 @@ func (g *Game) calculateShowdown() {
 
 	// Log results
 	if len(winners) == 1 {
-		g.sendLogMessages(newLogMessage(winners[0].PlayerID, "{} wins ${%d} with %s",
-			g.pot, HandTypeName(result.WinningHand.Type)))
+		g.sendLogMessages(newLogMessageWithCards(winners[0].PlayerID, winners[0].hand,
+			"{} wins ${%d} with %s", g.pot, HandTypeName(result.WinningHand.Type)))
 	} else {
 		playerIDs := make([]int64, len(winners))
 		for i, w := range winners {
@@ -531,8 +570,8 @@ func (g *Game) resolveBloodyGuts() {
 		result.DeckWon = false
 
 		g.sendLogMessages(
-			newLogMessage(player.PlayerID, "{} beats the deck with %s and wins ${%d}",
-				HandTypeName(playerHand.Type), g.pot),
+			newLogMessageWithCards(player.PlayerID, player.hand,
+				"{} beats the deck with %s and wins ${%d}", HandTypeName(playerHand.Type), g.pot),
 		)
 
 		// Game ends
@@ -583,6 +622,15 @@ func (g *Game) nextRound() error {
 	g.deckCardsRevealed = 0
 	g.bloodyGutsPlayer = 0
 
+	// Clear trade state
+	g.discards = nil
+	g.tradersIn = nil
+	g.currentTraderIndex = 0
+	g.tradesMade = nil
+	for _, p := range g.participants {
+		p.traded = 0
+	}
+
 	// Reshuffle deck
 	g.deck = deck.New()
 	g.deck.Shuffle()
@@ -606,6 +654,45 @@ func newLogMessage(playerID int64, format string, a ...interface{}) *playable.Lo
 	}
 }
 
+// parseCards safely parses card strings, recovering from panics
+func parseCards(cardStrings []string) (cards []*deck.Card, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("invalid card format: %v", r)
+			cards = nil
+		}
+	}()
+
+	cards = make([]*deck.Card, len(cardStrings))
+	for i, cardStr := range cardStrings {
+		cards[i] = deck.CardFromString(cardStr)
+	}
+	return cards, nil
+}
+
+// getStringSlice extracts a string slice from AdditionalData
+func getStringSlice(data playable.AdditionalData, key string) []string {
+	val, ok := data[key]
+	if !ok {
+		return []string{}
+	}
+
+	switch v := val.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	default:
+		return []string{}
+	}
+}
+
 func newLogMessageWithPlayers(playerIDs []int64, format string, a ...interface{}) *playable.LogMessage {
 	return &playable.LogMessage{
 		UUID:      uuid.New().String(),
@@ -615,14 +702,161 @@ func newLogMessageWithPlayers(playerIDs []int64, format string, a ...interface{}
 	}
 }
 
+func newLogMessageWithCards(playerID int64, cards []*deck.Card, format string, a ...interface{}) *playable.LogMessage {
+	return &playable.LogMessage{
+		UUID:      uuid.New().String(),
+		PlayerIDs: []int64{playerID},
+		Cards:     cards,
+		Message:   fmt.Sprintf(format, a...),
+		Time:      time.Now(),
+	}
+}
+
+// startTradeInPhase initializes the trade phase after all decisions are revealed
+func (g *Game) startTradeInPhase() {
+	g.phase = PhaseTradeIn
+
+	// Build list of players who went In, in participant order
+	g.tradersIn = make([]*Participant, 0)
+	for _, p := range g.participants {
+		if g.decisions[p.PlayerID] {
+			g.tradersIn = append(g.tradersIn, p)
+		}
+	}
+
+	g.currentTraderIndex = 0
+	g.tradesMade = make(map[int64]int)
+	g.discards = make([]*deck.Card, 0)
+
+	g.sendLogMessages(newLogMessage(0, "Trade round begins"))
+
+	// Notify first trader
+	g.pendingDealerAction = &pendingDealerAction{
+		Action:       dealerActionNextTrader,
+		ExecuteAfter: time.Now().Add(500 * time.Millisecond),
+	}
+}
+
+// notifyNextTrader sends a log message that it's the current trader's turn
+func (g *Game) notifyNextTrader() {
+	if g.currentTraderIndex >= len(g.tradersIn) {
+		// All done trading, proceed to showdown
+		g.sendLogMessages(newLogMessage(0, "Trading complete"))
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionShowdown,
+			ExecuteAfter: time.Now().Add(time.Second),
+		}
+		return
+	}
+
+	trader := g.tradersIn[g.currentTraderIndex]
+	g.sendLogMessages(newLogMessage(trader.PlayerID, "{}'s turn to trade"))
+}
+
+// getCurrentTrader returns the current trader or nil if not in trade phase
+func (g *Game) getCurrentTrader() *Participant {
+	if g.phase != PhaseTradeIn || g.currentTraderIndex >= len(g.tradersIn) {
+		return nil
+	}
+	return g.tradersIn[g.currentTraderIndex]
+}
+
+// submitTrade handles a player's trade action
+func (g *Game) submitTrade(playerID int64, cards []*deck.Card) error {
+	if g.phase != PhaseTradeIn {
+		return ErrNotInTradePhase
+	}
+
+	currentTrader := g.getCurrentTrader()
+	if currentTrader == nil || currentTrader.PlayerID != playerID {
+		return ErrNotYourTurnToTrade
+	}
+
+	cardCount := g.options.CardCount
+	if cardCount < 2 || cardCount > 3 {
+		cardCount = 2
+	}
+
+	if len(cards) > cardCount {
+		return ErrInvalidTradeCount
+	}
+
+	// Validate all cards are in hand
+	for _, card := range cards {
+		if !currentTrader.hasCard(card) {
+			return ErrCardNotInHand
+		}
+	}
+
+	// Remove cards from hand and add to discards
+	for _, card := range cards {
+		currentTrader.removeCard(card)
+		g.discards = append(g.discards, card)
+	}
+
+	// Draw replacement cards
+	for i := 0; i < len(cards); i++ {
+		// Check if deck is empty and reshuffle if needed
+		if len(g.deck.Cards) == 0 {
+			if len(g.discards) == 0 {
+				// This shouldn't happen in normal play
+				g.logger.Error("deck and discards both empty during trade")
+				break
+			}
+			g.deck.ShuffleDiscards(g.discards)
+			g.discards = make([]*deck.Card, 0)
+			g.sendLogMessages(newLogMessage(0, "Deck reshuffled"))
+		}
+
+		card, err := g.deck.Draw()
+		if err != nil {
+			g.logger.WithError(err).Error("failed to draw card during trade")
+			break
+		}
+		currentTrader.AddCard(card)
+	}
+
+	g.tradesMade[playerID] = len(cards)
+	currentTrader.traded = len(cards)
+
+	// Log the trade
+	if len(cards) == 0 {
+		g.sendLogMessages(newLogMessage(playerID, "{} stands pat"))
+	} else if len(cards) == 1 {
+		g.sendLogMessages(newLogMessage(playerID, "{} trades 1 card"))
+	} else {
+		g.sendLogMessages(newLogMessage(playerID, "{} trades %d cards", len(cards)))
+	}
+
+	// Advance to next trader
+	g.advanceTrader()
+
+	return nil
+}
+
+// advanceTrader moves to the next trader or proceeds to showdown
+func (g *Game) advanceTrader() {
+	g.currentTraderIndex++
+
+	// Schedule next trader notification (or showdown if done)
+	g.pendingDealerAction = &pendingDealerAction{
+		Action:       dealerActionNextTrader,
+		ExecuteAfter: time.Now().Add(500 * time.Millisecond),
+	}
+}
+
 // NameFromOptions returns the name of the game based on options
 func NameFromOptions(opts Options) string {
 	prefix := ""
 	if opts.BloodyGuts {
 		prefix = "Bloody "
 	}
-	if opts.CardCount == 3 {
-		return prefix + "3-Card Guts"
+	suffix := ""
+	if opts.AllowTrades {
+		suffix = " with Trades"
 	}
-	return prefix + "2-Card Guts"
+	if opts.CardCount == 3 {
+		return prefix + "3-Card Guts" + suffix
+	}
+	return prefix + "2-Card Guts" + suffix
 }
