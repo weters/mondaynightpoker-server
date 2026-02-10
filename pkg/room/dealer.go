@@ -8,6 +8,7 @@ import (
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room/gamefactory"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,7 +48,8 @@ type Dealer struct {
 	// note: this must only be manipulated within the run loop
 	logMessages []*playable.LogMessage
 
-	pendingGame *pendingGame
+	pendingGame       *pendingGame
+	lastGameStartedBy *model.Player
 }
 
 // NewDealer creates a new dealer object
@@ -589,9 +591,68 @@ func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetai
 		return fmt.Errorf("could not save game: %w", err)
 	}
 
+	if msgs := d.getPickerLogMessage(); len(msgs) > 0 {
+		d.sendLogMessages(msgs)
+	}
+
 	d.unsetGame()
 	d.stateChanged <- stateGameEnded
 	return nil
+}
+
+func (d *Dealer) getPickerLogMessage() []*playable.LogMessage {
+	if d.lastGameStartedBy == nil {
+		return nil
+	}
+
+	players, err := d.table.GetPlayers(context.Background())
+	if err != nil {
+		logrus.WithError(err).Error("could not get players for picker log message")
+		return nil
+	}
+
+	return buildPickerLogMessage(players, d.lastGameStartedBy.ID)
+}
+
+func buildPickerLogMessage(players []*model.PlayerTable, pickerID int64) []*playable.LogMessage {
+	activePlayers := make([]*model.PlayerTable, 0, len(players))
+	for _, p := range players {
+		if p.IsPlaying() {
+			activePlayers = append(activePlayers, p)
+		}
+	}
+
+	if len(activePlayers) == 0 {
+		return nil
+	}
+
+	sort.Slice(activePlayers, func(i, j int) bool {
+		return activePlayers[i].Player.DisplayName < activePlayers[j].Player.DisplayName
+	})
+
+	pickerIndex := -1
+	for i, p := range activePlayers {
+		if p.PlayerID == pickerID {
+			pickerIndex = i
+			break
+		}
+	}
+
+	if pickerIndex < 0 {
+		return nil
+	}
+
+	nextIndex := (pickerIndex + 1) % len(activePlayers)
+	lastPicker := activePlayers[pickerIndex].Player.DisplayName
+	nextPicker := activePlayers[nextIndex].Player.DisplayName
+
+	return []*playable.LogMessage{
+		{
+			UUID:    uuid.New().String(),
+			Message: fmt.Sprintf("%s picked the last game. %s is next to pick", lastPicker, nextPicker),
+			Time:    time.Now(),
+		},
+	}
 }
 
 func (d *Dealer) getNextPlayersForGame() ([]*model.PlayerTable, error) {
@@ -666,6 +727,7 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 	logger.Info("game started")
 
 	d.game = game
+	d.lastGameStartedBy = client.player
 
 	if t, ok := game.(playable.Tickable); ok {
 		d.ticker = time.NewTicker(t.Interval())
