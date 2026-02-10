@@ -107,6 +107,7 @@ func (g *Game) Tick() (bool, error) {
 					logrus.WithError(err).Error("could not go to the next round")
 				}
 			case dealerActionEndGame:
+				g.phase = PhaseGameOver
 				g.done = true
 			case dealerActionNextTrader:
 				g.notifyNextTrader()
@@ -381,13 +382,13 @@ func (g *Game) calculateShowdown() {
 		result.SingleWinner = true
 		g.showdownResult = result
 
-		g.sendLogMessages(newLogMessage(player.PlayerID, "{} wins ${%d} (only one in)", g.pot))
+		g.sendLogMessages(newLogMessageWithCards(player.PlayerID, player.hand,
+			"{} wins ${%d} with %s", g.pot, HandTypeName(result.WinningHand.Type)))
 
-		// Game ends
-		g.phase = PhaseGameOver
+		// Game ends (phase stays at PhaseShowdown so winning hand is visible)
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionEndGame,
-			ExecuteAfter: time.Now().Add(time.Second * 2),
+			ExecuteAfter: time.Now().Add(time.Second * 5),
 		}
 		return
 	}
@@ -477,11 +478,11 @@ func (g *Game) calculateShowdown() {
 		}
 	} else {
 		// No penalties paid (everyone who was in won), game ends
-		g.phase = PhaseGameOver
+		// Phase stays at PhaseShowdown so winning hand is visible
 		g.sendLogMessages(newLogMessage(0, "The game ends"))
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionEndGame,
-			ExecuteAfter: time.Now().Add(time.Second * 2),
+			ExecuteAfter: time.Now().Add(time.Second * 5),
 		}
 	}
 }
@@ -574,11 +575,10 @@ func (g *Game) resolveBloodyGuts() {
 				"{} beats the deck with %s and wins ${%d}", HandTypeName(playerHand.Type), g.pot),
 		)
 
-		// Game ends
-		g.phase = PhaseGameOver
+		// Game ends (phase stays at PhaseShowdown so winning hand is visible)
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionEndGame,
-			ExecuteAfter: time.Now().Add(time.Second * 2),
+			ExecuteAfter: time.Now().Add(time.Second * 5),
 		}
 	} else {
 		// Deck wins (including ties)

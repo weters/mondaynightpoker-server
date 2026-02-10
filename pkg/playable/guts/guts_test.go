@@ -150,8 +150,12 @@ func TestGame_Showdown_OnePersonIn(t *testing.T) {
 	// Winner should have received the pot
 	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance) // -25 ante + pot
 
-	// Game should end
-	assert.Equal(t, PhaseGameOver, g.phase)
+	// Phase stays at PhaseShowdown so winning hand is visible
+	assert.Equal(t, PhaseShowdown, g.phase)
+
+	// End game should be scheduled
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
 }
 
 func TestGame_Showdown_MultipleIn_SingleWinner(t *testing.T) {
@@ -203,7 +207,13 @@ func TestGame_Showdown_Tie(t *testing.T) {
 
 	// No penalty, game ends
 	assert.Equal(t, 0, g.showdownResult.NextPot)
-	assert.Equal(t, PhaseGameOver, g.phase)
+
+	// Phase stays at PhaseShowdown so winning hand is visible
+	assert.Equal(t, PhaseShowdown, g.phase)
+
+	// End game should be scheduled
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
 }
 
 func TestGame_Showdown_ThreePlayersOneWinner(t *testing.T) {
@@ -377,6 +387,107 @@ func TestGame_Tick_Done(t *testing.T) {
 	updated, err := g.Tick()
 	assert.NoError(t, err)
 	assert.False(t, updated)
+}
+
+func TestGame_Tick_EndGameSetsPhaseGameOver(t *testing.T) {
+	g := setupTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	// Single player goes in - wins automatically
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	// Phase should be showdown (not game over yet)
+	assert.Equal(t, PhaseShowdown, g.phase)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+
+	// Execute end game
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	updated, err := g.Tick()
+	assert.NoError(t, err)
+	assert.True(t, updated)
+
+	// NOW phase should be game over and done
+	assert.Equal(t, PhaseGameOver, g.phase)
+	assert.True(t, g.done)
+}
+
+func TestGame_EndGameDelay_SingleWinner(t *testing.T) {
+	g := setupTestGame(t, []string{"14c,13c", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+
+	// End game should be scheduled ~5 seconds in the future
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.After(time.Now().Add(time.Second*4)))
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.Before(time.Now().Add(time.Second*6)))
+}
+
+func TestGame_EndGameDelay_Tie(t *testing.T) {
+	// Both players have Ace-King (tie, no losers)
+	g := setupTestGame(t, []string{"14c,13c", "14d,13d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	g.calculateShowdown()
+
+	// End game should be scheduled ~5 seconds in the future
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.After(time.Now().Add(time.Second*4)))
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.Before(time.Now().Add(time.Second*6)))
+}
+
+func TestGame_EndGameDelay_BloodyGutsPlayerWins(t *testing.T) {
+	// Player has Ace-King, deck has Queen-Jack
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "12h,11h")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	// End game should be scheduled ~5 seconds in the future
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.After(time.Now().Add(time.Second*4)))
+	assert.True(t, g.pendingDealerAction.ExecuteAfter.Before(time.Now().Add(time.Second*6)))
+}
+
+func TestGame_SingleWinner_HandRevealed(t *testing.T) {
+	// Player 1 has pair of aces
+	g := setupTestGame(t, []string{"14c,14d", "12d,11d"})
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+
+	// Winner's hand should be in showdown result
+	assert.NotNil(t, g.showdownResult)
+	assert.Equal(t, Pair, g.showdownResult.WinningHand.Type)
+
+	// Game state should include the winner's hand (for front-end display)
+	state := g.getGameState()
+	for _, p := range state.Participants {
+		if p.PlayerID == 1 {
+			assert.NotNil(t, p.Hand, "winner's hand should be visible")
+			assert.Len(t, p.Hand, 2)
+		}
+	}
+
+	// Phase should be showdown so front-end shows cards
+	assert.Equal(t, PhaseShowdown, g.phase)
 }
 
 func TestGame_Tick_ShowdownSchedulesNextRound(t *testing.T) {
@@ -668,8 +779,8 @@ func TestBloodyGuts_PlayerBeatsDeck(t *testing.T) {
 	// Winner should have received the pot
 	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance)
 
-	// Game should end
-	assert.Equal(t, PhaseGameOver, g.phase)
+	// Phase stays at PhaseShowdown so winning hand is visible
+	assert.Equal(t, PhaseShowdown, g.phase)
 	assert.NotNil(t, g.pendingDealerAction)
 	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
 }
@@ -983,7 +1094,8 @@ func TestBloodyGuts_WinnerAfterLastCard(t *testing.T) {
 	assert.False(t, g.showdownResult.DeckWon)
 	assert.Equal(t, initialPot, g.showdownResult.PotWon)
 	assert.Equal(t, initialPot-25, g.idToParticipant[1].balance)
-	assert.Equal(t, PhaseGameOver, g.phase)
+	// Phase stays at PhaseShowdown so winning hand is visible
+	assert.Equal(t, PhaseShowdown, g.phase)
 }
 
 func TestBloodyGuts_NextRoundAfterResolve(t *testing.T) {
