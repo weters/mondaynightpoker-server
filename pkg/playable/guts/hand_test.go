@@ -256,3 +256,48 @@ func TestHandTypeName_3Card(t *testing.T) {
 	assert.Equal(t, "Pair", HandTypeName(Pair))
 	assert.Equal(t, "High Card", HandTypeName(HighCard))
 }
+
+func TestBestHand_3CardsPick2(t *testing.T) {
+	// Cards: 14c, 14d, 5h — best 2-card hand is pair of aces
+	cards := deck.CardsFromString("14c,14d,5h")
+	best := BestHand(cards, 2)
+	assert.Len(t, best, 2)
+	result := AnalyzeHand(best)
+	assert.Equal(t, Pair, result.Type)
+	assert.Equal(t, 14, result.HighCard)
+}
+
+func TestBestHand_4CardsPick3(t *testing.T) {
+	// Cards: 14c, 14d, 14h, 5s — best 3-card hand is three of a kind (aces)
+	cards := deck.CardsFromString("14c,14d,14h,5s")
+	best := BestHand(cards, 3)
+	assert.Len(t, best, 3)
+	result := AnalyzeHand(best)
+	assert.Equal(t, ThreeOfAKind, result.Type)
+	assert.Equal(t, 14, result.HighCard)
+}
+
+func TestBestHand_SameSize(t *testing.T) {
+	// When cards length equals handSize, returns same cards
+	cards := deck.CardsFromString("14c,13d")
+	best := BestHand(cards, 2)
+	assert.Equal(t, cards, best)
+}
+
+func TestBestHand_FewerCards(t *testing.T) {
+	// When cards length is less than handSize, returns same cards
+	cards := deck.CardsFromString("14c")
+	best := BestHand(cards, 2)
+	assert.Equal(t, cards, best)
+}
+
+func TestBestHand_PicksBestFromHighCards(t *testing.T) {
+	// Cards: 14c, 10d, 5h — best 2-card hand is A-10
+	cards := deck.CardsFromString("14c,10d,5h")
+	best := BestHand(cards, 2)
+	assert.Len(t, best, 2)
+	result := AnalyzeHand(best)
+	assert.Equal(t, HighCard, result.Type)
+	assert.Equal(t, 14, result.HighCard)
+	assert.Equal(t, 10, result.LowCard)
+}

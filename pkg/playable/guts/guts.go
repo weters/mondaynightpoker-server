@@ -502,9 +502,13 @@ func (g *Game) handleBloodyGutsShowdown(player *Participant, result *ShowdownRes
 	if cardCount < 2 || cardCount > 3 {
 		cardCount = 2
 	}
+	drawCount := cardCount
+	if g.options.AllowTrades {
+		drawCount++
+	}
 
-	g.deckHand = make([]*deck.Card, cardCount)
-	for i := 0; i < cardCount; i++ {
+	g.deckHand = make([]*deck.Card, drawCount)
+	for i := 0; i < drawCount; i++ {
 		card, err := g.deck.Draw()
 		if err != nil {
 			// This shouldn't happen in normal play
@@ -556,7 +560,8 @@ func (g *Game) resolveBloodyGuts() {
 	result := g.showdownResult
 
 	playerHand := AnalyzeHand(player.hand)
-	deckHandResult := AnalyzeHand(g.deckHand)
+	bestDeckCards := BestHand(g.deckHand, g.options.CardCount)
+	deckHandResult := AnalyzeHand(bestDeckCards)
 
 	result.DeckHand = g.deckHand
 

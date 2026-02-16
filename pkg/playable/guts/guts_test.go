@@ -1611,6 +1611,95 @@ func TestTrade_BloodyGuts_SinglePlayerInCanTrade(t *testing.T) {
 	assert.Equal(t, dealerActionRevealDeckCard, g.pendingDealerAction.Action)
 }
 
+func setupBloodyGutsTradeTestGame(t *testing.T, hands []string, deckCards string, cardCount int) *Game {
+	t.Helper()
+
+	playerIDs := make([]int64, len(hands))
+	for i := range hands {
+		playerIDs[i] = int64(i + 1)
+	}
+
+	opts := Options{Ante: 25, MaxOwed: 1000, CardCount: cardCount, BloodyGuts: true, AllowTrades: true}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	for i, handStr := range hands {
+		g.participants[i].hand = deck.CardsFromString(handStr)
+	}
+
+	deckCardsList := deck.CardsFromString(deckCards)
+	g.deck.Cards = append(deckCardsList, g.deck.Cards...)
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = make(map[int64]bool)
+	g.decisions = make(map[int64]bool)
+	for _, p := range g.participants {
+		g.pendingDecisions[p.PlayerID] = true
+	}
+
+	return g
+}
+
+func runTradePhaseNoTrades(t *testing.T, g *Game, playerID int64) {
+	t.Helper()
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	_ = g.submitTrade(playerID, []*deck.Card{})
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+	// Execute showdown
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+}
+
+func TestBloodyGuts_WithTrades_DeckGetsExtraCard(t *testing.T) {
+	g := setupBloodyGutsTradeTestGame(t, []string{"14c,13c", "12d,11d"}, "10h,9h,8h", 2)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+	runTradePhaseNoTrades(t, g, 1)
+
+	assert.Len(t, g.deckHand, 3)
+}
+
+func TestBloodyGuts_WithoutTrades_DeckGetsNormalCards(t *testing.T) {
+	g := setupBloodyGutsTestGame(t, []string{"14c,13c", "12d,11d"}, "10h,9h")
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.pendingDealerAction.ExecuteAfter = time.Now().Add(-time.Second)
+	_, _ = g.Tick()
+
+	assert.Len(t, g.deckHand, 2)
+}
+
+func TestBloodyGuts_3Card_WithTrades_DeckGetsExtraCard(t *testing.T) {
+	g := setupBloodyGutsTradeTestGame(t, []string{"12c,13d,14h", "5c,7d,9h"}, "14s,10s,5s,2h", 3)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+	runTradePhaseNoTrades(t, g, 1)
+
+	assert.Len(t, g.deckHand, 4)
+}
+
+func TestBloodyGuts_WithTrades_DeckPicksBestHand(t *testing.T) {
+	// Deck gets 3 cards (10h, 10d, 5s) for 2-card game with trades
+	// Best 2-card hand is pair of 10s — should beat player's A-K high
+	g := setupBloodyGutsTradeTestGame(t, []string{"14c,13c", "12d,11d"}, "10h,10d,5s", 2)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+	runTradePhaseNoTrades(t, g, 1)
+
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.True(t, g.showdownResult.DeckWon)
+}
+
 func TestTrade_StateVisibility(t *testing.T) {
 	g := setupTradeTestGame(t, []string{"14c,13c", "12d,11d"})
 

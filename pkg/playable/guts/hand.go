@@ -115,6 +115,62 @@ func analyze3CardHand(cards []*deck.Card) HandResult {
 	}
 }
 
+// BestHand finds the best handSize-card hand from a larger set of cards.
+// If len(cards) <= handSize, it returns cards as-is.
+func BestHand(cards []*deck.Card, handSize int) []*deck.Card {
+	if len(cards) <= handSize {
+		return cards
+	}
+
+	var best []*deck.Card
+	var bestStrength int
+
+	// Generate all combinations of handSize cards
+	combos := combinations(cards, handSize)
+	for _, combo := range combos {
+		result := AnalyzeHand(combo)
+		if best == nil || result.Strength > bestStrength {
+			best = combo
+			bestStrength = result.Strength
+		}
+	}
+
+	return best
+}
+
+// combinations returns all ways to choose k items from cards
+func combinations(cards []*deck.Card, k int) [][]*deck.Card {
+	var result [][]*deck.Card
+	n := len(cards)
+	indices := make([]int, k)
+	for i := range indices {
+		indices[i] = i
+	}
+
+	for {
+		combo := make([]*deck.Card, k)
+		for i, idx := range indices {
+			combo[i] = cards[idx]
+		}
+		result = append(result, combo)
+
+		// Find rightmost index that can be incremented
+		i := k - 1
+		for i >= 0 && indices[i] == n-k+i {
+			i--
+		}
+		if i < 0 {
+			break
+		}
+		indices[i]++
+		for j := i + 1; j < k; j++ {
+			indices[j] = indices[j-1] + 1
+		}
+	}
+
+	return result
+}
+
 // CompareHands compares two hands and returns:
 // 1 if hand1 wins, -1 if hand2 wins, 0 if tie
 func CompareHands(hand1, hand2 []*deck.Card) int {
