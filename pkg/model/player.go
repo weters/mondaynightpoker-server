@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/google/uuid"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/db"
-	"mondaynightpoker-server/pkg/token"
+	"mondaynightpoker-server/pkg/mnptoken"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/lib/pq"
 	"github.com/synacor/argon2id"
@@ -392,7 +393,7 @@ func (p *Player) createPlayerToken(ctx context.Context, tokenType string) (strin
 INSERT INTO player_tokens (token, player_id, type)
 VALUES ($1, $2, $3)`
 
-	resetToken, err := token.Generate(20)
+	resetToken, err := mnptoken.Generate(20)
 	if err != nil {
 		return "", err
 	}

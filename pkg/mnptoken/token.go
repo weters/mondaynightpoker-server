@@ -1,4 +1,4 @@
-package token
+package mnptoken
 
 import (
 	"crypto/rand"

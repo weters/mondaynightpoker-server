@@ -4,18 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/db"
+	"mondaynightpoker-server/pkg/mnptoken"
 	"mondaynightpoker-server/pkg/model"
-	"mondaynightpoker-server/pkg/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type mockRecaptcha struct {
@@ -400,7 +401,7 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 	var resetToken string
 	a.NoError(row.Scan(&resetToken))
 
-	diffToken, err := token.Generate(20)
+	diffToken, err := mnptoken.Generate(20)
 	a.NoError(err)
 
 	assertGet(t, ts, "/player/reset-password/"+resetToken, nil, http.StatusOK)
@@ -477,7 +478,7 @@ func TestMux_accountVerification(t *testing.T) {
 	var verifyToken string
 	a.NoError(row.Scan(&verifyToken))
 
-	badToken, _ := token.Generate(20)
+	badToken, _ := mnptoken.Generate(20)
 	assertPost(t, ts, "/player/verify/"+badToken, nil, nil, http.StatusBadRequest)
 	assertPost(t, ts, "/player/verify/"+verifyToken, nil, nil, http.StatusOK)
 
