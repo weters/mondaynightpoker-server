@@ -109,7 +109,7 @@ func (g *Game) getGameState() *GameState {
 		}
 
 		// Show hands of players who went in after showdown
-		if allDecided && g.decisions[p.PlayerID] {
+		if g.phase >= PhaseShowdown && g.decisions[p.PlayerID] {
 			gsp.Hand = p.Hand()
 		}
 

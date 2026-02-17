@@ -490,6 +490,39 @@ func TestGame_SingleWinner_HandRevealed(t *testing.T) {
 	assert.Equal(t, PhaseShowdown, g.phase)
 }
 
+func TestGame_HandsNotVisibleDuringDeclarationPhase(t *testing.T) {
+	// Verify that player hands are NOT leaked in the game state after all players
+	// have decided but before the phase transitions to showdown.
+	g := setupTestGame(t, []string{"14c,14d", "12d,11d"})
+
+	// Both go in - all decided, but phase is still PhaseDeclaration
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+
+	// Confirm we're still in declaration phase (showdown hasn't fired yet)
+	assert.Equal(t, PhaseDeclaration, g.phase)
+	assert.Empty(t, g.pendingDecisions)
+
+	// Game state should NOT include any player hands
+	state := g.getGameState()
+	for _, p := range state.Participants {
+		assert.Nil(t, p.Hand, "player %d hand should not be visible during declaration phase", p.PlayerID)
+	}
+
+	// Now run showdown
+	g.calculateShowdown()
+	assert.Equal(t, PhaseShowdown, g.phase)
+
+	// After showdown, hands of players who went in SHOULD be visible
+	state = g.getGameState()
+	for _, p := range state.Participants {
+		if p.PlayerID == 1 || p.PlayerID == 2 {
+			assert.NotNil(t, p.Hand, "player %d hand should be visible during showdown", p.PlayerID)
+			assert.Len(t, p.Hand, 2)
+		}
+	}
+}
+
 func TestGame_Tick_ShowdownSchedulesNextRound(t *testing.T) {
 	// This test verifies that Tick() clears pendingDealerAction BEFORE
 	// executing the action, so any new action scheduled during execution
