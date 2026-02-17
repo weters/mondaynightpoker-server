@@ -386,23 +386,7 @@ func (g *Game) calculateShowdown() {
 		g.sendLogMessages(newLogMessageWithCards(player.PlayerID, player.hand,
 			"{} wins ${%d} with %s", g.pot, HandTypeName(result.WinningHand.Type)))
 
-		if g.overflowPot > 0 {
-			// Overflow remains — move it to main pot and continue
-			g.pot = g.overflowPot
-			g.overflowPot = 0
-			g.applyOverflowCap()
-			g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
-			g.pendingDealerAction = &pendingDealerAction{
-				Action:       dealerActionNextRound,
-				ExecuteAfter: time.Now().Add(time.Second * 5),
-			}
-		} else {
-			// Game ends (phase stays at PhaseShowdown so winning hand is visible)
-			g.pendingDealerAction = &pendingDealerAction{
-				Action:       dealerActionEndGame,
-				ExecuteAfter: time.Now().Add(time.Second * 5),
-			}
-		}
+		g.scheduleOverflowOrEnd()
 		return
 	}
 
@@ -496,24 +480,8 @@ func (g *Game) calculateShowdown() {
 			Action:       dealerActionNextRound,
 			ExecuteAfter: time.Now().Add(time.Second * 5),
 		}
-	} else if g.overflowPot > 0 {
-		// No penalties but overflow remains — move it to main pot and continue
-		g.pot = g.overflowPot
-		g.overflowPot = 0
-		g.applyOverflowCap()
-		g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
-		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionNextRound,
-			ExecuteAfter: time.Now().Add(time.Second * 5),
-		}
 	} else {
-		// No penalties paid (everyone who was in won), game ends
-		// Phase stays at PhaseShowdown so winning hand is visible
-		g.sendLogMessages(newLogMessage(0, "The game ends"))
-		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionEndGame,
-			ExecuteAfter: time.Now().Add(time.Second * 5),
-		}
+		g.scheduleOverflowOrEnd()
 	}
 }
 
@@ -619,23 +587,7 @@ func (g *Game) resolveBloodyGuts() {
 				"{} beats the deck with %s and wins ${%d}", HandTypeName(playerHand.Type), g.pot),
 		)
 
-		if g.overflowPot > 0 {
-			// Overflow remains — move it to main pot and continue
-			g.pot = g.overflowPot
-			g.overflowPot = 0
-			g.applyOverflowCap()
-			g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
-			g.pendingDealerAction = &pendingDealerAction{
-				Action:       dealerActionNextRound,
-				ExecuteAfter: time.Now().Add(time.Second * 5),
-			}
-		} else {
-			// Game ends (phase stays at PhaseShowdown so winning hand is visible)
-			g.pendingDealerAction = &pendingDealerAction{
-				Action:       dealerActionEndGame,
-				ExecuteAfter: time.Now().Add(time.Second * 5),
-			}
-		}
+		g.scheduleOverflowOrEnd()
 	} else {
 		// Deck wins (including ties)
 		result.Losers = []*Participant{player}
@@ -659,6 +611,26 @@ func (g *Game) resolveBloodyGuts() {
 		// Continue to next round
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionNextRound,
+			ExecuteAfter: time.Now().Add(time.Second * 5),
+		}
+	}
+}
+
+// scheduleOverflowOrEnd checks if there's an overflow pot to carry over into the next round,
+// otherwise schedules the game to end.
+func (g *Game) scheduleOverflowOrEnd() {
+	if g.overflowPot > 0 {
+		g.pot = g.overflowPot
+		g.overflowPot = 0
+		g.applyOverflowCap()
+		g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionNextRound,
+			ExecuteAfter: time.Now().Add(time.Second * 5),
+		}
+	} else {
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionEndGame,
 			ExecuteAfter: time.Now().Add(time.Second * 5),
 		}
 	}
