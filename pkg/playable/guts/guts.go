@@ -576,7 +576,7 @@ func (g *Game) revealNextDeckCard() {
 	g.deckCardsRevealed++
 
 	card := g.deckHand[g.deckCardsRevealed-1]
-	g.sendLogMessages(newLogMessage(0, "Deck reveals: %s", card.String()))
+	g.sendLogMessages(newLogMessageWithCards(0, []*deck.Card{card}, "Deck reveals"))
 
 	if g.deckCardsRevealed < len(g.deckHand) {
 		// More cards to reveal - schedule next reveal (2 seconds)
