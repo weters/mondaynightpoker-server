@@ -52,6 +52,7 @@ type Game struct {
 	idToParticipant map[int64]*Participant
 
 	pot         int
+	overflowPot int
 	phase       Phase
 	roundNumber int
 
@@ -385,10 +386,22 @@ func (g *Game) calculateShowdown() {
 		g.sendLogMessages(newLogMessageWithCards(player.PlayerID, player.hand,
 			"{} wins ${%d} with %s", g.pot, HandTypeName(result.WinningHand.Type)))
 
-		// Game ends (phase stays at PhaseShowdown so winning hand is visible)
-		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionEndGame,
-			ExecuteAfter: time.Now().Add(time.Second * 5),
+		if g.overflowPot > 0 {
+			// Overflow remains — move it to main pot and continue
+			g.pot = g.overflowPot
+			g.overflowPot = 0
+			g.applyOverflowCap()
+			g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
+			g.pendingDealerAction = &pendingDealerAction{
+				Action:       dealerActionNextRound,
+				ExecuteAfter: time.Now().Add(time.Second * 5),
+			}
+		} else {
+			// Game ends (phase stays at PhaseShowdown so winning hand is visible)
+			g.pendingDealerAction = &pendingDealerAction{
+				Action:       dealerActionEndGame,
+				ExecuteAfter: time.Now().Add(time.Second * 5),
+			}
 		}
 		return
 	}
@@ -449,6 +462,14 @@ func (g *Game) calculateShowdown() {
 		loser.balance -= penalty
 		nextPot += penalty
 	}
+
+	// Add overflow to next pot, then apply cap
+	nextPot += g.overflowPot
+	g.overflowPot = 0
+	g.pot = nextPot
+	g.applyOverflowCap()
+	nextPot = g.pot
+
 	result.NextPot = nextPot
 
 	g.showdownResult = result
@@ -471,7 +492,16 @@ func (g *Game) calculateShowdown() {
 
 	// If there are losers who paid penalties, continue the game
 	if nextPot > 0 {
-		g.pot = nextPot
+		g.pendingDealerAction = &pendingDealerAction{
+			Action:       dealerActionNextRound,
+			ExecuteAfter: time.Now().Add(time.Second * 5),
+		}
+	} else if g.overflowPot > 0 {
+		// No penalties but overflow remains — move it to main pot and continue
+		g.pot = g.overflowPot
+		g.overflowPot = 0
+		g.applyOverflowCap()
+		g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionNextRound,
 			ExecuteAfter: time.Now().Add(time.Second * 5),
@@ -493,6 +523,15 @@ func (g *Game) calculatePenalty() int {
 		return g.options.MaxOwed
 	}
 	return g.pot
+}
+
+// applyOverflowCap caps the main pot at 2x maxOwed and moves excess to the overflow pot
+func (g *Game) applyOverflowCap() {
+	maxPot := g.options.MaxOwed * 2
+	if g.pot > maxPot {
+		g.overflowPot += g.pot - maxPot
+		g.pot = maxPot
+	}
 }
 
 // handleBloodyGutsShowdown handles the case where a single player must beat the deck
@@ -580,10 +619,22 @@ func (g *Game) resolveBloodyGuts() {
 				"{} beats the deck with %s and wins ${%d}", HandTypeName(playerHand.Type), g.pot),
 		)
 
-		// Game ends (phase stays at PhaseShowdown so winning hand is visible)
-		g.pendingDealerAction = &pendingDealerAction{
-			Action:       dealerActionEndGame,
-			ExecuteAfter: time.Now().Add(time.Second * 5),
+		if g.overflowPot > 0 {
+			// Overflow remains — move it to main pot and continue
+			g.pot = g.overflowPot
+			g.overflowPot = 0
+			g.applyOverflowCap()
+			g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
+			g.pendingDealerAction = &pendingDealerAction{
+				Action:       dealerActionNextRound,
+				ExecuteAfter: time.Now().Add(time.Second * 5),
+			}
+		} else {
+			// Game ends (phase stays at PhaseShowdown so winning hand is visible)
+			g.pendingDealerAction = &pendingDealerAction{
+				Action:       dealerActionEndGame,
+				ExecuteAfter: time.Now().Add(time.Second * 5),
+			}
 		}
 	} else {
 		// Deck wins (including ties)
@@ -594,8 +645,11 @@ func (g *Game) resolveBloodyGuts() {
 		result.PenaltyPaid = penalty
 
 		player.balance -= penalty
-		result.NextPot = g.pot + penalty
 		g.pot += penalty
+		g.pot += g.overflowPot
+		g.overflowPot = 0
+		g.applyOverflowCap()
+		result.NextPot = g.pot
 
 		g.sendLogMessages(
 			newLogMessage(player.PlayerID, "The deck wins with %s! {} pays penalty of ${%d}",
@@ -618,6 +672,7 @@ func (g *Game) nextRound() error {
 			p.balance -= g.options.Ante
 			g.pot += g.options.Ante
 		}
+		g.applyOverflowCap()
 		g.sendLogMessages(newLogMessage(0, "Everyone re-anted. Pot is now ${%d}", g.pot))
 	}
 

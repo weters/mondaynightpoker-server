@@ -958,8 +958,11 @@ func TestBloodyGuts_PenaltyCapped(t *testing.T) {
 
 	assert.True(t, g.showdownResult.DeckWon)
 	assert.Equal(t, 500, g.showdownResult.PenaltyPaid, "Penalty should be capped at maxOwed")
-	// In Bloody Guts, pot accumulates: original pot (2000) + capped penalty (500)
-	assert.Equal(t, 2500, g.showdownResult.NextPot)
+	// In Bloody Guts, pot accumulates: original pot (2000) + capped penalty (500) = 2500
+	// But overflow cap is 2*maxOwed = 1000, so main pot = 1000, overflow = 1500
+	assert.Equal(t, 1000, g.showdownResult.NextPot)
+	assert.Equal(t, 1000, g.pot)
+	assert.Equal(t, 1500, g.overflowPot)
 	// Player balance: -25 ante - 500 penalty = -525
 	assert.Equal(t, -25-500, g.idToParticipant[1].balance)
 }
@@ -1989,4 +1992,396 @@ func TestTrade_TradedFieldResetOnNextRound(t *testing.T) {
 	// traded should be reset
 	assert.Equal(t, 0, g.idToParticipant[1].traded)
 	assert.Equal(t, 0, g.idToParticipant[2].traded)
+}
+
+// ============================================
+// Overflow Pot Tests
+// ============================================
+
+// Helper to set up a game with a custom maxOwed for overflow testing
+func setupOverflowTestGame(t *testing.T, hands []string, maxOwed int) *Game {
+	t.Helper()
+
+	playerIDs := make([]int64, len(hands))
+	for i := range hands {
+		playerIDs[i] = int64(i + 1)
+	}
+
+	opts := Options{Ante: 25, MaxOwed: maxOwed, CardCount: 2}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	for i, handStr := range hands {
+		g.participants[i].hand = deck.CardsFromString(handStr)
+	}
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = make(map[int64]bool)
+	g.decisions = make(map[int64]bool)
+	for _, p := range g.participants {
+		g.pendingDecisions[p.PlayerID] = true
+	}
+
+	return g
+}
+
+func TestOverflow_CreatedWhenPenaltiesExceedCap(t *testing.T) {
+	// 3 players, maxOwed=100, pot starts at 75 (3*25 ante)
+	// Player 1 wins, players 2 and 3 lose => penalty is 75 each
+	// Next pot = 75 + 75 = 150, but cap is 2*100 = 200, so no overflow
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d"}, 100)
+	assert.Equal(t, 75, g.pot)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	g.calculateShowdown()
+
+	assert.Equal(t, 150, g.pot)
+	assert.Equal(t, 0, g.overflowPot)
+}
+
+func TestOverflow_CreatedWhenPenaltiesExceedCap_Large(t *testing.T) {
+	// 3 players, maxOwed=50, pot starts at 75
+	// Player 1 wins, 2 and 3 lose => penalty is capped at 50 each
+	// Next pot = 50 + 50 = 100, cap is 2*50 = 100, no overflow
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d"}, 50)
+	assert.Equal(t, 75, g.pot)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	g.calculateShowdown()
+
+	assert.Equal(t, 100, g.pot)
+	assert.Equal(t, 0, g.overflowPot)
+}
+
+func TestOverflow_CreatedFromHighPot(t *testing.T) {
+	// Set up a scenario where pot is already large and penalties push it over
+	// 3 players, maxOwed=100, artificially set pot to 200
+	// Winner takes 200, losers each pay 100 (maxOwed cap)
+	// Next pot = 200, but cap is 200, so no overflow yet
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d"}, 100)
+	g.pot = 200
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	g.calculateShowdown()
+
+	assert.Equal(t, 200, g.pot)
+	assert.Equal(t, 0, g.overflowPot)
+}
+
+func TestOverflow_ThreeLosersPushOverCap(t *testing.T) {
+	// 4 players, maxOwed=100, pot=200
+	// Player 1 wins, 3 losers each pay 100 = 300 next pot
+	// Cap is 200, overflow is 100
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d", "9c,8d"}, 100)
+	g.pot = 200
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	_ = g.submitDecision(4, true)
+	g.calculateShowdown()
+
+	assert.Equal(t, 200, g.pot)
+	assert.Equal(t, 100, g.overflowPot)
+	assert.Equal(t, 200, g.showdownResult.NextPot, "NextPot should be capped main pot")
+}
+
+func TestOverflow_WinnerOnlyWinsMainPot(t *testing.T) {
+	// Set up overflow scenario, then verify winner only wins main pot
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d", "9c,8d"}, 100)
+	g.pot = 200
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	_ = g.submitDecision(4, true)
+	g.calculateShowdown()
+
+	assert.Equal(t, 200, g.showdownResult.PotWon)
+	// Winner balance: -25 ante + 200 pot won = 175
+	assert.Equal(t, 175, g.idToParticipant[1].balance)
+}
+
+func TestOverflow_ContinuesAfterSingleWinnerWithOverflow(t *testing.T) {
+	// Single player goes in, wins automatically, but there's overflow
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d"}, 100)
+	g.pot = 150
+	g.overflowPot = 300
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+	g.calculateShowdown()
+
+	// Winner should have won 150
+	assert.Equal(t, 150, g.showdownResult.PotWon)
+	assert.Equal(t, 150-25, g.idToParticipant[1].balance)
+
+	// Game should continue, not end
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+
+	// Overflow should have moved to main pot with cap applied
+	assert.Equal(t, 200, g.pot) // 300 capped at 2*100=200
+	assert.Equal(t, 100, g.overflowPot)
+}
+
+func TestOverflow_GameEndsWhenNoOverflow(t *testing.T) {
+	// Single player goes in, no overflow, game ends
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d"}, 100)
+	g.pot = 150
+	g.overflowPot = 0
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+	g.calculateShowdown()
+
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+}
+
+func TestOverflow_MergesIntoNextPotWithPenalties(t *testing.T) {
+	// 3 players, maxOwed=100, pot=150, overflow=500
+	// Player 1 wins, 2 losers pay 100 each = 200
+	// 200 + 500 overflow = 700, cap 200, overflow 500
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d"}, 100)
+	g.pot = 150
+	g.overflowPot = 500
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	g.calculateShowdown()
+
+	assert.Equal(t, 200, g.pot)
+	assert.Equal(t, 500, g.overflowPot)
+	assert.Equal(t, 200, g.showdownResult.NextPot)
+}
+
+func TestOverflow_StacksAcrossMultipleRounds(t *testing.T) {
+	// Start with overflow, add more via penalties
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d", "11c,10d", "9c,8d"}, 100)
+	g.pot = 200
+	g.overflowPot = 500
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	_ = g.submitDecision(3, true)
+	_ = g.submitDecision(4, true)
+	g.calculateShowdown()
+
+	// 3 losers * 100 = 300, + 500 overflow = 800
+	// Cap = 200, new overflow = 600
+	assert.Equal(t, 200, g.pot)
+	assert.Equal(t, 600, g.overflowPot)
+}
+
+func TestOverflow_TieWithOverflowContinuesGame(t *testing.T) {
+	// Both players have Ace-King (tie, no losers, no penalties)
+	// But there's overflow, so game should continue
+	g := setupOverflowTestGame(t, []string{"14c,13c", "14d,13d"}, 100)
+	g.pot = 100
+	g.overflowPot = 300
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	g.calculateShowdown()
+
+	// Both win, split pot
+	assert.Len(t, g.showdownResult.Winners, 2)
+	assert.Empty(t, g.showdownResult.Losers)
+
+	// Game continues because overflow > 0
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+
+	// Overflow moves to main pot
+	assert.Equal(t, 200, g.pot) // 300 capped at 200
+	assert.Equal(t, 100, g.overflowPot)
+}
+
+func TestOverflow_TieNoOverflowEndsGame(t *testing.T) {
+	// Tie with no overflow should still end game
+	g := setupOverflowTestGame(t, []string{"14c,13c", "14d,13d"}, 100)
+	g.pot = 100
+	g.overflowPot = 0
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, true)
+	g.calculateShowdown()
+
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+}
+
+func TestOverflow_BloodyGuts_DeckWins(t *testing.T) {
+	// Deck beats player, penalty + pot > cap
+	playerIDs := []int64{1, 2}
+	opts := Options{Ante: 25, MaxOwed: 100, CardCount: 2, BloodyGuts: true}
+	g, _ := NewGame(logrus.StandardLogger(), playerIDs, opts)
+
+	g.participants[0].hand = deck.CardsFromString("10c,9c")
+	g.participants[1].hand = deck.CardsFromString("8d,7d")
+
+	deckCardsList := deck.CardsFromString("14h,13h")
+	g.deck.Cards = append(deckCardsList, g.deck.Cards...)
+
+	g.pot = 200
+	g.overflowPot = 0
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = map[int64]bool{1: true, 2: true}
+	g.decisions = make(map[int64]bool)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.True(t, g.showdownResult.DeckWon)
+	// Pot was 200, penalty is 100 (capped at maxOwed), total = 300
+	// Cap = 2*100 = 200, overflow = 100
+	assert.Equal(t, 200, g.pot)
+	assert.Equal(t, 100, g.overflowPot)
+	assert.Equal(t, 200, g.showdownResult.NextPot)
+}
+
+func TestOverflow_BloodyGuts_PlayerWinsWithOverflow(t *testing.T) {
+	// Player beats deck, but there's overflow — game continues
+	playerIDs := []int64{1, 2}
+	opts := Options{Ante: 25, MaxOwed: 100, CardCount: 2, BloodyGuts: true}
+	g, _ := NewGame(logrus.StandardLogger(), playerIDs, opts)
+
+	g.participants[0].hand = deck.CardsFromString("14c,13c")
+	g.participants[1].hand = deck.CardsFromString("8d,7d")
+
+	deckCardsList := deck.CardsFromString("10h,9h")
+	g.deck.Cards = append(deckCardsList, g.deck.Cards...)
+
+	g.pot = 150
+	g.overflowPot = 400
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = map[int64]bool{1: true, 2: true}
+	g.decisions = make(map[int64]bool)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.False(t, g.showdownResult.DeckWon)
+	assert.Equal(t, 150, g.showdownResult.PotWon)
+	assert.Equal(t, 150-25, g.idToParticipant[1].balance)
+
+	// Game continues because overflow > 0
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionNextRound, g.pendingDealerAction.Action)
+
+	// Overflow moves to main pot
+	assert.Equal(t, 200, g.pot) // 400 capped at 200
+	assert.Equal(t, 200, g.overflowPot)
+}
+
+func TestOverflow_BloodyGuts_PlayerWinsNoOverflow(t *testing.T) {
+	// Player beats deck, no overflow — game ends
+	playerIDs := []int64{1, 2}
+	opts := Options{Ante: 25, MaxOwed: 100, CardCount: 2, BloodyGuts: true}
+	g, _ := NewGame(logrus.StandardLogger(), playerIDs, opts)
+
+	g.participants[0].hand = deck.CardsFromString("14c,13c")
+	g.participants[1].hand = deck.CardsFromString("8d,7d")
+
+	deckCardsList := deck.CardsFromString("10h,9h")
+	g.deck.Cards = append(deckCardsList, g.deck.Cards...)
+
+	g.pot = 150
+	g.overflowPot = 0
+
+	g.phase = PhaseDeclaration
+	g.pendingDecisions = map[int64]bool{1: true, 2: true}
+	g.decisions = make(map[int64]bool)
+
+	_ = g.submitDecision(1, true)
+	_ = g.submitDecision(2, false)
+
+	g.calculateShowdown()
+	runBloodyGutsRevealSequence(t, g)
+
+	assert.False(t, g.showdownResult.DeckWon)
+	assert.NotNil(t, g.pendingDealerAction)
+	assert.Equal(t, dealerActionEndGame, g.pendingDealerAction.Action)
+}
+
+func TestOverflow_ApplyOverflowCap(t *testing.T) {
+	g := &Game{
+		options: Options{MaxOwed: 500},
+	}
+
+	// Under cap — no overflow
+	g.pot = 900
+	g.overflowPot = 0
+	g.applyOverflowCap()
+	assert.Equal(t, 900, g.pot)
+	assert.Equal(t, 0, g.overflowPot)
+
+	// At cap — no overflow
+	g.pot = 1000
+	g.overflowPot = 0
+	g.applyOverflowCap()
+	assert.Equal(t, 1000, g.pot)
+	assert.Equal(t, 0, g.overflowPot)
+
+	// Over cap — overflow created
+	g.pot = 1500
+	g.overflowPot = 0
+	g.applyOverflowCap()
+	assert.Equal(t, 1000, g.pot)
+	assert.Equal(t, 500, g.overflowPot)
+
+	// Overflow stacks
+	g.pot = 1200
+	g.overflowPot = 300
+	g.applyOverflowCap()
+	assert.Equal(t, 1000, g.pot)
+	assert.Equal(t, 500, g.overflowPot)
+}
+
+func TestOverflow_StateIncludesOverflowPot(t *testing.T) {
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d"}, 100)
+	g.overflowPot = 500
+
+	state := g.getGameState()
+	assert.Equal(t, 500, state.OverflowPot)
+}
+
+func TestOverflow_NextRound_AllFolded_AppliesCap(t *testing.T) {
+	// Test that re-antes are also subject to overflow cap
+	g := setupOverflowTestGame(t, []string{"14c,13c", "12d,11d"}, 50)
+	g.pot = 100
+	g.overflowPot = 0
+
+	// Both fold
+	_ = g.submitDecision(1, false)
+	_ = g.submitDecision(2, false)
+	g.calculateShowdown()
+
+	// Trigger next round (re-ante)
+	g.pendingDealerAction = nil
+	err := g.nextRound()
+	assert.NoError(t, err)
+
+	// Pot was 100, + 2*25 ante = 150, cap = 2*50 = 100
+	// So pot = 100, overflow = 50
+	assert.Equal(t, 100, g.pot)
+	assert.Equal(t, 50, g.overflowPot)
 }
