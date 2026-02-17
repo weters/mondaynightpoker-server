@@ -499,6 +499,7 @@ func (g *Game) applyOverflowCap() {
 	if g.pot > maxPot {
 		g.overflowPot += g.pot - maxPot
 		g.pot = maxPot
+		g.sendLogMessages(newLogMessage(0, "Pot is now ${%d}, overflow pot carries over: ${%d}", g.pot, g.overflowPot))
 	}
 }
 
@@ -623,7 +624,7 @@ func (g *Game) scheduleOverflowOrEnd() {
 		g.pot = g.overflowPot
 		g.overflowPot = 0
 		g.applyOverflowCap()
-		g.sendLogMessages(newLogMessage(0, "Overflow pot carries over: ${%d}", g.pot))
+		g.sendLogMessages(newLogMessage(0, "Pot is now ${%d}, overflow pot carries over: ${%d}", g.pot, g.overflowPot))
 		g.pendingDealerAction = &pendingDealerAction{
 			Action:       dealerActionNextRound,
 			ExecuteAfter: time.Now().Add(time.Second * 5),
