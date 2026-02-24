@@ -12,11 +12,12 @@ import (
 func main() {
 	serverURL := flag.String("server", "http://localhost:5080", "server base URL")
 	tableUUID := flag.String("table", "", "table UUID (creates a new table if empty)")
-	numPlayers := flag.Int("players", 3, "number of bot players")
+	numPlayers := flag.Int("players", 3, "number of bot players to create (ignored with -join)")
 	adminEmail := flag.String("admin-email", "", "admin email for test player creation")
 	adminPassword := flag.String("admin-password", "", "admin password for test player creation")
 	game := flag.String("game", "", "game to auto-start after setup")
-	autoPilot := flag.Bool("auto", true, "start bots in auto-pilot mode")
+	autoPilot := flag.Bool("auto", false, "start bots in auto-pilot mode")
+	join := flag.Bool("join", false, "join existing table players instead of creating new ones (requires -table)")
 	flag.Parse()
 
 	if *adminEmail == "" || *adminPassword == "" {
@@ -25,14 +26,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *numPlayers < 2 {
+	if *join && *tableUUID == "" {
+		fmt.Fprintln(os.Stderr, "Error: -join requires -table")
+		os.Exit(1)
+	}
+
+	if !*join && *numPlayers < 2 {
 		fmt.Fprintln(os.Stderr, "Error: -players must be at least 2")
 		os.Exit(1)
 	}
 
 	client := NewHTTPClient(*serverURL)
 
-	// Step 1: Login as admin
+	// Login as admin
 	log.Println("Logging in as admin...")
 	adminJWT, err := client.Login(*adminEmail, *adminPassword)
 	if err != nil {
@@ -40,57 +46,27 @@ func main() {
 	}
 	log.Println("Admin login successful")
 
-	// Step 2: Create test players
-	bots := make([]*Bot, *numPlayers)
-	botPassword := "testbot123"
+	var bots []*Bot
+	var tblUUID string
 
-	for i := 0; i < *numPlayers; i++ {
-		name := randomName(i)
-		email := fmt.Sprintf("testbot_%s_%d@example.com", name, os.Getpid())
-
-		log.Printf("Creating test player: %s (%s)", name, email)
-		playerID, err := client.CreateTestPlayer(adminJWT, name, email, botPassword)
+	if *join {
+		tblUUID = *tableUUID
+		bots, err = joinExistingTable(client, adminJWT, tblUUID, *autoPilot)
 		if err != nil {
-			log.Fatalf("Failed to create test player %s: %v", name, err)
+			log.Fatalf("Failed to join existing table: %v", err)
 		}
-
-		// Login the test player
-		jwt, err := client.Login(email, botPassword)
+	} else {
+		bots, tblUUID, err = createNewBots(client, adminJWT, *tableUUID, *numPlayers, *autoPilot)
 		if err != nil {
-			log.Fatalf("Failed to login test player %s: %v", name, err)
-		}
-
-		bots[i] = &Bot{
-			ID:        i + 1,
-			Name:      name,
-			PlayerID:  playerID,
-			JWT:       jwt,
-			AutoPilot: *autoPilot,
-		}
-
-		log.Printf("  Created p%d: %s (ID: %d)", i+1, name, playerID)
-	}
-
-	// Step 3: Create or use existing table
-	tblUUID := *tableUUID
-	if tblUUID == "" {
-		log.Println("Creating table...")
-		tblUUID, err = client.CreateTable(bots[0].JWT, "Test Bot Table")
-		if err != nil {
-			log.Fatalf("Failed to create table: %v", err)
-		}
-		log.Printf("Table created: %s", tblUUID)
-	}
-
-	// Step 4: Join all bots to table
-	for _, bot := range bots {
-		log.Printf("Joining p%d (%s) to table...", bot.ID, bot.Name)
-		if err := client.JoinTable(bot.JWT, tblUUID); err != nil {
-			log.Fatalf("Failed to join table: %v", err)
+			log.Fatalf("Failed to create bots: %v", err)
 		}
 	}
 
-	// Step 5: Connect all bots via WebSocket
+	if len(bots) == 0 {
+		log.Fatal("No players to control")
+	}
+
+	// Connect all bots via WebSocket
 	for _, bot := range bots {
 		log.Printf("Connecting p%d (%s) via WebSocket...", bot.ID, bot.Name)
 		if err := bot.Connect(*serverURL, tblUUID); err != nil {
@@ -98,15 +74,15 @@ func main() {
 		}
 	}
 
-	// Step 6: Set all bots as active
+	// Set all bots as active
 	for _, bot := range bots {
 		bot.SetActive(true)
 	}
 
-	log.Printf("\nAll %d bots connected to table %s", *numPlayers, tblUUID)
+	log.Printf("\nAll %d bots connected to table %s", len(bots), tblUUID)
 	log.Printf("Table URL: %s/table/%s\n", *serverURL, tblUUID)
 
-	// Step 7: Auto-start game if specified
+	// Auto-start game if specified
 	if *game != "" {
 		log.Printf("Starting game: %s", *game)
 		bots[0].StartGame(*game)
@@ -124,7 +100,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Step 8: Enter REPL
+	// Enter REPL
 	repl := NewREPL(bots)
 	repl.Run()
 
@@ -132,4 +108,123 @@ func main() {
 	for _, bot := range bots {
 		bot.Close()
 	}
+}
+
+// joinExistingTable fetches players from an existing table, resets their passwords
+// via admin, logs in as each, and returns bots ready to connect.
+func joinExistingTable(client *HTTPClient, adminJWT, tableUUID string, autoPilot bool) ([]*Bot, error) {
+	log.Printf("Fetching players from table %s...", tableUUID)
+	players, err := client.GetTablePlayers(adminJWT, tableUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(players) == 0 {
+		return nil, fmt.Errorf("no players found at table %s", tableUUID)
+	}
+
+	botPassword := "testbot_takeover"
+	bots := make([]*Bot, 0, len(players))
+
+	for i, p := range players {
+		playerID := p.Player.ID
+		name := p.Player.DisplayName
+
+		log.Printf("Taking control of player: %s (ID: %d)", name, playerID)
+
+		// Reset password via admin
+		if err := client.SetPlayerPassword(adminJWT, playerID, botPassword); err != nil {
+			return nil, fmt.Errorf("reset password for %s: %w", name, err)
+		}
+
+		// Look up email via admin search, then login
+		jwt, err := loginByPlayerID(client, adminJWT, playerID, botPassword)
+		if err != nil {
+			return nil, fmt.Errorf("login as %s: %w", name, err)
+		}
+
+		bots = append(bots, &Bot{
+			ID:        i + 1,
+			Name:      name,
+			PlayerID:  playerID,
+			JWT:       jwt,
+			AutoPilot: autoPilot,
+		})
+
+		log.Printf("  Controlling p%d: %s (ID: %d)", i+1, name, playerID)
+	}
+
+	return bots, nil
+}
+
+type adminPlayerWithEmail struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+// loginByPlayerID uses the admin player search to find the player's email, then logs in.
+func loginByPlayerID(client *HTTPClient, adminJWT string, playerID int64, password string) (string, error) {
+	var players []adminPlayerWithEmail
+	path := fmt.Sprintf("/player?search=%d&start=0&rows=1", playerID)
+	if err := client.getJSON(path, adminJWT, &players); err != nil {
+		return "", fmt.Errorf("admin player search: %w", err)
+	}
+
+	if len(players) == 0 {
+		return "", fmt.Errorf("player %d not found via admin search", playerID)
+	}
+
+	return client.Login(players[0].Email, password)
+}
+
+// createNewBots creates test players, a table if needed, and joins them.
+func createNewBots(client *HTTPClient, adminJWT, tableUUID string, numPlayers int, autoPilot bool) ([]*Bot, string, error) {
+	bots := make([]*Bot, numPlayers)
+	botPassword := "testbot123"
+
+	for i := 0; i < numPlayers; i++ {
+		name := randomName(i)
+		email := fmt.Sprintf("testbot_%s_%d@example.com", name, os.Getpid())
+
+		log.Printf("Creating test player: %s (%s)", name, email)
+		playerID, err := client.CreateTestPlayer(adminJWT, name, email, botPassword)
+		if err != nil {
+			return nil, "", fmt.Errorf("create test player %s: %w", name, err)
+		}
+
+		jwt, err := client.Login(email, botPassword)
+		if err != nil {
+			return nil, "", fmt.Errorf("login test player %s: %w", name, err)
+		}
+
+		bots[i] = &Bot{
+			ID:        i + 1,
+			Name:      name,
+			PlayerID:  playerID,
+			JWT:       jwt,
+			AutoPilot: autoPilot,
+		}
+
+		log.Printf("  Created p%d: %s (ID: %d)", i+1, name, playerID)
+	}
+
+	tblUUID := tableUUID
+	if tblUUID == "" {
+		log.Println("Creating table...")
+		var err error
+		tblUUID, err = client.CreateTable(bots[0].JWT, "Test Bot Table")
+		if err != nil {
+			return nil, "", fmt.Errorf("create table: %w", err)
+		}
+		log.Printf("Table created: %s", tblUUID)
+	}
+
+	for _, bot := range bots {
+		log.Printf("Joining p%d (%s) to table...", bot.ID, bot.Name)
+		if err := client.JoinTable(bot.JWT, tblUUID); err != nil {
+			return nil, "", fmt.Errorf("join table: %w", err)
+		}
+	}
+
+	return bots, tblUUID, nil
 }

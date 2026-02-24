@@ -22,7 +22,15 @@ func NewHTTPClient(baseURL string) *HTTPClient {
 	}
 }
 
-func (c *HTTPClient) doJSON(path, jwt string, payload, result interface{}) error {
+func (c *HTTPClient) postJSON(path, jwt string, payload, result interface{}) error {
+	return c.doJSON(http.MethodPost, path, jwt, payload, result)
+}
+
+func (c *HTTPClient) getJSON(path, jwt string, result interface{}) error {
+	return c.doJSON(http.MethodGet, path, jwt, nil, result)
+}
+
+func (c *HTTPClient) doJSON(method, path, jwt string, payload, result interface{}) error {
 	var body io.Reader
 	if payload != nil {
 		b, err := json.Marshal(payload)
@@ -32,7 +40,7 @@ func (c *HTTPClient) doJSON(path, jwt string, payload, result interface{}) error
 		body = bytes.NewReader(b)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, body)
+	req, err := http.NewRequest(method, c.baseURL+path, body)
 	if err != nil {
 		return err
 	}
@@ -79,7 +87,7 @@ func (c *HTTPClient) Login(email, password string) (string, error) {
 		"password": password,
 	}
 	var resp loginResponse
-	if err := c.doJSON("/player/auth", "", payload, &resp); err != nil {
+	if err := c.postJSON("/player/auth", "", payload, &resp); err != nil {
 		return "", fmt.Errorf("login: %w", err)
 	}
 	return resp.JWT, nil
@@ -98,7 +106,7 @@ func (c *HTTPClient) CreateTestPlayer(adminJWT, displayName, email, password str
 		"password":    password,
 	}
 	var resp createTestPlayerResponse
-	if err := c.doJSON("/admin/test-player", adminJWT, payload, &resp); err != nil {
+	if err := c.postJSON("/admin/test-player", adminJWT, payload, &resp); err != nil {
 		return 0, fmt.Errorf("create test player: %w", err)
 	}
 	return resp.PlayerID, nil
@@ -112,15 +120,52 @@ type createTableResponse struct {
 func (c *HTTPClient) CreateTable(jwt, name string) (string, error) {
 	payload := map[string]string{"name": name}
 	var resp createTableResponse
-	if err := c.doJSON("/table", jwt, payload, &resp); err != nil {
+	if err := c.postJSON("/table", jwt, payload, &resp); err != nil {
 		return "", fmt.Errorf("create table: %w", err)
 	}
 	return resp.UUID, nil
 }
 
+// TablePlayer represents a player seated at a table.
+type TablePlayer struct {
+	PlayerID int64 `json:"playerId"`
+	Player   struct {
+		ID          int64  `json:"id"`
+		DisplayName string `json:"displayName"`
+	} `json:"player"`
+	Active bool `json:"active"`
+}
+
+type getTableResponse struct {
+	UUID    string        `json:"uuid"`
+	Players []TablePlayer `json:"players"`
+}
+
+// GetTablePlayers fetches the player list for a table.
+func (c *HTTPClient) GetTablePlayers(jwt, tableUUID string) ([]TablePlayer, error) {
+	var resp getTableResponse
+	if err := c.getJSON("/table/"+tableUUID, jwt, &resp); err != nil {
+		return nil, fmt.Errorf("get table: %w", err)
+	}
+	return resp.Players, nil
+}
+
+// SetPlayerPassword resets a player's password via the admin endpoint.
+func (c *HTTPClient) SetPlayerPassword(adminJWT string, playerID int64, newPassword string) error {
+	payload := map[string]interface{}{
+		"key":   "password",
+		"value": newPassword,
+	}
+	path := fmt.Sprintf("/admin/player/%d", playerID)
+	if err := c.postJSON(path, adminJWT, payload, nil); err != nil {
+		return fmt.Errorf("set player password: %w", err)
+	}
+	return nil
+}
+
 // JoinTable joins a player to a table.
 func (c *HTTPClient) JoinTable(jwt, tableUUID string) error {
-	if err := c.doJSON("/table/"+tableUUID+"/seat", jwt, nil, nil); err != nil {
+	if err := c.postJSON("/table/"+tableUUID+"/seat", jwt, nil, nil); err != nil {
 		return fmt.Errorf("join table: %w", err)
 	}
 	return nil
