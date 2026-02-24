@@ -547,6 +547,63 @@ func (m *Mux) postPlayerVerifyAccountToken() http.HandlerFunc {
 	}
 }
 
+type postAdminTestPlayerPayload struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+}
+
+type postAdminTestPlayerResponse struct {
+	PlayerID int64  `json:"playerId"`
+	Email    string `json:"email"`
+}
+
+func (m *Mux) postAdminTestPlayer() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var pp postAdminTestPlayerPayload
+		if !decodeRequest(w, r, &pp) {
+			return
+		}
+
+		if pp.Email == "" {
+			writeJSONError(w, http.StatusBadRequest, errors.New("email is required"))
+			return
+		}
+
+		if err := validatePassword(pp.Password); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		displayName := pp.DisplayName
+		if displayName == "" {
+			displayName = util.GetRandomName()
+		}
+
+		player, err := model.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, "")
+		if err != nil {
+			if err == model.ErrDuplicateKey {
+				writeJSONError(w, http.StatusBadRequest, errors.New("email address is already taken"))
+				return
+			}
+
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		player.Status = model.PlayerStatusVerified
+		if err := player.Save(r.Context()); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, postAdminTestPlayerResponse{
+			PlayerID: player.ID,
+			Email:    player.Email,
+		})
+	}
+}
+
 func validatePassword(password string) error {
 	if len(password) < 6 {
 		return errors.New("password must be at least six characters")

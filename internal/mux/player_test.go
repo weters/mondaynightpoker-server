@@ -331,6 +331,78 @@ func TestMux_getPlayerIDTable(t *testing.T) {
 	assertGet(t, ts, path+"?rows=0", nil, http.StatusBadRequest, j)
 }
 
+func TestMux_postAdminTestPlayer(t *testing.T) {
+	a := assert.New(t)
+
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	admin, adminJWT := player()
+	_ = admin.SetIsSiteAdmin(context.Background(), true)
+
+	_, nonAdminJWT := player()
+
+	// non-admin gets 403
+	assertPost(t, ts, "/admin/test-player", postAdminTestPlayerPayload{
+		Email:    "test@example.com",
+		Password: "123456",
+	}, nil, http.StatusForbidden, nonAdminJWT)
+
+	// missing email returns 400
+	var errResp errorResponse
+	assertPost(t, ts, "/admin/test-player", postAdminTestPlayerPayload{
+		Password: "123456",
+	}, &errResp, http.StatusBadRequest, adminJWT)
+	a.Equal("email is required", errResp.Message)
+
+	// missing password returns 400
+	errResp = errorResponse{}
+	assertPost(t, ts, "/admin/test-player", postAdminTestPlayerPayload{
+		Email: util.RandomEmail(),
+	}, &errResp, http.StatusBadRequest, adminJWT)
+	a.Equal("password must be at least six characters", errResp.Message)
+
+	// admin can create test player (returns verified status)
+	email := util.RandomEmail()
+	var resp postAdminTestPlayerResponse
+	assertPost(t, ts, "/admin/test-player", postAdminTestPlayerPayload{
+		DisplayName: "TestBot",
+		Email:       email,
+		Password:    "123456",
+	}, &resp, http.StatusCreated, adminJWT)
+	a.Greater(resp.PlayerID, int64(0))
+	a.Equal(email, resp.Email)
+
+	// verify the player is actually verified (can log in)
+	p, err := model.GetPlayerByEmailAndPassword(context.Background(), email, "123456")
+	a.NoError(err)
+	a.NotNil(p)
+	a.Equal(model.PlayerStatusVerified, p.Status)
+	a.Equal("TestBot", p.DisplayName)
+
+	// test with auto-generated display name
+	email2 := util.RandomEmail()
+	var resp2 postAdminTestPlayerResponse
+	assertPost(t, ts, "/admin/test-player", postAdminTestPlayerPayload{
+		Email:    email2,
+		Password: "123456",
+	}, &resp2, http.StatusCreated, adminJWT)
+	a.Greater(resp2.PlayerID, int64(0))
+
+	p2, err := model.GetPlayerByID(context.Background(), resp2.PlayerID)
+	a.NoError(err)
+	a.NotEmpty(p2.DisplayName)
+
+	// duplicate email returns 400
+	errResp = errorResponse{}
+	assertPost(t, ts, "/admin/test-player", postAdminTestPlayerPayload{
+		Email:    email,
+		Password: "123456",
+	}, &errResp, http.StatusBadRequest, adminJWT)
+	a.Equal("email address is already taken", errResp.Message)
+}
+
 func TestMux_postAdminPlayerID(t *testing.T) {
 	a := assert.New(t)
 
