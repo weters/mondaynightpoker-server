@@ -80,17 +80,17 @@ type loginResponse struct {
 	} `json:"player"`
 }
 
-// Login authenticates a player and returns their JWT.
-func (c *HTTPClient) Login(email, password string) (string, error) {
+// Login authenticates a player and returns their JWT and player ID.
+func (c *HTTPClient) Login(email, password string) (string, int64, error) {
 	payload := map[string]string{
 		"email":    email,
 		"password": password,
 	}
 	var resp loginResponse
 	if err := c.postJSON("/player/auth", "", payload, &resp); err != nil {
-		return "", fmt.Errorf("login: %w", err)
+		return "", 0, fmt.Errorf("login: %w", err)
 	}
-	return resp.JWT, nil
+	return resp.JWT, resp.Player.ID, nil
 }
 
 type createTestPlayerResponse struct {

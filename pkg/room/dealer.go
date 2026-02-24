@@ -550,7 +550,13 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			d.stateChanged <- stateClientEvent
 		}
 	default:
-		if game := d.game; game != nil {
+		d.execInRunLoop <- func() {
+			game := d.game
+			if game == nil {
+				logrus.WithField("msg", msg).Warn("unknown message")
+				return
+			}
+
 			action, updateState, err := game.Action(c.player.ID, msg)
 			if err != nil {
 				logrus.WithError(err).WithField("client", c.String()).Error("could not perform action")
@@ -564,7 +570,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			}
 
 			if updateState {
-				d.stateChanged <- stateGameEvent
+				d.sendGameData()
 			}
 
 			if details, isOver := game.GetEndOfGameDetails(); isOver {
@@ -573,11 +579,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 					return
 				}
 			}
-
-			return
 		}
-
-		logrus.WithField("msg", msg).Warn("unknown message")
 	}
 }
 

@@ -19,9 +19,10 @@ type GameState struct {
 
 // ValidAction represents a single action a bot can take.
 type ValidAction struct {
-	Action string
-	Name   string
-	Cards  []CardInfo // for card-based actions (playCard, discard, trade)
+	Action      string
+	Name        string
+	Cards       []CardInfo // for card-based actions (playCard, discard, trade)
+	NeedsAmount bool       // whether this action requires a bet amount
 }
 
 // CardInfo is a simplified card representation for display and action selection.
@@ -52,22 +53,35 @@ func (c CardInfo) String() string {
 	return r + s
 }
 
+// DeckString returns the card in deck.CardFromString format, e.g. "14h" for Ace of hearts.
+func (c CardInfo) DeckString() string {
+	suitChar := map[string]string{
+		"hearts": "h", "diamonds": "d",
+		"clubs": "c", "spades": "s", "stars": "t",
+	}
+	s := suitChar[c.Suit]
+	if s == "" {
+		s = c.Suit[:1]
+	}
+	return fmt.Sprintf("%d%s", c.Rank, s)
+}
+
 // ParseGameState parses the game response data based on game name and extracts valid actions.
 func ParseGameState(gameName string, rawData json.RawMessage, playerID int64) (*GameState, error) {
 	switch gameName {
-	case "texas-hold-em", "texas-hold-em-plo":
+	case gameTexasHoldEm, gameTexasHoldEmPLO:
 		return parseTexasHoldEm(rawData, gameName)
-	case "seven-card":
+	case gameSevenCard:
 		return parseSevenCard(rawData, gameName)
-	case "little-l":
+	case gameLittleL:
 		return parseLittleL(rawData, gameName)
-	case "bourre":
+	case gameBourre:
 		return parseBourre(rawData, playerID)
-	case "guts":
+	case gameGuts:
 		return parseGuts(rawData)
-	case "pass-the-poop":
+	case gamePassThePoop:
 		return parsePassThePoop(rawData)
-	case "acey-deucey":
+	case gameAceyDeucey:
 		return parseAceyDeucey(rawData)
 	default:
 		return &GameState{GameName: gameName}, nil
@@ -204,7 +218,7 @@ func parseBourre(data json.RawMessage, playerID int64) (*GameState, error) {
 		return nil, err
 	}
 
-	gs := &GameState{GameName: "bourre"}
+	gs := &GameState{GameName: gameBourre}
 	gs.Hand = toCardInfo(raw.Hand)
 
 	if raw.GameState != nil {
@@ -249,7 +263,7 @@ func parseGuts(data json.RawMessage) (*GameState, error) {
 		return nil, err
 	}
 
-	gs := &GameState{GameName: "guts"}
+	gs := &GameState{GameName: gameGuts}
 	gs.Hand = toCardInfo(raw.Hand)
 
 	if raw.GameState != nil {
@@ -288,7 +302,7 @@ func parsePassThePoop(data json.RawMessage) (*GameState, error) {
 		return nil, err
 	}
 
-	gs := &GameState{GameName: "pass-the-poop"}
+	gs := &GameState{GameName: gamePassThePoop}
 	if raw.Card != nil {
 		gs.Hand = []CardInfo{{Rank: raw.Card.Rank, Suit: raw.Card.Suit}}
 	}
@@ -305,10 +319,13 @@ func parsePassThePoop(data json.RawMessage) (*GameState, error) {
 	return gs, nil
 }
 
+const aceyDeuceyActionBet = 3 // ActionBet in acey deucey
+
 func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 	var raw struct {
 		GameState *struct {
 			CurrentTurn int64 `json:"currentTurn"`
+			MaxBet      int   `json:"maxBet"`
 		} `json:"gameState"`
 		Actions []struct {
 			ID   int    `json:"id"`
@@ -319,14 +336,17 @@ func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 		return nil, err
 	}
 
-	gs := &GameState{GameName: "acey-deucey"}
+	gs := &GameState{GameName: gameAceyDeucey}
 	if raw.GameState != nil {
 		gs.CurrentTurn = raw.GameState.CurrentTurn
+		gs.MinBet = 25 // acey deucey minimum bet is always $25
+		gs.MaxBet = raw.GameState.MaxBet
 	}
 	for _, a := range raw.Actions {
 		gs.ValidActions = append(gs.ValidActions, ValidAction{
-			Action: fmt.Sprintf("%d", a.ID),
-			Name:   a.Name,
+			Action:      fmt.Sprintf("%d", a.ID),
+			Name:        a.Name,
+			NeedsAmount: a.ID == aceyDeuceyActionBet,
 		})
 	}
 	return gs, nil

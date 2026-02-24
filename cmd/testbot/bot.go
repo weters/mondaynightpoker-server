@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gorilla/websocket"
 )
 
@@ -20,12 +21,13 @@ type Bot struct {
 	JWT       string
 	AutoPilot bool
 
-	conn      *websocket.Conn
-	mu        sync.RWMutex
-	gameState *GameState
-	sendCh    chan outgoingMessage
-	done      chan struct{}
-	promptCh  chan<- *Bot // signals the REPL that this bot needs to act
+	conn          *websocket.Conn
+	mu            sync.RWMutex
+	gameState     *GameState
+	autoPilotBusy bool // true while an autopilot goroutine is running
+	sendCh        chan outgoingMessage
+	done          chan struct{}
+	program       *tea.Program // TUI program for sending messages
 }
 
 type outgoingMessage struct {
@@ -98,37 +100,39 @@ func (b *Bot) handleMessage(resp *wsResponse) {
 	case "game":
 		gs, err := ParseGameState(resp.Value, resp.Data, b.PlayerID)
 		if err != nil {
-			log.Printf("[%s] parse game state error: %v", b.Name, err)
+			b.sendTUI(ErrorMsg{BotID: b.ID, Message: fmt.Sprintf("parse game state: %v", err)})
 			return
 		}
 
 		b.mu.Lock()
 		b.gameState = gs
+		shouldAutoPilot := b.AutoPilot && len(gs.ValidActions) > 0 && !b.autoPilotBusy
+		if shouldAutoPilot {
+			b.autoPilotBusy = true
+		}
 		b.mu.Unlock()
 
-		if len(gs.ValidActions) > 0 {
-			if b.AutoPilot {
-				go b.doAutoPilot(gs)
-			} else if b.promptCh != nil {
-				// Signal REPL non-blocking
-				select {
-				case b.promptCh <- b:
-				default:
-				}
-			}
+		// Notify TUI of state change
+		b.sendTUI(BotStateMsg{BotID: b.ID})
+
+		if len(gs.ValidActions) > 0 && shouldAutoPilot {
+			go b.doAutoPilot(gs)
 		}
 
 	case "gameEnded":
-		log.Printf("[%s] game ended", b.Name)
+		b.sendTUI(GameEndedMsg{BotID: b.ID})
 
 	case "error":
-		log.Printf("[%s] server error: %s", b.Name, resp.Value)
+		b.sendTUI(ErrorMsg{BotID: b.ID, Message: resp.Value})
 
 	case "clientState":
 		// Silently store; not critical for bot
 
 	case "allLogs", "logs":
-		// Silently consume log messages
+		msgs := parseLogs(resp.Data)
+		for _, msg := range msgs {
+			b.sendTUI(GameLogMsg{Message: msg})
+		}
 
 	case "status":
 		// OK responses
@@ -138,17 +142,26 @@ func (b *Bot) handleMessage(resp *wsResponse) {
 	}
 }
 
+// sendTUI sends a message to the TUI program if one is set.
+func (b *Bot) sendTUI(msg tea.Msg) {
+	if b.program != nil {
+		b.program.Send(msg)
+	}
+}
+
 func (b *Bot) doAutoPilot(gs *GameState) {
-	action, ad := AutoPilotAction(gs)
-	if action == "" {
+	defer func() {
+		b.mu.Lock()
+		b.autoPilotBusy = false
+		b.mu.Unlock()
+	}()
+
+	msg := AutoPilotAction(gs)
+	if msg == nil {
 		return
 	}
 
-	msg := outgoingMessage{
-		Action:         action,
-		AdditionalData: ad,
-	}
-	b.Send(msg)
+	b.Send(*msg)
 }
 
 func (b *Bot) writeLoop() {

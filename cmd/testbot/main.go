@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
@@ -40,7 +42,7 @@ func main() {
 
 	// Login as admin
 	log.Println("Logging in as admin...")
-	adminJWT, err := client.Login(*adminEmail, *adminPassword)
+	adminJWT, adminPlayerID, err := client.Login(*adminEmail, *adminPassword)
 	if err != nil {
 		log.Fatalf("Admin login failed: %v", err)
 	}
@@ -51,7 +53,7 @@ func main() {
 
 	if *join {
 		tblUUID = *tableUUID
-		bots, err = joinExistingTable(client, adminJWT, tblUUID, *autoPilot)
+		bots, err = joinExistingTable(client, adminJWT, adminPlayerID, tblUUID, *autoPilot)
 		if err != nil {
 			log.Fatalf("Failed to join existing table: %v", err)
 		}
@@ -100,9 +102,18 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Enter REPL
-	repl := NewREPL(bots)
-	repl.Run()
+	// Create and run the TUI
+	m := NewModel(bots)
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// Wire up tea.Program to all bots so they can send messages
+	for _, bot := range bots {
+		bot.program = p
+	}
+
+	if _, err := p.Run(); err != nil {
+		log.Fatalf("TUI error: %v", err)
+	}
 
 	// Cleanup
 	for _, bot := range bots {
@@ -112,7 +123,8 @@ func main() {
 
 // joinExistingTable fetches players from an existing table, resets their passwords
 // via admin, logs in as each, and returns bots ready to connect.
-func joinExistingTable(client *HTTPClient, adminJWT, tableUUID string, autoPilot bool) ([]*Bot, error) {
+// It skips the admin player (adminPlayerID) to avoid resetting the admin's password.
+func joinExistingTable(client *HTTPClient, adminJWT string, adminPlayerID int64, tableUUID string, autoPilot bool) ([]*Bot, error) {
 	log.Printf("Fetching players from table %s...", tableUUID)
 	players, err := client.GetTablePlayers(adminJWT, tableUUID)
 	if err != nil {
@@ -128,6 +140,11 @@ func joinExistingTable(client *HTTPClient, adminJWT, tableUUID string, autoPilot
 
 	for i, p := range players {
 		playerID := p.Player.ID
+
+		if playerID == adminPlayerID {
+			log.Printf("Skipping admin player: %s (ID: %d)", p.Player.DisplayName, playerID)
+			continue
+		}
 		name := p.Player.DisplayName
 
 		log.Printf("Taking control of player: %s (ID: %d)", name, playerID)
@@ -174,7 +191,8 @@ func loginByPlayerID(client *HTTPClient, adminJWT string, playerID int64, passwo
 		return "", fmt.Errorf("player %d not found via admin search", playerID)
 	}
 
-	return client.Login(players[0].Email, password)
+	jwt, _, err := client.Login(players[0].Email, password)
+	return jwt, err
 }
 
 // createNewBots creates test players, a table if needed, and joins them.
@@ -192,7 +210,7 @@ func createNewBots(client *HTTPClient, adminJWT, tableUUID string, numPlayers in
 			return nil, "", fmt.Errorf("create test player %s: %w", name, err)
 		}
 
-		jwt, err := client.Login(email, botPassword)
+		jwt, _, err := client.Login(email, botPassword)
 		if err != nil {
 			return nil, "", fmt.Errorf("login test player %s: %w", name, err)
 		}
