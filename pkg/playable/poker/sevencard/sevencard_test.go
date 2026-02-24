@@ -110,7 +110,7 @@ func TestGame_turns(t *testing.T) {
 	game.decisionStartIndex = 0
 
 	a.Equal(int64(1), game.getCurrentTurn().PlayerID)
-	game.advanceDecisionIfPlayerDidFold() // no movement
+	game.advanceDecisionIfPlayerCannotAct() // no movement
 	a.Equal(int64(1), game.getCurrentTurn().PlayerID)
 
 	game.advanceDecision()
@@ -125,7 +125,7 @@ func TestGame_turns(t *testing.T) {
 	a.Equal(int64(1), game.getCurrentTurn().PlayerID) // ensure good state
 	game.idToParticipant[1].didFold = true
 	game.idToParticipant[2].didFold = true
-	game.advanceDecisionIfPlayerDidFold()
+	game.advanceDecisionIfPlayerCannotAct()
 	a.Equal(int64(3), game.getCurrentTurn().PlayerID)
 
 	// test what happens if we make a coding error and don't advance beyond a folded player

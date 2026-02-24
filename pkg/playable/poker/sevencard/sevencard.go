@@ -138,6 +138,11 @@ func (g *Game) Start() error {
 	g.logChan <- g.pendingLogs
 	g.pendingLogs = make([]*playable.LogMessage, 0)
 
+	// If all remaining players are all-in, auto-advance through rounds
+	if g.isRoundOver() {
+		g.nextRound()
+	}
+
 	return nil
 }
 
@@ -180,6 +185,11 @@ func (g *Game) nextRound() {
 	}
 
 	g.determineFirstToAct()
+
+	// If all remaining players are all-in (or folded), auto-advance to the next round
+	if g.isRoundOver() {
+		g.nextRound()
+	}
 }
 
 func (g *Game) isRoundOver() bool {
@@ -189,7 +199,7 @@ func (g *Game) isRoundOver() bool {
 // advanceDecision moves the decision to the next participant still active
 func (g *Game) advanceDecision() {
 	g.decisionCount++
-	g.advanceDecisionIfPlayerDidFold()
+	g.advanceDecisionIfPlayerCannotAct()
 
 	if g.isRoundOver() {
 		g.nextRound()
@@ -202,14 +212,14 @@ func (g *Game) setDecisionIndexToCurrentTurn() {
 	g.decisionCount = 0
 }
 
-// advanceDecisionIfPlayerDidFold will advance the decision to the next participant still active
-// if the current decision is with a folded participant
-func (g *Game) advanceDecisionIfPlayerDidFold() {
+// advanceDecisionIfPlayerCannotAct will advance the decision to the next participant still active
+// skipping participants who have folded or are all-in
+func (g *Game) advanceDecisionIfPlayerCannotAct() {
 	nPlayers := len(g.playerIDs)
 	for ; g.decisionCount < nPlayers; g.decisionCount++ {
 		index := (g.decisionStartIndex + g.decisionCount) % nPlayers
 		p := g.idToParticipant[g.playerIDs[index]]
-		if !p.didFold {
+		if !p.didFold && !p.isAllIn() {
 			break
 		}
 	}
@@ -231,6 +241,9 @@ func (g *Game) getCurrentTurn() *participant {
 	p := g.idToParticipant[g.playerIDs[index]]
 	if p.didFold {
 		panic("decision is on a player who folded")
+	}
+	if p.isAllIn() {
+		panic("decision is on a player who is all-in")
 	}
 
 	return p
@@ -274,6 +287,9 @@ func (g *Game) determineFirstToAct() {
 
 	id := g.playerIDs[bestIndex]
 	g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(id, "{} is first to act (%s)", handName))
+
+	// Skip past any players who are folded or all-in
+	g.advanceDecisionIfPlayerCannotAct()
 }
 
 func (g *Game) dealCards(faceDown bool) error {

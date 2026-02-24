@@ -81,7 +81,7 @@ func (g *Game) getActionsForParticipant(p *participant) []Action {
 	}
 
 	actions := make([]Action, 0)
-	if g.getCurrentTurn() == p {
+	if g.getCurrentTurn() == p && !p.isAllIn() {
 		if g.currentBet == 0 {
 			actions = append(actions, ActionFold, ActionCheck, ActionBet)
 		} else {
@@ -101,7 +101,7 @@ func (g *Game) getFutureActionsForParticipant(p *participant) []Action {
 	}
 
 	actions := make([]Action, 0)
-	if g.getCurrentTurn() != p && !p.didFold {
+	if g.getCurrentTurn() != p && !p.didFold && !p.isAllIn() {
 		if g.currentBet == 0 {
 			actions = append(actions, ActionFold, ActionCheck)
 		} else {

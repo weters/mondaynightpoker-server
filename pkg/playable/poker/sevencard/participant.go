@@ -35,6 +35,17 @@ func (p *participant) Balance() int {
 	return p.tableStake + p.balance
 }
 
+// hasTableStake returns true if the participant has a table stake set.
+func (p *participant) hasTableStake() bool {
+	return p.tableStake > 0
+}
+
+// isAllIn returns true if the participant has no remaining balance.
+// Only applies when table stakes are set.
+func (p *participant) isAllIn() bool {
+	return p.hasTableStake() && p.Balance() <= 0
+}
+
 func (p *participant) resetForNewRound() {
 	p.currentBet = 0
 }

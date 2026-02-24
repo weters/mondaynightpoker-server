@@ -125,7 +125,7 @@ func (c *Chiggs) triggerMushroomEvent(game *Game, p *participant, mushroomCard *
 	}
 
 	// Advance decision past any players who just folded
-	game.advanceDecisionIfPlayerDidFold()
+	game.advanceDecisionIfPlayerCannotAct()
 
 	// If no pending responses, mushroom phase is complete
 	if len(c.pendingResponses) == 0 {

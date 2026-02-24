@@ -54,9 +54,17 @@ func (g *Game) participantCalls(p *participant) error {
 	}
 
 	diff := g.currentBet - p.currentBet
+
+	// Cap the call to the player's remaining balance (table stakes)
+	if p.hasTableStake() {
+		if remaining := p.Balance(); diff > remaining {
+			diff = max(remaining, 0)
+		}
+	}
+
 	g.pot += diff
 	p.balance -= diff
-	p.currentBet = g.currentBet
+	p.currentBet += diff
 	g.advanceDecision()
 	return nil
 }
@@ -96,11 +104,18 @@ func (g *Game) bet(p *participant, betType string, amount, minAmount int) error 
 
 	diff := amount - p.currentBet
 
+	// Cap the bet to the player's remaining balance (table stakes)
+	if p.hasTableStake() {
+		if remaining := p.Balance(); diff > remaining {
+			diff = max(remaining, 0)
+		}
+	}
+
 	g.pot += diff
-	g.currentBet = amount
+	g.currentBet = p.currentBet + diff
 
 	p.balance -= diff
-	p.currentBet = amount
+	p.currentBet = p.currentBet + diff
 
 	// Notify variant that a bet was placed
 	if bav, ok := g.options.Variant.(BetAwareVariant); ok {
