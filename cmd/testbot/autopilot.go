@@ -158,6 +158,7 @@ func bourreAutoPilot(gs *GameState) *outgoingMessage {
 		return nil
 	}
 
+	// Bots never fold in bourre
 	a := gs.ValidActions[0]
 
 	if a.Action == actionDiscard {

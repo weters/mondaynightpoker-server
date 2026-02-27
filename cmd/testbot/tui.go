@@ -209,6 +209,12 @@ func (m Model) handleActionKey(num int) (tea.Model, tea.Cmd) {
 			m.inputMode = inputCardSelect
 			return m, nil
 		}
+	case action.Action == actionFold && gs.GameName == gameBourre:
+		// Bourre fold sends discard with nil cards
+		msg := outgoingMessage{Action: actionDiscard}
+		bot.Send(msg)
+		m.logBuf.Add(fmt.Sprintf("p%d %s: Fold", bot.ID, bot.Name))
+		return m, nil
 	case action.Action == actionPlayCard:
 		// PlayCard already has its cards embedded in the action
 	case action.Action == "decide-out":

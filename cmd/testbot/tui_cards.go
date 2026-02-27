@@ -9,6 +9,8 @@ import (
 // minWidthForArt is the minimum terminal width to show ASCII card art.
 const minWidthForArt = 60
 
+const suitStars = "stars"
+
 // suitSymbol returns the unicode suit symbol.
 func suitSymbol(suit string) string {
 	switch suit {
@@ -20,6 +22,8 @@ func suitSymbol(suit string) string {
 		return "♣"
 	case "spades":
 		return "♠"
+	case suitStars:
+		return "⭐"
 	default:
 		return suit
 	}
@@ -34,6 +38,9 @@ func isRedSuit(suit string) bool {
 func cardStyle(suit string) lipgloss.Style {
 	if isRedSuit(suit) {
 		return styleCardRed
+	}
+	if suit == suitStars {
+		return styleCardYellow
 	}
 	return styleCardWhite
 }
@@ -57,7 +64,12 @@ func RenderCard(c CardInfo) string {
 
 	top := style.Render("┌────┐")
 	mid1 := style.Render("│ " + rankPad + " │")
-	mid2 := style.Render("│ " + s + "  │")
+	// Stars emoji is 2 cells wide, so use less padding
+	suitPad := "  "
+	if c.Suit == suitStars {
+		suitPad = " "
+	}
+	mid2 := style.Render("│ " + s + suitPad + "│")
 	bot := style.Render("└────┘")
 
 	return top + "\n" + mid1 + "\n" + mid2 + "\n" + bot

@@ -31,7 +31,7 @@ func TestSuitSymbol(t *testing.T) {
 	assert.Equal(t, "♦", suitSymbol("diamonds"))
 	assert.Equal(t, "♣", suitSymbol("clubs"))
 	assert.Equal(t, "♠", suitSymbol("spades"))
-	assert.Equal(t, "stars", suitSymbol("stars"))
+	assert.Equal(t, "⭐", suitSymbol("stars"))
 }
 
 func TestIsRedSuit(t *testing.T) {
@@ -39,6 +39,17 @@ func TestIsRedSuit(t *testing.T) {
 	assert.True(t, isRedSuit("diamonds"))
 	assert.False(t, isRedSuit("clubs"))
 	assert.False(t, isRedSuit("spades"))
+	assert.False(t, isRedSuit("stars"))
+}
+
+func TestRenderCardStars(t *testing.T) {
+	card := CardInfo{Rank: 14, Suit: "stars"}
+	rendered := RenderCard(card)
+
+	lines := strings.Split(rendered, "\n")
+	assert.Len(t, lines, 4)
+	assert.Contains(t, rendered, "A")
+	assert.Contains(t, rendered, "⭐")
 }
 
 func TestRenderCard(t *testing.T) {

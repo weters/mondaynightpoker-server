@@ -102,6 +102,26 @@ func TestPickBetAction_BalanceBelowMinBet(t *testing.T) {
 	assert.Nil(t, ad)
 }
 
+func TestBourreAutoPilot_NeverFolds(t *testing.T) {
+	gs := &GameState{
+		GameName: gameBourre,
+		ValidActions: []ValidAction{
+			{Action: actionDiscard, Name: "Discard (max 3)"},
+			{Action: actionFold, Name: "Fold"},
+		},
+		Hand: []CardInfo{
+			{Rank: 14, Suit: "hearts"},
+			{Rank: 13, Suit: "spades"},
+		},
+	}
+
+	for range 100 {
+		msg := bourreAutoPilot(gs)
+		assert.NotNil(t, msg)
+		assert.Equal(t, actionDiscard, msg.Action, "bourre bot should never fold")
+	}
+}
+
 func TestPickBetAction_BalanceBelowMinBetChecks(t *testing.T) {
 	actionMap := map[string]ValidAction{
 		actionBet:   {Action: actionBet, Name: "Bet"},

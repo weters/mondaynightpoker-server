@@ -40,6 +40,10 @@ var (
 	styleCardWhite = lipgloss.NewStyle().
 			Foreground(colorForeground)
 
+	// styleCardYellow renders star suit cards.
+	styleCardYellow = lipgloss.NewStyle().
+			Foreground(colorYellow)
+
 	// styleAction renders action keys in the action bar.
 	styleAction = lipgloss.NewStyle().
 			Bold(true).

@@ -41,6 +41,7 @@ func (c CardInfo) String() string {
 	suitStr := map[string]string{
 		"hearts": "\u2665", "diamonds": "\u2666",
 		"clubs": "\u2663", "spades": "\u2660",
+		"stars": "⭐",
 	}
 
 	r := rankStr[c.Rank]
@@ -213,11 +214,17 @@ func parseBourre(data json.RawMessage, playerID int64) (*GameState, error) {
 
 		if raw.GameState.CurrentTurn == playerID && !raw.Folded {
 			if raw.GameState.Round == 0 {
-				// Discard phase: can discard up to maxDraw cards
-				gs.ValidActions = append(gs.ValidActions, ValidAction{
-					Action: "discard",
-					Name:   fmt.Sprintf("Discard (max %d)", raw.MaxDraw),
-				})
+				// Discard phase: can discard up to maxDraw cards or fold
+				gs.ValidActions = append(gs.ValidActions,
+					ValidAction{
+						Action: "discard",
+						Name:   fmt.Sprintf("Discard (max %d)", raw.MaxDraw),
+					},
+					ValidAction{
+						Action: "fold",
+						Name:   "Fold",
+					},
+				)
 			} else {
 				// Play phase: play a valid card
 				for _, c := range raw.ValidMoves {
