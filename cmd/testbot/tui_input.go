@@ -119,7 +119,7 @@ func (m CardSelectModel) Update(msg tea.KeyMsg) (CardSelectModel, []CardInfo, bo
 	case tea.KeyEscape:
 		return m, nil, true
 	case tea.KeyEnter:
-		var selected []CardInfo
+		selected := make([]CardInfo, 0)
 		for i, s := range m.Selected {
 			if s {
 				selected = append(selected, m.Cards[i])

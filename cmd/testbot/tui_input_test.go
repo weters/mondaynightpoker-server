@@ -148,6 +148,21 @@ func TestCardSelectEscape(t *testing.T) {
 	assert.True(t, cancel)
 }
 
+func TestCardSelectConfirmNoSelection(t *testing.T) {
+	cards := []CardInfo{
+		{Rank: 14, Suit: "hearts"},
+		{Rank: 13, Suit: "spades"},
+	}
+
+	m := NewCardSelect(ValidAction{Action: "trade", Name: "Trade Cards"}, cards, "Select cards to trade")
+
+	// Confirm without selecting any cards (stand pat)
+	_, selected, cancel := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	assert.False(t, cancel)
+	assert.NotNil(t, selected, "selected should be non-nil empty slice, not nil")
+	assert.Len(t, selected, 0)
+}
+
 func TestCardSelectView(t *testing.T) {
 	cards := []CardInfo{
 		{Rank: 14, Suit: "hearts"},

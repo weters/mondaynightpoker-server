@@ -12,6 +12,7 @@ type GameState struct {
 	Hand         []CardInfo
 	MinBet       int
 	MaxBet       int
+	Balance      int // player's remaining balance (for capping bets)
 	CurrentTurn  int64
 	Pot          int
 	Community    []CardInfo
@@ -119,7 +120,9 @@ func parseTexasHoldEm(data json.RawMessage, gameName string) (*GameState, error)
 			Pots      json.RawMessage `json:"pots"`
 		} `json:"pokerState"`
 		Participant *struct {
-			Hand []rawCard `json:"hand"`
+			Hand    []rawCard `json:"hand"`
+			Balance int       `json:"balance"`
+			Bet     int       `json:"currentBet"`
 		} `json:"participant"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -130,6 +133,7 @@ func parseTexasHoldEm(data json.RawMessage, gameName string) (*GameState, error)
 
 	if raw.Participant != nil {
 		gs.Hand = toCardInfo(raw.Participant.Hand)
+		gs.Balance = raw.Participant.Balance + raw.Participant.Bet
 	}
 	if raw.PokerState != nil {
 		gs.MinBet = raw.PokerState.MinBet
@@ -145,35 +149,14 @@ func parseTexasHoldEm(data json.RawMessage, gameName string) (*GameState, error)
 }
 
 func parseSevenCard(data json.RawMessage, gameName string) (*GameState, error) {
-	var raw struct {
-		Actions    []pokerAction `json:"actions"`
-		PokerState *struct {
-			MinBet int `json:"minBet"`
-			MaxBet int `json:"maxBet"`
-		} `json:"pokerState"`
-		Participant *struct {
-			Hand []rawCard `json:"hand"`
-		} `json:"participant"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-
-	gs := &GameState{GameName: gameName}
-	if raw.Participant != nil {
-		gs.Hand = toCardInfo(raw.Participant.Hand)
-	}
-	if raw.PokerState != nil {
-		gs.MinBet = raw.PokerState.MinBet
-		gs.MaxBet = raw.PokerState.MaxBet
-	}
-	for _, a := range raw.Actions {
-		gs.ValidActions = append(gs.ValidActions, ValidAction{Action: a.ID, Name: a.Name})
-	}
-	return gs, nil
+	return parseSimplePoker(data, gameName)
 }
 
 func parseLittleL(data json.RawMessage, gameName string) (*GameState, error) {
+	return parseSimplePoker(data, gameName)
+}
+
+func parseSimplePoker(data json.RawMessage, gameName string) (*GameState, error) {
 	var raw struct {
 		Actions    []pokerAction `json:"actions"`
 		PokerState *struct {
@@ -181,7 +164,9 @@ func parseLittleL(data json.RawMessage, gameName string) (*GameState, error) {
 			MaxBet int `json:"maxBet"`
 		} `json:"pokerState"`
 		Participant *struct {
-			Hand []rawCard `json:"hand"`
+			Hand       []rawCard `json:"hand"`
+			Balance    int       `json:"balance"`
+			CurrentBet int       `json:"currentBet"`
 		} `json:"participant"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -191,6 +176,7 @@ func parseLittleL(data json.RawMessage, gameName string) (*GameState, error) {
 	gs := &GameState{GameName: gameName}
 	if raw.Participant != nil {
 		gs.Hand = toCardInfo(raw.Participant.Hand)
+		gs.Balance = raw.Participant.Balance + raw.Participant.CurrentBet
 	}
 	if raw.PokerState != nil {
 		gs.MinBet = raw.PokerState.MinBet

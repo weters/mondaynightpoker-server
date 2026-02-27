@@ -28,6 +28,7 @@ type Bot struct {
 	sendCh        chan outgoingMessage
 	done          chan struct{}
 	program       *tea.Program // TUI program for sending messages
+	forwardLogs   bool         // only one bot should forward logs/clientState to avoid duplicates
 }
 
 type outgoingMessage struct {
@@ -126,12 +127,19 @@ func (b *Bot) handleMessage(resp *wsResponse) {
 		b.sendTUI(ErrorMsg{BotID: b.ID, Message: resp.Value})
 
 	case "clientState":
-		// Silently store; not critical for bot
+		if b.forwardLogs {
+			names := parseClientState(resp.Data)
+			if len(names) > 0 {
+				b.sendTUI(ClientStateMsg{PlayerNames: names})
+			}
+		}
 
 	case "allLogs", "logs":
-		msgs := parseLogs(resp.Data)
-		for _, msg := range msgs {
-			b.sendTUI(GameLogMsg{Message: msg})
+		if b.forwardLogs {
+			entries := parseLogs(resp.Data)
+			for _, entry := range entries {
+				b.sendTUI(GameLogMsg(entry))
+			}
 		}
 
 	case "status":

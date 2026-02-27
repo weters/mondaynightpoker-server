@@ -120,15 +120,26 @@ func pickBetAction(gs *GameState, actionMap map[string]ValidAction, randomAmount
 	}
 
 	if betAction != "" && gs.MinBet > 0 {
-		amount := gs.MinBet
-		if randomAmount && gs.MaxBet > gs.MinBet {
-			steps := (gs.MaxBet - gs.MinBet) / betIncrement
-			if steps > 0 {
-				amount = gs.MinBet + cryptoIntn(steps+1)*betIncrement
-			}
+		maxBet := gs.MaxBet
+		// Cap to player's all-in amount to avoid "bet exceeds participant's total"
+		if gs.Balance > 0 && gs.Balance < maxBet {
+			maxBet = gs.Balance
 		}
-		return betAction, map[string]interface{}{
-			"amount": amount,
+		// Round down to bet increment
+		maxBet = (maxBet / betIncrement) * betIncrement
+
+		// If player can't afford the min bet, fall through to check/call/fold
+		if maxBet >= gs.MinBet {
+			amount := gs.MinBet
+			if randomAmount && maxBet > gs.MinBet {
+				steps := (maxBet - gs.MinBet) / betIncrement
+				if steps > 0 {
+					amount = gs.MinBet + cryptoIntn(steps+1)*betIncrement
+				}
+			}
+			return betAction, map[string]interface{}{
+				"amount": amount,
+			}
 		}
 	}
 

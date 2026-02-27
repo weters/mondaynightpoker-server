@@ -68,8 +68,9 @@ func main() {
 		log.Fatal("No players to control")
 	}
 
-	// Connect all bots via WebSocket
-	for _, bot := range bots {
+	// Connect all bots via WebSocket (only first bot forwards logs to avoid duplicates)
+	for i, bot := range bots {
+		bot.forwardLogs = i == 0
 		log.Printf("Connecting p%d (%s) via WebSocket...", bot.ID, bot.Name)
 		if err := bot.Connect(*serverURL, tblUUID); err != nil {
 			log.Fatalf("Failed to connect bot: %v", err)

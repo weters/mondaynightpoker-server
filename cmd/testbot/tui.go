@@ -18,7 +18,8 @@ type BotStateMsg struct {
 
 // GameLogMsg is sent when a log event should be displayed.
 type GameLogMsg struct {
-	Message string
+	Message   string
+	PlayerIDs []int64
 }
 
 // GameEndedMsg is sent when a game ends.
@@ -32,6 +33,11 @@ type ErrorMsg struct {
 	Message string
 }
 
+// ClientStateMsg is sent when a clientState update is received.
+type ClientStateMsg struct {
+	PlayerNames map[int64]string
+}
+
 // Model is the top-level Bubble Tea model for the testbot TUI.
 type Model struct {
 	bots   []*Bot
@@ -39,7 +45,8 @@ type Model struct {
 	width  int
 	height int
 
-	logBuf *LogBuffer
+	logBuf      *LogBuffer
+	playerNames map[int64]string
 
 	// Sub-models
 	overlay    OverlayModel
@@ -55,8 +62,9 @@ type Model struct {
 // NewModel creates a new TUI model.
 func NewModel(bots []*Bot) Model {
 	return Model{
-		bots:   bots,
-		logBuf: NewLogBuffer(100),
+		bots:        bots,
+		logBuf:      NewLogBuffer(100),
+		playerNames: make(map[int64]string),
 	}
 }
 
@@ -92,8 +100,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ClientStateMsg:
+		for id, name := range msg.PlayerNames {
+			m.playerNames[id] = name
+		}
+		return m, nil
+
 	case GameLogMsg:
-		m.logBuf.Add(msg.Message)
+		m.logBuf.Add(formatLogMessage(msg.Message, msg.PlayerIDs, m.playerNames))
 		return m, nil
 
 	case GameEndedMsg:
@@ -598,31 +612,122 @@ func formatGameName(name string) string {
 	}
 }
 
-// parseLogs extracts log message text from the JSON log data.
-func parseLogs(data json.RawMessage) []string {
+// rawLogEntry represents a log message from the server.
+type rawLogEntry struct {
+	Message   string  `json:"message"`
+	PlayerIDs []int64 `json:"playerIds"`
+}
+
+// parseLogs extracts log entries from the JSON log data.
+func parseLogs(data json.RawMessage) []rawLogEntry {
 	// Try array of log objects
-	var logs []struct {
-		Message string `json:"message"`
-	}
+	var logs []rawLogEntry
 	if err := json.Unmarshal(data, &logs); err == nil {
-		msgs := make([]string, 0, len(logs))
+		entries := make([]rawLogEntry, 0, len(logs))
 		for _, l := range logs {
 			if l.Message != "" {
-				msgs = append(msgs, l.Message)
+				entries = append(entries, l)
 			}
 		}
-		return msgs
+		return entries
 	}
 
 	// Try single log object
-	var single struct {
-		Message string `json:"message"`
-	}
+	var single rawLogEntry
 	if err := json.Unmarshal(data, &single); err == nil && single.Message != "" {
-		return []string{single.Message}
+		return []rawLogEntry{single}
 	}
 
 	return nil
+}
+
+// parseClientState extracts player ID to display name mappings from clientState data.
+func parseClientState(data json.RawMessage) map[int64]string {
+	var cs map[string]struct {
+		Player struct {
+			DisplayName string `json:"displayName"`
+		} `json:"player"`
+	}
+	if err := json.Unmarshal(data, &cs); err != nil {
+		return nil
+	}
+
+	names := make(map[int64]string, len(cs))
+	for idStr, entry := range cs {
+		var id int64
+		if _, err := fmt.Sscanf(idStr, "%d", &id); err == nil && entry.Player.DisplayName != "" {
+			names[id] = entry.Player.DisplayName
+		}
+	}
+	return names
+}
+
+// formatLogMessage replaces {} with player names and ${cents} with formatted dollar amounts.
+func formatLogMessage(message string, playerIDs []int64, playerNames map[int64]string) string {
+	// Replace {} with player display names
+	if len(playerIDs) > 0 && playerIDs[0] != 0 {
+		names := make([]string, 0, len(playerIDs))
+		for _, pid := range playerIDs {
+			if name, ok := playerNames[pid]; ok {
+				names = append(names, name)
+			} else {
+				names = append(names, fmt.Sprintf("Player(%d)", pid))
+			}
+		}
+		message = strings.ReplaceAll(message, "{}", strings.Join(names, ", "))
+	}
+
+	// Replace ${cents} with formatted dollar amounts
+	message = replaceAmountTokens(message)
+
+	return message
+}
+
+// replaceAmountTokens replaces ${cents} tokens with formatted dollar amounts.
+func replaceAmountTokens(s string) string {
+	var result strings.Builder
+	for {
+		idx := strings.Index(s, "${")
+		if idx < 0 {
+			result.WriteString(s)
+			break
+		}
+		result.WriteString(s[:idx])
+		rest := s[idx+2:]
+		end := strings.Index(rest, "}")
+		if end < 0 {
+			result.WriteString(s[idx:])
+			break
+		}
+		var cents int
+		if _, err := fmt.Sscanf(rest[:end], "%d", &cents); err == nil {
+			result.WriteString(formatCents(cents))
+		} else {
+			result.WriteString(s[idx : idx+2+end+1])
+		}
+		s = rest[end+1:]
+	}
+	return result.String()
+}
+
+// formatCents converts a cent amount to a dollar string (e.g., 150 -> "$1.50", 200 -> "$2").
+func formatCents(cents int) string {
+	negative := cents < 0
+	if negative {
+		cents = -cents
+	}
+	dollars := cents / 100
+	remainder := cents % 100
+	var s string
+	if remainder == 0 {
+		s = fmt.Sprintf("$%d", dollars)
+	} else {
+		s = fmt.Sprintf("$%d.%02d", dollars, remainder)
+	}
+	if negative {
+		s = "-" + s
+	}
+	return s
 }
 
 // indentBlock prepends prefix to every line of a multi-line string.
