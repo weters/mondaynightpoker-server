@@ -645,6 +645,8 @@ func gameTypeGroup(gameType string) string {
 		return "Pass the Poop"
 	case strings.Contains(lower, "guts"):
 		return "Guts"
+	case strings.HasPrefix(lower, "7-card"), strings.HasPrefix(lower, "7 card"):
+		return "Seven Card"
 	default:
 		for _, v := range sevenCardVariants {
 			if strings.HasPrefix(lower, v) {

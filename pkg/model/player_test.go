@@ -394,6 +394,7 @@ func TestGameTypeGroup(t *testing.T) {
 		{"High Chicago", "Seven Card"},
 		{"Low Card Wild", "Seven Card"},
 		{"7 Card Chiggs", "Seven Card"},
+		{"7-Card TJ", "Seven Card"},
 		{"Coupons and Clippings", "Seven Card"},
 		{"Unknown Game", "Unknown Game"},
 	}
