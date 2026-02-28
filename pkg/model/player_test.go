@@ -381,6 +381,7 @@ func TestGameTypeGroup(t *testing.T) {
 		{"Acey Deucey", "Acey Deucey"},
 		{"Acey Deucey (Continuous Shoe)", "Acey Deucey"},
 		{"Texas Hold'em (${25}/${50})", "Texas Hold'em"},
+		{"Limit Texas Hold'em (${50}/${100})", "Texas Hold'em"},
 		{"Pineapple (${25}/${50})", "Texas Hold'em"},
 		{"Lazy Pineapple (${25}/${50})", "Texas Hold'em"},
 		{"Pass the Poop, Standard Edition", "Pass the Poop"},

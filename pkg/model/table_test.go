@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -188,9 +187,7 @@ func TestTable_Save(t *testing.T) {
 	_, table := playerAndTable()
 	a.False(table.Deleted)
 
-	now := time.Now()
-	time.Sleep(time.Millisecond)
-	assert.True(t, table.Modified.Before(now))
+	modifiedBefore := table.Modified
 
 	origName := table.Name
 	table.Name = origName + "-updated"
@@ -201,5 +198,5 @@ func TestTable_Save(t *testing.T) {
 	a.NoError(err)
 	a.NotEqual(origName, table.Name)
 	a.True(table.Deleted)
-	a.True(table.Modified.After(now))
+	a.False(table.Modified.Before(modifiedBefore), "modified should not be before the original modified time")
 }

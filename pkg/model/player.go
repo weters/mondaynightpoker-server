@@ -633,7 +633,7 @@ func gameTypeGroup(gameType string) string {
 		return "Little L"
 	case strings.HasPrefix(lower, "acey deucey"):
 		return "Acey Deucey"
-	case strings.HasPrefix(lower, "texas hold"):
+	case strings.Contains(lower, "texas hold"):
 		return "Texas Hold'em"
 	case strings.HasPrefix(lower, "pineapple"), strings.HasPrefix(lower, "lazy pineapple"):
 		return "Texas Hold'em"

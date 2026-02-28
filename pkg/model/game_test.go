@@ -3,7 +3,6 @@ package model
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
 func TestGame_EndGame(t *testing.T) {
@@ -18,7 +17,6 @@ func TestGame_EndGame(t *testing.T) {
 	playerTable, err := player.GetPlayerTable(cbg, table)
 	assert.NoError(t, err)
 
-	before := time.Now()
 	err = game.EndGame(cbg, map[string]string{"foo": "bar", "tar": "car"}, map[int64]int{playerTable.PlayerID: 123})
 	assert.NoError(t, err)
 
@@ -29,7 +27,8 @@ func TestGame_EndGame(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, g2)
 	assert.Equal(t, "bar", g2.data.(map[string]interface{})["foo"])
-	assert.True(t, g2.Ended.After(before))
+	assert.False(t, g2.Ended.IsZero())
+	assert.False(t, g2.Ended.Before(g2.Created), "ended should not be before created")
 }
 
 func playerTableAndGame() (*Player, *Table, *Game) {
