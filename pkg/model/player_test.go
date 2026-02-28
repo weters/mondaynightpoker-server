@@ -442,6 +442,9 @@ func TestGetPlayerStats(t *testing.T) {
 	// Both Bourré variants should be grouped under "Bourre"
 	a.Equal(300, stats.WinningsByGame["Bourre"])
 	a.Equal(-50, stats.WinningsByGame["Texas Hold'em"])
+	// Game counts by type
+	a.Equal(2, stats.GamesCountByType["Bourre"])
+	a.Equal(1, stats.GamesCountByType["Texas Hold'em"])
 
 	// Test with narrow date range that excludes everything
 	future := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -452,6 +455,7 @@ func TestGetPlayerStats(t *testing.T) {
 	a.Equal(0, stats.GamesPlayed)
 	a.Equal(0, stats.TotalWinnings)
 	a.Equal(0, len(stats.WinningsByGame))
+	a.Equal(0, len(stats.GamesCountByType))
 }
 
 func TestGetPlayerTablesFiltered(t *testing.T) {

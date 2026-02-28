@@ -523,10 +523,11 @@ WHERE token = $1`
 
 // PlayerStats holds aggregate stats for a player profile
 type PlayerStats struct {
-	TablesJoined   int            `json:"tablesJoined"`
-	GamesPlayed    int            `json:"gamesPlayed"`
-	TotalWinnings  int            `json:"totalWinnings"`
-	WinningsByGame map[string]int `json:"winningsByGame"`
+	TablesJoined     int            `json:"tablesJoined"`
+	GamesPlayed      int            `json:"gamesPlayed"`
+	TotalWinnings    int            `json:"totalWinnings"`
+	WinningsByGame   map[string]int `json:"winningsByGame"`
+	GamesCountByType map[string]int `json:"gamesCountByType"`
 }
 
 // PlayerProfile is the combined profile response for a player
@@ -539,7 +540,8 @@ type PlayerProfile struct {
 // GetPlayerStats returns aggregate stats for a player within the given time range
 func GetPlayerStats(ctx context.Context, playerID int64, from, to time.Time) (*PlayerStats, error) {
 	stats := &PlayerStats{
-		WinningsByGame: make(map[string]int),
+		WinningsByGame:   make(map[string]int),
+		GamesCountByType: make(map[string]int),
 	}
 
 	// Tables joined count
@@ -581,9 +583,9 @@ WHERE pt.player_id = $1
 		return nil, err
 	}
 
-	// Winnings by game type
+	// Winnings and game count by game type
 	const byGameQuery = `
-SELECT g.game_type, COALESCE(SUM(ptt.adjustment), 0) as total
+SELECT g.game_type, COALESCE(SUM(ptt.adjustment), 0) as total, COUNT(DISTINCT g.id) as game_count
 FROM players_tables_transactions ptt
 INNER JOIN games g ON ptt.game_id = g.id
 INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
@@ -600,11 +602,13 @@ GROUP BY g.game_type`
 	for rows.Next() {
 		var gameType string
 		var total int
-		if err := rows.Scan(&gameType, &total); err != nil {
+		var gameCount int
+		if err := rows.Scan(&gameType, &total, &gameCount); err != nil {
 			return nil, err
 		}
 		group := gameTypeGroup(gameType)
 		stats.WinningsByGame[group] += total
+		stats.GamesCountByType[group] += gameCount
 	}
 
 	return stats, nil
