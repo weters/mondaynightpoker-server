@@ -619,7 +619,7 @@ func (m *Mux) getPlayerIDProfile() http.HandlerFunc {
 }
 
 func writePlayerProfile(w http.ResponseWriter, r *http.Request, playerID int64) {
-	start, rows, err := parsePaginationOptions(r)
+	start, rows, err := parsePaginationOptions(r, 1000)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return

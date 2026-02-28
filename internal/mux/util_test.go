@@ -53,6 +53,17 @@ func Test_parsePaginationOptions(t *testing.T) {
 	assert.EqualError(t, err, fmt.Sprintf("rows cannot be greater than %d", maxRows))
 	assert.Equal(t, int64(0), start)
 	assert.Equal(t, 0, rows)
+
+	// test maxRowsOverride
+	start, rows, err = parsePaginationOptions(req("?rows=500"), 1000)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), start)
+	assert.Equal(t, 500, rows)
+
+	start, rows, err = parsePaginationOptions(req("?rows=1001"), 1000)
+	assert.EqualError(t, err, "rows cannot be greater than 1000")
+	assert.Equal(t, int64(0), start)
+	assert.Equal(t, 0, rows)
 }
 
 func player() (*model.Player, string) {

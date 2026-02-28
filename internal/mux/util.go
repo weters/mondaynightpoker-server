@@ -20,7 +20,12 @@ import (
 const maxRows = 100
 const defaultRows = 100
 
-func parsePaginationOptions(r *http.Request) (start int64, rows int, err error) {
+func parsePaginationOptions(r *http.Request, maxRowsOverride ...int) (start int64, rows int, err error) {
+	mr := maxRows
+	if len(maxRowsOverride) > 0 {
+		mr = maxRowsOverride[0]
+	}
+
 	rows = defaultRows
 
 	if startStr := r.FormValue("start"); startStr != "" {
@@ -46,8 +51,8 @@ func parsePaginationOptions(r *http.Request) (start int64, rows int, err error) 
 			return 0, 0, errors.New("rows must be greater than zero")
 		}
 
-		if val > maxRows {
-			return 0, 0, fmt.Errorf("rows cannot be greater than %d", maxRows)
+		if val > mr {
+			return 0, 0, fmt.Errorf("rows cannot be greater than %d", mr)
 		}
 
 		rows = val
