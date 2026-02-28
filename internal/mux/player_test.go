@@ -331,6 +331,58 @@ func TestMux_getPlayerIDTable(t *testing.T) {
 	assertGet(t, ts, path+"?rows=0", nil, http.StatusBadRequest, j)
 }
 
+func TestMux_getPlayerProfile(t *testing.T) {
+	a := assert.New(t)
+
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	p, _ := player()
+	_ = p.SetIsSiteAdmin(context.Background(), true)
+
+	for i := 1; i <= 3; i++ {
+		tbl, _ := p.CreateTable(context.Background(), fmt.Sprintf("Profile Test %d", i))
+
+		game, _ := tbl.CreateGame(context.Background(), "Bourré")
+		_ = game.EndGame(context.Background(), nil, map[int64]int{
+			p.ID: i * 100,
+		})
+	}
+
+	// remove site admin so we test as a regular user
+	_ = p.SetIsSiteAdmin(context.Background(), false)
+
+	j, _ := jwt.Sign(p.ID)
+
+	// player can view own profile
+	var profile model.PlayerProfile
+	assertGet(t, ts, "/player/profile", &profile, http.StatusOK, j)
+	a.Equal(p.ID, profile.Player.ID)
+	a.Equal(3, profile.Stats.TablesJoined)
+	a.Equal(3, profile.Stats.GamesPlayed)
+	a.Equal(600, profile.Stats.TotalWinnings)
+	a.Equal(600, profile.Stats.WinningsByGame["Bourre"])
+	a.Equal(3, len(profile.Tables))
+
+	// test pagination
+	profile = model.PlayerProfile{}
+	assertGet(t, ts, "/player/profile?start=0&rows=2", &profile, http.StatusOK, j)
+	a.Equal(2, len(profile.Tables))
+
+	// test bad pagination
+	var errResp errorResponse
+	assertGet(t, ts, "/player/profile?rows=0", &errResp, http.StatusBadRequest, j)
+
+	// test bad date format
+	errResp = errorResponse{}
+	assertGet(t, ts, "/player/profile?from=bad-date", &errResp, http.StatusBadRequest, j)
+	a.Equal("invalid 'from' date format, use ISO 8601", errResp.Message)
+
+	// test unauthenticated
+	assertGet(t, ts, "/player/profile", nil, http.StatusUnauthorized)
+}
+
 func TestMux_getPlayerIDProfile(t *testing.T) {
 	a := assert.New(t)
 
@@ -358,14 +410,8 @@ func TestMux_getPlayerIDProfile(t *testing.T) {
 	j2, _ := jwt.Sign(p2.ID)
 
 	// admin can view any profile
-	path := fmt.Sprintf("/player/%d/profile", p2.ID)
+	path := fmt.Sprintf("/player/%d/profile", p.ID)
 	var profile model.PlayerProfile
-	assertGet(t, ts, path, &profile, http.StatusOK, j)
-	a.Equal(p2.ID, profile.Player.ID)
-
-	// player can view own profile
-	path = fmt.Sprintf("/player/%d/profile", p.ID)
-	profile = model.PlayerProfile{}
 	assertGet(t, ts, path, &profile, http.StatusOK, j)
 	a.Equal(p.ID, profile.Player.ID)
 	a.Equal(3, profile.Stats.TablesJoined)
@@ -374,16 +420,18 @@ func TestMux_getPlayerIDProfile(t *testing.T) {
 	a.Equal(600, profile.Stats.WinningsByGame["Bourre"])
 	a.Equal(3, len(profile.Tables))
 
-	// non-admin cannot view another player's profile
-	assertGet(t, ts, path, nil, http.StatusForbidden, j2)
-
-	// non-admin can view own profile
+	// admin can view another player's profile
 	path = fmt.Sprintf("/player/%d/profile", p2.ID)
 	profile = model.PlayerProfile{}
-	assertGet(t, ts, path, &profile, http.StatusOK, j2)
+	assertGet(t, ts, path, &profile, http.StatusOK, j)
 	a.Equal(p2.ID, profile.Player.ID)
 
+	// non-admin cannot view any profile
+	assertGet(t, ts, path, nil, http.StatusForbidden, j2)
+	assertGet(t, ts, fmt.Sprintf("/player/%d/profile", p2.ID), nil, http.StatusForbidden, j2)
+
 	// test pagination
+	path = fmt.Sprintf("/player/%d/profile", p.ID)
 	profile = model.PlayerProfile{}
 	assertGet(t, ts, path+"?start=0&rows=2", &profile, http.StatusOK, j)
 	a.Equal(2, len(profile.Tables))

@@ -604,51 +604,55 @@ func (m *Mux) postAdminTestPlayer() http.HandlerFunc {
 	}
 }
 
+func (m *Mux) getPlayerProfile() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
+		writePlayerProfile(w, r, player.ID)
+	}
+}
+
 func (m *Mux) getPlayerIDProfile() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-
-		player := r.Context().Value(ctxPlayerKey).(*model.Player)
-		if player.ID != playerID && !player.IsSiteAdmin {
-			writeJSONError(w, http.StatusForbidden, nil)
-			return
-		}
-
-		start, rows, err := parsePaginationOptions(r)
-		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, err)
-			return
-		}
-
-		from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-		to := time.Now().In(time.UTC).Add(24 * time.Hour)
-
-		if fromStr := r.FormValue("from"); fromStr != "" {
-			parsed, err := time.Parse(time.RFC3339, fromStr)
-			if err != nil {
-				writeJSONError(w, http.StatusBadRequest, errors.New("invalid 'from' date format, use ISO 8601"))
-				return
-			}
-			from = parsed.In(time.UTC)
-		}
-
-		if toStr := r.FormValue("to"); toStr != "" {
-			parsed, err := time.Parse(time.RFC3339, toStr)
-			if err != nil {
-				writeJSONError(w, http.StatusBadRequest, errors.New("invalid 'to' date format, use ISO 8601"))
-				return
-			}
-			to = parsed.In(time.UTC)
-		}
-
-		profile, err := model.GetPlayerProfile(r.Context(), playerID, from, to, start, rows)
-		if err != nil {
-			writeMaybeNotFoundError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, profile)
+		writePlayerProfile(w, r, playerID)
 	}
+}
+
+func writePlayerProfile(w http.ResponseWriter, r *http.Request, playerID int64) {
+	start, rows, err := parsePaginationOptions(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Now().In(time.UTC).Add(24 * time.Hour)
+
+	if fromStr := r.FormValue("from"); fromStr != "" {
+		parsed, err := time.Parse(time.RFC3339, fromStr)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, errors.New("invalid 'from' date format, use ISO 8601"))
+			return
+		}
+		from = parsed.In(time.UTC)
+	}
+
+	if toStr := r.FormValue("to"); toStr != "" {
+		parsed, err := time.Parse(time.RFC3339, toStr)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, errors.New("invalid 'to' date format, use ISO 8601"))
+			return
+		}
+		to = parsed.In(time.UTC)
+	}
+
+	profile, err := model.GetPlayerProfile(r.Context(), playerID, from, to, start, rows)
+	if err != nil {
+		writeMaybeNotFoundError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profile)
 }
 
 func validatePassword(password string) error {
