@@ -369,6 +369,152 @@ func TestPlayer_accountVerification(t *testing.T) {
 	a.EqualError(VerifyAccount(cbg, token), "token is expired")
 }
 
+func TestGameTypeGroup(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Bourré", "Bourre"},
+		{"Bourré (Five Suit)", "Bourre"},
+		{"4-Card Little L (trade: 0, 2)", "Little L"},
+		{"5-Card Little L (trade: 0, 1, 3)", "Little L"},
+		{"Acey Deucey", "Acey Deucey"},
+		{"Acey Deucey (Continuous Shoe)", "Acey Deucey"},
+		{"Texas Hold'em (${25}/${50})", "Texas Hold'em"},
+		{"Pineapple (${25}/${50})", "Texas Hold'em"},
+		{"Lazy Pineapple (${25}/${50})", "Texas Hold'em"},
+		{"Pass the Poop, Standard Edition", "Pass the Poop"},
+		{"Pass the Poop, Diarrhea Edition (with Blocks)", "Pass the Poop"},
+		{"2-Card Guts", "Guts"},
+		{"Bloody 3-Card Guts with Trades", "Guts"},
+		{"Seven-Card Stud", "Seven Card"},
+		{"Baseball", "Seven Card"},
+		{"Follow the Queen", "Seven Card"},
+		{"High Chicago", "Seven Card"},
+		{"Low Card Wild", "Seven Card"},
+		{"7 Card Chiggs", "Seven Card"},
+		{"Coupons and Clippings", "Seven Card"},
+		{"Unknown Game", "Unknown Game"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, gameTypeGroup(tt.input))
+		})
+	}
+}
+
+func TestGetPlayerStats(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
+	tbl1, _ := p.CreateTable(cbg, "Stats Table 1")
+	tbl2, _ := p.CreateTable(cbg, "Stats Table 2")
+
+	pt1, _ := p.GetPlayerTable(cbg, tbl1)
+	pt2, _ := p.GetPlayerTable(cbg, tbl2)
+
+	// Create games and end them with balance adjustments
+	// Use display names as they would be stored in the DB
+	game1, _ := tbl1.CreateGame(cbg, "Bourré")
+	_ = game1.EndGame(cbg, nil, map[int64]int{p.ID: 100})
+
+	game2, _ := tbl1.CreateGame(cbg, "Texas Hold'em (${25}/${50})")
+	_ = game2.EndGame(cbg, nil, map[int64]int{p.ID: -50})
+
+	game3, _ := tbl2.CreateGame(cbg, "Bourré (Five Suit)")
+	_ = game3.EndGame(cbg, nil, map[int64]int{p.ID: 200})
+
+	// Reload balances
+	_ = pt1
+	_ = pt2
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	stats, err := GetPlayerStats(cbg, p.ID, from, to)
+	a.NoError(err)
+	a.Equal(2, stats.TablesJoined)
+	a.Equal(3, stats.GamesPlayed)
+	a.Equal(250, stats.TotalWinnings)
+	// Both Bourré variants should be grouped under "Bourre"
+	a.Equal(300, stats.WinningsByGame["Bourre"])
+	a.Equal(-50, stats.WinningsByGame["Texas Hold'em"])
+
+	// Test with narrow date range that excludes everything
+	future := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	futureEnd := time.Date(2100, 12, 31, 0, 0, 0, 0, time.UTC)
+	stats, err = GetPlayerStats(cbg, p.ID, future, futureEnd)
+	a.NoError(err)
+	a.Equal(0, stats.TablesJoined)
+	a.Equal(0, stats.GamesPlayed)
+	a.Equal(0, stats.TotalWinnings)
+	a.Equal(0, len(stats.WinningsByGame))
+}
+
+func TestGetPlayerTablesFiltered(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true
+	tbl1, _ := p.CreateTable(cbg, "Filtered Table 1")
+	tbl2, _ := p.CreateTable(cbg, "Filtered Table 2")
+	tbl3, _ := p.CreateTable(cbg, "Filtered Table 3")
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tables, err := GetPlayerTablesFiltered(cbg, p.ID, from, to, 0, 100)
+	a.NoError(err)
+	a.Equal(3, len(tables))
+	a.Equal(tbl3.UUID, tables[0].UUID)
+	a.Equal(tbl2.UUID, tables[1].UUID)
+	a.Equal(tbl1.UUID, tables[2].UUID)
+
+	// Test pagination
+	tables, err = GetPlayerTablesFiltered(cbg, p.ID, from, to, 0, 2)
+	a.NoError(err)
+	a.Equal(2, len(tables))
+
+	tables, err = GetPlayerTablesFiltered(cbg, p.ID, from, to, 2, 2)
+	a.NoError(err)
+	a.Equal(1, len(tables))
+
+	// Test narrow date range
+	future := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	futureEnd := time.Date(2100, 12, 31, 0, 0, 0, 0, time.UTC)
+	tables, err = GetPlayerTablesFiltered(cbg, p.ID, future, futureEnd, 0, 100)
+	a.NoError(err)
+	a.Equal(0, len(tables))
+}
+
+func TestGetPlayerProfile(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true
+	tbl, _ := p.CreateTable(cbg, "Profile Table")
+
+	game, _ := tbl.CreateGame(cbg, "bourre")
+	_ = game.EndGame(cbg, nil, map[int64]int{p.ID: 500})
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	profile, err := GetPlayerProfile(cbg, p.ID, from, to, 0, 100)
+	a.NoError(err)
+	a.Equal(p.ID, profile.Player.ID)
+	a.Equal(1, profile.Stats.TablesJoined)
+	a.Equal(1, profile.Stats.GamesPlayed)
+	a.Equal(500, profile.Stats.TotalWinnings)
+	a.Equal(1, len(profile.Tables))
+
+	// Test with non-existent player
+	_, err = GetPlayerProfile(cbg, 0, from, to, 0, 100)
+	a.Error(err)
+}
+
 func TestPlayer_Delete(t *testing.T) {
 	p := player()
 	email := p.Email

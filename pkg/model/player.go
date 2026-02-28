@@ -8,6 +8,7 @@ import (
 	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/mnptoken"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -518,4 +519,194 @@ WHERE token = $1`
 
 	_, err := db.Instance().ExecContext(ctx, query, t)
 	return err
+}
+
+// PlayerStats holds aggregate stats for a player profile
+type PlayerStats struct {
+	TablesJoined   int            `json:"tablesJoined"`
+	GamesPlayed    int            `json:"gamesPlayed"`
+	TotalWinnings  int            `json:"totalWinnings"`
+	WinningsByGame map[string]int `json:"winningsByGame"`
+}
+
+// PlayerProfile is the combined profile response for a player
+type PlayerProfile struct {
+	Player *Player             `json:"player"`
+	Stats  *PlayerStats        `json:"stats"`
+	Tables []*TableWithBalance `json:"tables"`
+}
+
+// GetPlayerStats returns aggregate stats for a player within the given time range
+func GetPlayerStats(ctx context.Context, playerID int64, from, to time.Time) (*PlayerStats, error) {
+	stats := &PlayerStats{
+		WinningsByGame: make(map[string]int),
+	}
+
+	// Tables joined count
+	const tablesQuery = `
+SELECT COUNT(*)
+FROM players_tables pt
+INNER JOIN tables t ON pt.table_uuid = t.uuid
+WHERE pt.player_id = $1
+  AND NOT t.deleted
+  AND pt.created >= $2 AND pt.created <= $3`
+
+	if err := db.Instance().QueryRowContext(ctx, tablesQuery, playerID, from, to).Scan(&stats.TablesJoined); err != nil {
+		return nil, err
+	}
+
+	// Games played count
+	const gamesQuery = `
+SELECT COUNT(DISTINCT ptt.game_id)
+FROM players_tables_transactions ptt
+INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+WHERE pt.player_id = $1
+  AND ptt.game_id IS NOT NULL
+  AND ptt.created >= $2 AND ptt.created <= $3`
+
+	if err := db.Instance().QueryRowContext(ctx, gamesQuery, playerID, from, to).Scan(&stats.GamesPlayed); err != nil {
+		return nil, err
+	}
+
+	// Total winnings
+	const winningsQuery = `
+SELECT COALESCE(SUM(ptt.adjustment), 0)
+FROM players_tables_transactions ptt
+INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+WHERE pt.player_id = $1
+  AND ptt.game_id IS NOT NULL
+  AND ptt.created >= $2 AND ptt.created <= $3`
+
+	if err := db.Instance().QueryRowContext(ctx, winningsQuery, playerID, from, to).Scan(&stats.TotalWinnings); err != nil {
+		return nil, err
+	}
+
+	// Winnings by game type
+	const byGameQuery = `
+SELECT g.game_type, COALESCE(SUM(ptt.adjustment), 0) as total
+FROM players_tables_transactions ptt
+INNER JOIN games g ON ptt.game_id = g.id
+INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+WHERE pt.player_id = $1
+  AND ptt.created >= $2 AND ptt.created <= $3
+GROUP BY g.game_type`
+
+	rows, err := db.Instance().QueryContext(ctx, byGameQuery, playerID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var gameType string
+		var total int
+		if err := rows.Scan(&gameType, &total); err != nil {
+			return nil, err
+		}
+		group := gameTypeGroup(gameType)
+		stats.WinningsByGame[group] += total
+	}
+
+	return stats, nil
+}
+
+// sevenCardVariants lists the display names of seven-card poker variants
+// stored in the game_type column.
+var sevenCardVariants = []string{
+	"seven-card stud",
+	"baseball",
+	"follow the queen",
+	"high chicago",
+	"low card wild",
+	"7 card chiggs",
+	"coupons and clippings",
+}
+
+// gameTypeGroup maps a stored game_type display name to its canonical group name.
+// The game_type column stores the full display name (e.g., "4-Card Little L (trade: 0, 2)").
+func gameTypeGroup(gameType string) string {
+	lower := strings.ToLower(gameType)
+	switch {
+	case strings.HasPrefix(lower, "bourr"):
+		return "Bourre"
+	case strings.Contains(lower, "little l"):
+		return "Little L"
+	case strings.HasPrefix(lower, "acey deucey"):
+		return "Acey Deucey"
+	case strings.HasPrefix(lower, "texas hold"):
+		return "Texas Hold'em"
+	case strings.HasPrefix(lower, "pineapple"), strings.HasPrefix(lower, "lazy pineapple"):
+		return "Texas Hold'em"
+	case strings.HasPrefix(lower, "pass the poop"):
+		return "Pass the Poop"
+	case strings.Contains(lower, "guts"):
+		return "Guts"
+	default:
+		for _, v := range sevenCardVariants {
+			if strings.HasPrefix(lower, v) {
+				return "Seven Card"
+			}
+		}
+		return gameType
+	}
+}
+
+// GetPlayerTablesFiltered returns tables with balances for a player, filtered by date range
+func GetPlayerTablesFiltered(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) ([]*TableWithBalance, error) {
+	const query = `
+SELECT ` + tableColumns + `, players_tables.balance
+FROM tables
+INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
+WHERE NOT tables.deleted
+  AND players_tables.player_id = $1
+  AND players_tables.created >= $2 AND players_tables.created <= $3
+ORDER BY players_tables.id DESC
+OFFSET $4
+LIMIT $5`
+
+	rows, err := db.Instance().QueryContext(ctx, query, playerID, from, to, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	records := make([]*TableWithBalance, 0)
+	for rows.Next() {
+		var balance int
+		tbl, err := getTableByRow(rows, &balance)
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, &TableWithBalance{
+			Table:   tbl,
+			Balance: balance,
+		})
+	}
+
+	return records, nil
+}
+
+// GetPlayerProfile returns the full player profile including stats and tables
+func GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) (*PlayerProfile, error) {
+	player, err := GetPlayerByID(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+
+	stats, err := GetPlayerStats(ctx, playerID, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	tables, err := GetPlayerTablesFiltered(ctx, playerID, from, to, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PlayerProfile{
+		Player: player,
+		Stats:  stats,
+		Tables: tables,
+	}, nil
 }
