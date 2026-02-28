@@ -564,6 +564,16 @@ func TestRound_getMaxBet(t *testing.T) {
 	testHalfPot(t, 0, 0)
 }
 
+func TestRound_MarshalJSON(t *testing.T) {
+	a := assert.New(t)
+	d := deck.New()
+	r := NewRound(DefaultOptions(), 42, d, 100)
+
+	b, err := r.MarshalJSON()
+	a.NoError(err)
+	a.Contains(string(b), `"playerId":42`)
+}
+
 func TestRound_Pass(t *testing.T) {
 	a := assert.New(t)
 	r := &Round{}

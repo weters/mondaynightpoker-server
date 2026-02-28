@@ -38,6 +38,7 @@ type Round struct {
 // MarshalJSON provides custom JSON marshalling for round
 func (r *Round) MarshalJSON() ([]byte, error) {
 	return json.Marshal(roundJSON{
+		PlayerID:        r.PlayerID,
 		Games:           r.Games,
 		State:           r.State,
 		Pot:             r.Pot,
@@ -47,6 +48,7 @@ func (r *Round) MarshalJSON() ([]byte, error) {
 }
 
 type roundJSON struct {
+	PlayerID        int64         `json:"playerId"`
 	Games           []*SingleGame `json:"games"`
 	State           RoundState    `json:"state"`
 	Pot             int           `json:"pot"`
