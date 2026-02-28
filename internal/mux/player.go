@@ -608,6 +608,12 @@ func (m *Mux) getPlayerIDProfile() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
+		if player.ID != playerID && !player.IsSiteAdmin {
+			writeJSONError(w, http.StatusForbidden, nil)
+			return
+		}
+
 		start, rows, err := parsePaginationOptions(r)
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err)
