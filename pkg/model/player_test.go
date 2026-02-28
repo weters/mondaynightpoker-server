@@ -515,10 +515,48 @@ func TestGetPlayerProfile(t *testing.T) {
 	a.Equal(1, profile.Stats.GamesPlayed)
 	a.Equal(500, profile.Stats.TotalWinnings)
 	a.Equal(1, len(profile.Tables))
+	a.Equal(1, len(profile.GraphData))
+	a.Equal(500, profile.GraphData[0].Balance)
+
+	// Test graph data is not affected by pagination
+	profile2, err := GetPlayerProfile(cbg, p.ID, from, to, 0, 0)
+	a.NoError(err)
+	a.Equal(0, len(profile2.Tables))
+	a.Equal(1, len(profile2.GraphData))
 
 	// Test with non-existent player
 	_, err = GetPlayerProfile(cbg, 0, from, to, 0, 100)
 	a.Error(err)
+}
+
+func TestGetPlayerGraphData(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true
+	tbl, _ := p.CreateTable(cbg, "Graph Table 1")
+
+	game, _ := tbl.CreateGame(cbg, "bourre")
+	_ = game.EndGame(cbg, nil, map[int64]int{p.ID: 300})
+
+	tbl2, _ := p.CreateTable(cbg, "Graph Table 2")
+	game2, _ := tbl2.CreateGame(cbg, "bourre")
+	_ = game2.EndGame(cbg, nil, map[int64]int{p.ID: -100})
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	points, err := GetPlayerGraphData(cbg, p.ID, from, to)
+	a.NoError(err)
+	a.Equal(2, len(points))
+	a.Equal(300, points[0].Balance)
+	a.Equal(-100, points[1].Balance)
+
+	// Test with filtered date range that excludes all data
+	future := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	points2, err := GetPlayerGraphData(cbg, p.ID, future, to)
+	a.NoError(err)
+	a.Equal(0, len(points2))
 }
 
 func TestPlayer_Delete(t *testing.T) {

@@ -530,11 +530,18 @@ type PlayerStats struct {
 	GamesCountByType map[string]int `json:"gamesCountByType"`
 }
 
+// GraphPoint is a lightweight data point for the profile graph
+type GraphPoint struct {
+	Created time.Time `json:"created"`
+	Balance int       `json:"balance"`
+}
+
 // PlayerProfile is the combined profile response for a player
 type PlayerProfile struct {
-	Player *Player             `json:"player"`
-	Stats  *PlayerStats        `json:"stats"`
-	Tables []*TableWithBalance `json:"tables"`
+	Player    *Player             `json:"player"`
+	Stats     *PlayerStats        `json:"stats"`
+	Tables    []*TableWithBalance `json:"tables"`
+	GraphData []*GraphPoint       `json:"graphData"`
 }
 
 // GetPlayerStats returns aggregate stats for a player within the given time range
@@ -693,6 +700,35 @@ LIMIT $5`
 	return records, nil
 }
 
+// GetPlayerGraphData returns lightweight balance data points for the profile graph
+func GetPlayerGraphData(ctx context.Context, playerID int64, from, to time.Time) ([]*GraphPoint, error) {
+	const query = `
+SELECT players_tables.created, players_tables.balance
+FROM players_tables
+INNER JOIN tables ON tables.uuid = players_tables.table_uuid
+WHERE NOT tables.deleted
+  AND players_tables.player_id = $1
+  AND players_tables.created >= $2 AND players_tables.created <= $3
+ORDER BY players_tables.id ASC`
+
+	rows, err := db.Instance().QueryContext(ctx, query, playerID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := make([]*GraphPoint, 0)
+	for rows.Next() {
+		var gp GraphPoint
+		if err := rows.Scan(&gp.Created, &gp.Balance); err != nil {
+			return nil, err
+		}
+		points = append(points, &gp)
+	}
+
+	return points, nil
+}
+
 // GetPlayerProfile returns the full player profile including stats and tables
 func GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) (*PlayerProfile, error) {
 	player, err := GetPlayerByID(ctx, playerID)
@@ -710,9 +746,15 @@ func GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, o
 		return nil, err
 	}
 
+	graphData, err := GetPlayerGraphData(ctx, playerID, from, to)
+	if err != nil {
+		return nil, err
+	}
+
 	return &PlayerProfile{
-		Player: player,
-		Stats:  stats,
-		Tables: tables,
+		Player:    player,
+		Stats:     stats,
+		Tables:    tables,
+		GraphData: graphData,
 	}, nil
 }
