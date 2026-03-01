@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 // GameState is a unified representation of valid actions across game types.
@@ -16,6 +17,11 @@ type GameState struct {
 	CurrentTurn  int64
 	Pot          int
 	Community    []CardInfo
+	Round        int                // current round number (bourré)
+	MaxDraw      int                // max cards to discard (bourré)
+	TrumpCard    *CardInfo          // bourré trump card
+	PlayedCards  map[int64]CardInfo // bourré cards played in current trick
+	AceyCards    []CardInfo         // acey deucey [firstCard, lastCard]
 }
 
 // ValidAction represents a single action a bot can take.
@@ -192,9 +198,11 @@ func parseSimplePoker(data json.RawMessage, gameName string) (*GameState, error)
 func parseBourre(data json.RawMessage, playerID int64) (*GameState, error) {
 	var raw struct {
 		GameState *struct {
-			CurrentTurn int64 `json:"currentTurn"`
-			Round       int   `json:"round"`
-			Pot         int   `json:"pot"`
+			CurrentTurn int64              `json:"currentTurn"`
+			Round       int                `json:"round"`
+			Pot         int                `json:"pot"`
+			TrumpCard   *rawCard           `json:"trumpCard"`
+			PlayedCards map[string]rawCard `json:"playedCards"`
 		} `json:"gameState"`
 		Hand       []rawCard `json:"hand"`
 		ValidMoves []rawCard `json:"validMoves"`
@@ -207,10 +215,28 @@ func parseBourre(data json.RawMessage, playerID int64) (*GameState, error) {
 
 	gs := &GameState{GameName: gameBourre}
 	gs.Hand = toCardInfo(raw.Hand)
+	gs.MaxDraw = raw.MaxDraw
 
 	if raw.GameState != nil {
 		gs.CurrentTurn = raw.GameState.CurrentTurn
 		gs.Pot = raw.GameState.Pot
+		gs.Round = raw.GameState.Round
+
+		if raw.GameState.TrumpCard != nil {
+			tc := CardInfo(*raw.GameState.TrumpCard)
+			gs.TrumpCard = &tc
+		}
+
+		if len(raw.GameState.PlayedCards) > 0 {
+			gs.PlayedCards = make(map[int64]CardInfo)
+			for idStr, c := range raw.GameState.PlayedCards {
+				id, err := strconv.ParseInt(idStr, 10, 64)
+				if err != nil {
+					continue
+				}
+				gs.PlayedCards[id] = CardInfo(c)
+			}
+		}
 
 		if raw.GameState.CurrentTurn == playerID && !raw.Folded {
 			if raw.GameState.Round == 0 {
@@ -319,6 +345,13 @@ func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 		GameState *struct {
 			CurrentTurn int64 `json:"currentTurn"`
 			MaxBet      int   `json:"maxBet"`
+			Round       *struct {
+				Games []struct {
+					FirstCard *rawCard `json:"firstCard"`
+					LastCard  *rawCard `json:"lastCard"`
+				} `json:"games"`
+				ActiveGameIndex int `json:"activeGameIndex"`
+			} `json:"round"`
 		} `json:"gameState"`
 		Actions []struct {
 			ID   int    `json:"id"`
@@ -334,6 +367,19 @@ func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 		gs.CurrentTurn = raw.GameState.CurrentTurn
 		gs.MinBet = 25 // acey deucey minimum bet is always $25
 		gs.MaxBet = raw.GameState.MaxBet
+
+		if raw.GameState.Round != nil {
+			r := raw.GameState.Round
+			if r.ActiveGameIndex < len(r.Games) {
+				g := r.Games[r.ActiveGameIndex]
+				if g.FirstCard != nil && g.LastCard != nil {
+					gs.AceyCards = []CardInfo{
+						CardInfo(*g.FirstCard),
+						CardInfo(*g.LastCard),
+					}
+				}
+			}
+		}
 	}
 	for _, a := range raw.Actions {
 		gs.ValidActions = append(gs.ValidActions, ValidAction{

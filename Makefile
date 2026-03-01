@@ -47,3 +47,7 @@ assets/uml_deck.png:
 		| java -jar third_party/plantuml/plantuml.jar -pipe > assets/uml_deck.png
 
 uml: assets/uml_playable.png assets/uml_room.png assets/uml_deck.png
+
+.PHONY: testbot
+testbot:
+	go build ./cmd/testbot
