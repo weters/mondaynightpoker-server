@@ -247,10 +247,13 @@ func bourreDiscardDecision(gs *GameState) *outgoingMessage {
 		}
 	}
 
-	// Fold decision
+	// Fold decision: in bourré, folding is done by discarding nil cards
 	if trumpCount == 0 && faceCount == 0 {
 		if cryptoFloat64() < 0.80 {
-			return &outgoingMessage{Action: actionFold}
+			return &outgoingMessage{
+				Action: actionDiscard,
+				Cards:  nil,
+			}
 		}
 	}
 

@@ -143,7 +143,8 @@ func TestBourreAutoPilot_FoldsWeakHand(t *testing.T) {
 	for range 200 {
 		msg := bourreAutoPilot(gs)
 		assert.NotNil(t, msg)
-		if msg.Action == actionFold {
+		// In bourré, folding is discard with nil cards
+		if msg.Action == actionDiscard && msg.Cards == nil {
 			foldCount++
 		}
 	}
