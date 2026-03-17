@@ -384,7 +384,7 @@ func (g *Game) calculateShowdown() {
 		g.showdownResult = result
 
 		g.sendLogMessages(newLogMessageWithCards(player.PlayerID, player.hand,
-			"{} wins ${%d} with %s", g.pot, HandTypeName(result.WinningHand.Type)))
+			"{} wins ${%d} with %s", g.pot, result.WinningHand.Type.String()))
 
 		g.scheduleOverflowOrEnd()
 		return
@@ -461,7 +461,7 @@ func (g *Game) calculateShowdown() {
 	// Log results
 	if len(winners) == 1 {
 		g.sendLogMessages(newLogMessageWithCards(winners[0].PlayerID, winners[0].hand,
-			"{} wins ${%d} with %s", g.pot, HandTypeName(result.WinningHand.Type)))
+			"{} wins ${%d} with %s", g.pot, result.WinningHand.Type.String()))
 	} else {
 		playerIDs := make([]int64, len(winners))
 		for i, w := range winners {
@@ -585,7 +585,7 @@ func (g *Game) resolveBloodyGuts() {
 
 		g.sendLogMessages(
 			newLogMessageWithCards(player.PlayerID, player.hand,
-				"{} beats the deck with %s and wins ${%d}", HandTypeName(playerHand.Type), g.pot),
+				"{} beats the deck with %s and wins ${%d}", playerHand.Type.String(), g.pot),
 		)
 
 		g.scheduleOverflowOrEnd()
@@ -606,7 +606,7 @@ func (g *Game) resolveBloodyGuts() {
 
 		g.sendLogMessages(
 			newLogMessage(player.PlayerID, "The deck wins with %s! {} pays penalty of ${%d}",
-				HandTypeName(deckHandResult.Type), penalty),
+				deckHandResult.Type.String(), penalty),
 		)
 
 		// Continue to next round

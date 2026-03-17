@@ -5,19 +5,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
 func TestAnalyzeHand_Pair(t *testing.T) {
 	tests := []struct {
 		name     string
 		cards    string
-		wantType HandType
+		wantType handanalyzer.Hand
 		highCard int
 	}{
-		{"Pair of Aces", "14c,14d", Pair, 14},
-		{"Pair of Kings", "13c,13d", Pair, 13},
-		{"Pair of Twos", "2c,2d", Pair, 2},
-		{"Pair of Tens", "10c,10d", Pair, 10},
+		{"Pair of Aces", "14c,14d", handanalyzer.OnePair, 14},
+		{"Pair of Kings", "13c,13d", handanalyzer.OnePair, 13},
+		{"Pair of Twos", "2c,2d", handanalyzer.OnePair, 2},
+		{"Pair of Tens", "10c,10d", handanalyzer.OnePair, 10},
 	}
 
 	for _, tt := range tests {
@@ -34,14 +35,14 @@ func TestAnalyzeHand_HighCard(t *testing.T) {
 	tests := []struct {
 		name     string
 		cards    string
-		wantType HandType
+		wantType handanalyzer.Hand
 		highCard int
 		lowCard  int
 	}{
-		{"Ace-King", "14c,13d", HighCard, 14, 13},
-		{"Ace-Two", "14c,2d", HighCard, 14, 2},
-		{"King-Queen", "13c,12d", HighCard, 13, 12},
-		{"Ten-Five", "10c,5d", HighCard, 10, 5},
+		{"Ace-King", "14c,13d", handanalyzer.HighCard, 14, 13},
+		{"Ace-Two", "14c,2d", handanalyzer.HighCard, 14, 2},
+		{"King-Queen", "13c,12d", handanalyzer.HighCard, 13, 12},
+		{"Ten-Five", "10c,5d", handanalyzer.HighCard, 10, 5},
 	}
 
 	for _, tt := range tests {
@@ -110,12 +111,6 @@ func TestCompareHands_HighCardTie(t *testing.T) {
 	assert.Equal(t, 0, result, "Same high cards should tie")
 }
 
-func TestHandTypeName(t *testing.T) {
-	assert.Equal(t, "Pair", HandTypeName(Pair))
-	assert.Equal(t, "High Card", HandTypeName(HighCard))
-	assert.Equal(t, "Unknown", HandTypeName(HandType(99)))
-}
-
 func TestAnalyzeHand_EmptyHand(t *testing.T) {
 	result := AnalyzeHand([]*deck.Card{})
 	assert.Equal(t, HandResult{}, result)
@@ -141,35 +136,35 @@ func TestStrengthCalculation(t *testing.T) {
 func TestAnalyze3CardHand_ThreeOfAKind(t *testing.T) {
 	cards := deck.CardsFromString("14c,14d,14h")
 	result := AnalyzeHand(cards)
-	assert.Equal(t, ThreeOfAKind, result.Type)
+	assert.Equal(t, handanalyzer.ThreeCardPokerThreeOfAKind, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 }
 
 func TestAnalyze3CardHand_Straight(t *testing.T) {
 	cards := deck.CardsFromString("12c,13d,14h")
 	result := AnalyzeHand(cards)
-	assert.Equal(t, ThreeCardStraight, result.Type)
+	assert.Equal(t, handanalyzer.ThreeCardPokerStraight, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 }
 
 func TestAnalyze3CardHand_Flush(t *testing.T) {
 	cards := deck.CardsFromString("14c,10c,5c")
 	result := AnalyzeHand(cards)
-	assert.Equal(t, Flush, result.Type)
+	assert.Equal(t, handanalyzer.Flush, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 }
 
 func TestAnalyze3CardHand_Pair(t *testing.T) {
 	cards := deck.CardsFromString("14c,14d,10h")
 	result := AnalyzeHand(cards)
-	assert.Equal(t, Pair, result.Type)
+	assert.Equal(t, handanalyzer.OnePair, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 }
 
 func TestAnalyze3CardHand_HighCard(t *testing.T) {
 	cards := deck.CardsFromString("14c,10d,5h")
 	result := AnalyzeHand(cards)
-	assert.Equal(t, HighCard, result.Type)
+	assert.Equal(t, handanalyzer.HighCard, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 	assert.Equal(t, 5, result.LowCard)
 }
@@ -241,20 +236,12 @@ func TestCompare3CardHands_WheelStraight(t *testing.T) {
 	// A-2-3 is the lowest straight (wheel)
 	wheel := deck.CardsFromString("14c,2d,3h")
 	result := AnalyzeHand(wheel)
-	assert.Equal(t, ThreeCardStraight, result.Type, "A-2-3 should be a straight")
+	assert.Equal(t, handanalyzer.ThreeCardPokerStraight, result.Type, "A-2-3 should be a straight")
 
 	// Regular straight should beat wheel
 	regularStraight := deck.CardsFromString("4c,5d,6h")
 	compareResult := CompareHands(regularStraight, wheel)
 	assert.Equal(t, 1, compareResult, "4-5-6 straight should beat A-2-3 wheel")
-}
-
-func TestHandTypeName_3Card(t *testing.T) {
-	assert.Equal(t, "Three of a Kind", HandTypeName(ThreeOfAKind))
-	assert.Equal(t, "Straight", HandTypeName(ThreeCardStraight))
-	assert.Equal(t, "Flush", HandTypeName(Flush))
-	assert.Equal(t, "Pair", HandTypeName(Pair))
-	assert.Equal(t, "High Card", HandTypeName(HighCard))
 }
 
 func TestBestHand_3CardsPick2(t *testing.T) {
@@ -263,7 +250,7 @@ func TestBestHand_3CardsPick2(t *testing.T) {
 	best := BestHand(cards, 2)
 	assert.Len(t, best, 2)
 	result := AnalyzeHand(best)
-	assert.Equal(t, Pair, result.Type)
+	assert.Equal(t, handanalyzer.OnePair, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 }
 
@@ -273,7 +260,7 @@ func TestBestHand_4CardsPick3(t *testing.T) {
 	best := BestHand(cards, 3)
 	assert.Len(t, best, 3)
 	result := AnalyzeHand(best)
-	assert.Equal(t, ThreeOfAKind, result.Type)
+	assert.Equal(t, handanalyzer.ThreeCardPokerThreeOfAKind, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 }
 
@@ -297,7 +284,7 @@ func TestBestHand_PicksBestFromHighCards(t *testing.T) {
 	best := BestHand(cards, 2)
 	assert.Len(t, best, 2)
 	result := AnalyzeHand(best)
-	assert.Equal(t, HighCard, result.Type)
+	assert.Equal(t, handanalyzer.HighCard, result.Type)
 	assert.Equal(t, 14, result.HighCard)
 	assert.Equal(t, 10, result.LowCard)
 }

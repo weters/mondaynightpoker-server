@@ -6,6 +6,7 @@ import (
 
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -475,7 +476,7 @@ func TestGame_SingleWinner_HandRevealed(t *testing.T) {
 
 	// Winner's hand should be in showdown result
 	assert.NotNil(t, g.showdownResult)
-	assert.Equal(t, Pair, g.showdownResult.WinningHand.Type)
+	assert.Equal(t, handanalyzer.OnePair, g.showdownResult.WinningHand.Type)
 
 	// Game state should include the winner's hand (for front-end display)
 	state := g.getGameState()
@@ -2384,4 +2385,57 @@ func TestOverflow_NextRound_AllFolded_AppliesCap(t *testing.T) {
 	// So pot = 100, overflow = 50
 	assert.Equal(t, 100, g.pot)
 	assert.Equal(t, 50, g.overflowPot)
+}
+
+// ============================================
+// Hand Rank in Player State Tests
+// ============================================
+
+func TestGetPlayerState_HandRank_2Card(t *testing.T) {
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d"}, 100)
+
+	// Player 1 has a pair of aces
+	resp, err := g.GetPlayerState(1)
+	assert.NoError(t, err)
+	data := resp.Data.(*Response)
+	assert.Equal(t, "Pair", data.HandRank)
+
+	// Player 2 has high card
+	resp, err = g.GetPlayerState(2)
+	assert.NoError(t, err)
+	data = resp.Data.(*Response)
+	assert.Equal(t, "High card", data.HandRank)
+}
+
+func TestGetPlayerState_HandRank_3Card(t *testing.T) {
+	playerIDs := []int64{1, 2}
+	opts := Options{Ante: 25, MaxOwed: 100, CardCount: 3}
+	g, err := NewGame(logrus.StandardLogger(), playerIDs, opts)
+	assert.NoError(t, err)
+
+	g.participants[0].hand = deck.CardsFromString("14c,10c,5c")
+	g.participants[1].hand = deck.CardsFromString("10d,10h,10s")
+	g.phase = PhaseDeclaration
+
+	// Player 1 has a flush
+	resp, err := g.GetPlayerState(1)
+	assert.NoError(t, err)
+	data := resp.Data.(*Response)
+	assert.Equal(t, "Flush", data.HandRank)
+
+	// Player 2 has three of a kind
+	resp, err = g.GetPlayerState(2)
+	assert.NoError(t, err)
+	data = resp.Data.(*Response)
+	assert.Equal(t, "Three of a kind", data.HandRank)
+}
+
+func TestGetPlayerState_HandRank_Viewer(t *testing.T) {
+	g := setupOverflowTestGame(t, []string{"14c,14d", "13c,12d"}, 100)
+
+	// A viewer (not a player) should get empty hand rank
+	resp, err := g.GetPlayerState(999)
+	assert.NoError(t, err)
+	data := resp.Data.(*Response)
+	assert.Equal(t, "", data.HandRank)
 }

@@ -67,6 +67,8 @@ type Response struct {
 	GameState *GameState   `json:"gameState"`
 	Balance   int          `json:"balance"`
 	Hand      []*deck.Card `json:"hand"`
+	// HandRank is a human-readable description of the player's current hand
+	HandRank string `json:"handRank"`
 	// CanDecide is true if the player can make a decision
 	CanDecide bool `json:"canDecide"`
 	// HasDecided is true if the player has already decided
@@ -210,10 +212,18 @@ func (g *Game) GetPlayerState(playerID int64) (*playable.Response, error) {
 		canTrade = g.tradersIn[g.currentTraderIndex].PlayerID == playerID
 	}
 
+	hand := participant.Hand()
+	var handRank string
+	if len(hand) > 0 {
+		result := AnalyzeHand(hand)
+		handRank = result.Type.String()
+	}
+
 	response := &Response{
 		GameState:  gameState,
 		Balance:    participant.balance,
-		Hand:       participant.Hand(),
+		Hand:       hand,
+		HandRank:   handRank,
 		CanDecide:  g.phase == PhaseDeclaration && g.pendingDecisions[playerID],
 		HasDecided: g.phase == PhaseDeclaration && !g.pendingDecisions[playerID] && g.idToParticipant[playerID] != nil,
 		CanTrade:   canTrade,

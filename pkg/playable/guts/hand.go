@@ -5,25 +5,9 @@ import (
 	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
-// HandType represents the type of hand
-type HandType int
-
-const (
-	// HighCard is a hand with no matching ranks
-	HighCard HandType = iota
-	// Pair is a hand with two cards of the same rank
-	Pair
-	// ThreeCardStraight is a 3-card straight (beats flush in 3-card poker)
-	ThreeCardStraight
-	// Flush is a hand with all cards of the same suit (3-card only)
-	Flush
-	// ThreeOfAKind is a hand with three cards of the same rank
-	ThreeOfAKind
-)
-
 // HandResult contains the analysis of a hand
 type HandResult struct {
-	Type     HandType
+	Type     handanalyzer.Hand
 	Strength int
 	HighCard int
 	LowCard  int
@@ -57,8 +41,8 @@ func analyze2CardHand(cards []*deck.Card) HandResult {
 	// Check for pair
 	if rank1 == rank2 {
 		return HandResult{
-			Type:     Pair,
-			Strength: int(Pair)*225 + highRank*15,
+			Type:     handanalyzer.OnePair,
+			Strength: int(handanalyzer.OnePair)*225 + highRank*15,
 			HighCard: highRank,
 			LowCard:  lowRank,
 		}
@@ -66,8 +50,8 @@ func analyze2CardHand(cards []*deck.Card) HandResult {
 
 	// High card
 	return HandResult{
-		Type:     HighCard,
-		Strength: int(HighCard)*225 + highRank*15 + lowRank,
+		Type:     handanalyzer.HighCard,
+		Strength: int(handanalyzer.HighCard)*225 + highRank*15 + lowRank,
 		HighCard: highRank,
 		LowCard:  lowRank,
 	}
@@ -79,21 +63,6 @@ func analyze3CardHand(cards []*deck.Card) HandResult {
 	ha := handanalyzer.New(3, cards)
 	haHand := ha.GetHand()
 	strength := ha.GetStrength()
-
-	// Map handanalyzer.Hand to our HandType
-	var handType HandType
-	switch haHand {
-	case handanalyzer.ThreeCardPokerThreeOfAKind:
-		handType = ThreeOfAKind
-	case handanalyzer.ThreeCardPokerStraight:
-		handType = ThreeCardStraight
-	case handanalyzer.Flush:
-		handType = Flush
-	case handanalyzer.OnePair:
-		handType = Pair
-	default:
-		handType = HighCard
-	}
 
 	// Get high and low card
 	highRank := cards[0].Rank
@@ -108,7 +77,7 @@ func analyze3CardHand(cards []*deck.Card) HandResult {
 	}
 
 	return HandResult{
-		Type:     handType,
+		Type:     haHand,
 		Strength: strength,
 		HighCard: highRank,
 		LowCard:  lowRank,
@@ -184,22 +153,4 @@ func CompareHands(hand1, hand2 []*deck.Card) int {
 		return -1
 	}
 	return 0
-}
-
-// HandTypeName returns a human-readable name for the hand type
-func HandTypeName(t HandType) string {
-	switch t {
-	case ThreeOfAKind:
-		return "Three of a Kind"
-	case ThreeCardStraight:
-		return "Straight"
-	case Flush:
-		return "Flush"
-	case Pair:
-		return "Pair"
-	case HighCard:
-		return "High Card"
-	default:
-		return "Unknown"
-	}
 }

@@ -8,6 +8,7 @@ import (
 
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable/guts"
+	"mondaynightpoker-server/pkg/playable/poker/handanalyzer"
 )
 
 const (
@@ -464,11 +465,11 @@ const (
 func gutsAnalyzeHand(cards []*deck.Card) int {
 	result := guts.AnalyzeHand(cards)
 	switch result.Type {
-	case guts.ThreeOfAKind:
+	case handanalyzer.ThreeOfAKind, handanalyzer.ThreeCardPokerThreeOfAKind:
 		return gutsThreeOfAKind
-	case guts.ThreeCardStraight, guts.Flush:
+	case handanalyzer.Straight, handanalyzer.ThreeCardPokerStraight, handanalyzer.Flush, handanalyzer.StraightFlush, handanalyzer.RoyalFlush:
 		return gutsStraightOrFlush
-	case guts.Pair:
+	case handanalyzer.OnePair:
 		return gutsPair
 	default:
 		return gutsHighCard
