@@ -44,10 +44,11 @@ type LogMessage struct {
 // Response is a container to determine who gets the specified message
 // If Recipient is 0, it's intended as a broadcast
 type Response struct {
-	Key     string      `json:"key"`
-	Value   string      `json:"value"`
-	Data    interface{} `json:"data"`
-	Context string      `json:"context"`
+	Key     string        `json:"key"`
+	Value   string        `json:"value"`
+	Data    interface{}   `json:"data"`
+	Context string        `json:"context"`
+	Rules   []RuleSection `json:"rules,omitempty"`
 }
 
 // OK returns a generic success response

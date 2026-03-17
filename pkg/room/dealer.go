@@ -176,6 +176,10 @@ func (d *Dealer) AddClient(client *Client) {
 			return
 		}
 
+		if rp, ok := d.game.(playable.RulesProvider); ok {
+			gs.Rules = rp.Rules()
+		}
+
 		client.Send(gs)
 	}
 }
@@ -215,6 +219,11 @@ func (d *Dealer) sendGameData() {
 		logrus.Error("XXX game state changed, but there's no active game")
 	}
 
+	var rules []playable.RuleSection
+	if rp, ok := d.game.(playable.RulesProvider); ok {
+		rules = rp.Rules()
+	}
+
 	for client := range d.clients {
 		data, err := d.game.GetPlayerState(client.player.ID)
 		if err != nil {
@@ -222,6 +231,7 @@ func (d *Dealer) sendGameData() {
 			continue
 		}
 
+		data.Rules = rules
 		client.Send(data)
 	}
 }
