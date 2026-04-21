@@ -284,14 +284,22 @@ func (d *Dealer) sendPlayerData() {
 		connectedClients[client.player.ID] = client.player
 	}
 
+	var nextPickerID int64
+	if d.lastGameStartedBy != nil {
+		if next := getNextPicker(players, d.lastGameStartedBy.ID); next != nil {
+			nextPickerID = next.PlayerID
+		}
+	}
+
 	csPlayers := make(map[int64]*clientStatePlayers)
 	for _, player := range players {
 		_, isConnected := connectedClients[player.PlayerID]
 		delete(connectedClients, player.PlayerID)
 		csPlayers[player.PlayerID] = &clientStatePlayers{
-			PlayerTable: player,
-			IsConnected: isConnected,
-			IsSeated:    true,
+			PlayerTable:  player,
+			IsConnected:  isConnected,
+			IsSeated:     true,
+			IsNextPicker: nextPickerID != 0 && player.PlayerID == nextPickerID,
 		}
 	}
 
@@ -627,6 +635,28 @@ func (d *Dealer) getPickerLogMessage() []*playable.LogMessage {
 }
 
 func buildPickerLogMessage(players []*model.PlayerTable, pickerID int64) []*playable.LogMessage {
+	last, next := getLastAndNextPicker(players, pickerID)
+	if last == nil || next == nil {
+		return nil
+	}
+
+	return []*playable.LogMessage{
+		{
+			UUID:    uuid.New().String(),
+			Message: fmt.Sprintf("%s picked the last game. %s is next to pick", last.Player.DisplayName, next.Player.DisplayName),
+			Time:    time.Now(),
+		},
+	}
+}
+
+// getNextPicker returns the player who should pick the next game given the player who last picked.
+// Returns nil if the last picker cannot be located among active players.
+func getNextPicker(players []*model.PlayerTable, lastPickerID int64) *model.PlayerTable {
+	_, next := getLastAndNextPicker(players, lastPickerID)
+	return next
+}
+
+func getLastAndNextPicker(players []*model.PlayerTable, lastPickerID int64) (*model.PlayerTable, *model.PlayerTable) {
 	activePlayers := make([]*model.PlayerTable, 0, len(players))
 	for _, p := range players {
 		if p.IsPlaying() {
@@ -635,7 +665,7 @@ func buildPickerLogMessage(players []*model.PlayerTable, pickerID int64) []*play
 	}
 
 	if len(activePlayers) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	sort.Slice(activePlayers, func(i, j int) bool {
@@ -644,27 +674,18 @@ func buildPickerLogMessage(players []*model.PlayerTable, pickerID int64) []*play
 
 	pickerIndex := -1
 	for i, p := range activePlayers {
-		if p.PlayerID == pickerID {
+		if p.PlayerID == lastPickerID {
 			pickerIndex = i
 			break
 		}
 	}
 
 	if pickerIndex < 0 {
-		return nil
+		return nil, nil
 	}
 
 	nextIndex := (pickerIndex + 1) % len(activePlayers)
-	lastPicker := activePlayers[pickerIndex].Player.DisplayName
-	nextPicker := activePlayers[nextIndex].Player.DisplayName
-
-	return []*playable.LogMessage{
-		{
-			UUID:    uuid.New().String(),
-			Message: fmt.Sprintf("%s picked the last game. %s is next to pick", lastPicker, nextPicker),
-			Time:    time.Now(),
-		},
-	}
+	return activePlayers[pickerIndex], activePlayers[nextIndex]
 }
 
 func (d *Dealer) getNextPlayersForGame() ([]*model.PlayerTable, error) {

@@ -108,3 +108,75 @@ func Test_buildPickerLogMessage_skipsInactivePlayers(t *testing.T) {
 	assert.Len(t, msgs, 1)
 	assert.Equal(t, "Darren picked the last game. Alice is next to pick", msgs[0].Message)
 }
+
+func Test_getNextPicker(t *testing.T) {
+	players := []*model.PlayerTable{
+		newPlayerTable(1, "Charlie", true, false),
+		newPlayerTable(2, "Alice", true, false),
+		newPlayerTable(3, "Bob", true, false),
+	}
+
+	// Sorted: Alice, Bob, Charlie
+	next := getNextPicker(players, 2) // Alice picked => Bob next
+	assert.NotNil(t, next)
+	assert.Equal(t, int64(3), next.PlayerID)
+
+	next = getNextPicker(players, 3) // Bob picked => Charlie next
+	assert.NotNil(t, next)
+	assert.Equal(t, int64(1), next.PlayerID)
+
+	next = getNextPicker(players, 1) // Charlie picked => wraps to Alice
+	assert.NotNil(t, next)
+	assert.Equal(t, int64(2), next.PlayerID)
+}
+
+func Test_getNextPicker_pickerNotFound(t *testing.T) {
+	players := []*model.PlayerTable{
+		newPlayerTable(1, "Alice", true, false),
+		newPlayerTable(2, "Bob", true, false),
+	}
+
+	assert.Nil(t, getNextPicker(players, 99))
+}
+
+func Test_getNextPicker_noActivePlayers(t *testing.T) {
+	players := []*model.PlayerTable{
+		newPlayerTable(1, "Alice", false, false),
+		newPlayerTable(2, "Bob", true, true),
+	}
+
+	assert.Nil(t, getNextPicker(players, 1))
+}
+
+func Test_getNextPicker_singlePlayerReturnsSelf(t *testing.T) {
+	players := []*model.PlayerTable{
+		newPlayerTable(1, "Alice", true, false),
+	}
+
+	next := getNextPicker(players, 1)
+	assert.NotNil(t, next)
+	assert.Equal(t, int64(1), next.PlayerID)
+}
+
+func Test_getNextPicker_skipsInactiveAndBlocked(t *testing.T) {
+	players := []*model.PlayerTable{
+		newPlayerTable(1, "Alice", true, false),
+		newPlayerTable(2, "Bob", false, false),   // inactive
+		newPlayerTable(3, "Charlie", true, true), // blocked
+		newPlayerTable(4, "Darren", true, false),
+	}
+
+	// Active sorted: Alice, Darren. Alice picked => Darren next.
+	next := getNextPicker(players, 1)
+	assert.NotNil(t, next)
+	assert.Equal(t, int64(4), next.PlayerID)
+
+	// Darren picked => wraps to Alice
+	next = getNextPicker(players, 4)
+	assert.NotNil(t, next)
+	assert.Equal(t, int64(1), next.PlayerID)
+
+	// Previous picker is no longer active => no next picker
+	assert.Nil(t, getNextPicker(players, 2))
+	assert.Nil(t, getNextPicker(players, 3))
+}
