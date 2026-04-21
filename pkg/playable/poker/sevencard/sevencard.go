@@ -132,6 +132,15 @@ func (g *Game) Start() error {
 
 	g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(0, "New game of %s started (ante: ${%d})", g.Name(), g.options.Ante))
 
+	// A variant's ParticipantReceivedCard hook (e.g. Chiggs mushroom folding
+	// all but one player) may have ended the game during dealing. In that case
+	// endGame() already set round=revealWinner, so skip advancing rounds.
+	if g.isGameOver() {
+		g.logChan <- g.pendingLogs
+		g.pendingLogs = make([]*playable.LogMessage, 0)
+		return nil
+	}
+
 	g.determineFirstToAct()
 	g.round++
 

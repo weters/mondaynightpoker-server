@@ -411,6 +411,15 @@ func TestChiggs_BettingActionsSuppressedDuringMushroomPhase(t *testing.T) {
 	chiggs := &Chiggs{}
 	opts.Variant = chiggs
 	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+
+	// Deterministic deck so Start() doesn't randomly deal a face-up mushroom
+	// that ends the game during the deal (no 4s in any hand).
+	game.deck.Cards = deck.CardsFromString(
+		"2c,3c,5c," +
+			"6c,7c,8c," +
+			"9c,10c,11c",
+	)
+
 	a.NoError(game.Start())
 
 	// Drain log channel
@@ -429,6 +438,42 @@ func TestChiggs_BettingActionsSuppressedDuringMushroomPhase(t *testing.T) {
 	// Future actions should also be suppressed
 	futureActions := game.getFutureActionsForParticipant(p(2))
 	a.Empty(futureActions, "future betting actions should be suppressed during mushroom phase")
+}
+
+// TestChiggs_Start_GameEndsDuringDeal reproduces the case where a face-up
+// mushroom is dealt during Start() and no neighbor has an antidote, so both
+// neighbors fold and Chiggs.checkForWinByFold ends the game via endGame().
+// Previously Start() would continue, increment round past revealWinner, and
+// panic in nextRound() with "round N is not implemented".
+func TestChiggs_Start_GameEndsDuringDeal(t *testing.T) {
+	a := assert.New(t)
+	opts := DefaultOptions()
+	chiggs := &Chiggs{}
+	opts.Variant = chiggs
+	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+	a.NoError(err)
+
+	// Deal order is 3 rounds × 3 players (P1, P2, P3 in order).
+	// P2 gets face-up 4c (mushroom). P1 and P3 receive no 4-ranked cards,
+	// so neither has an antidote — both fold during dealing.
+	game.deck.Cards = deck.CardsFromString(
+		"2c,3c,5c," +
+			"6c,7c,8c," +
+			"9c,4c,10c",
+	)
+
+	drainLogChannel(game)
+
+	a.NotPanics(func() {
+		a.NoError(game.Start())
+	})
+
+	p := createParticipantGetter(game)
+	a.True(p(1).didFold, "P1 should fold — no antidote")
+	a.True(p(3).didFold, "P3 should fold — no antidote")
+	a.False(p(2).didFold, "P2 holds the mushroom and should remain")
+	a.True(game.isGameOver(), "game should end via checkForWinByFold")
+	a.Equal(revealWinner, game.round, "round should be revealWinner after endGame")
 }
 
 func TestChiggs_MultipleAntidotesAutoSelectsFirst(t *testing.T) {
