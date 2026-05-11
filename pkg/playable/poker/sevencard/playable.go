@@ -19,11 +19,13 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 	// Check for variant-specific actions first
 	if iv, ok := g.options.Variant.(InteractiveVariant); ok {
-		handled, err := iv.HandleVariantAction(g, p, Action(message.Action))
+		variantAction := Action(message.Action)
+		handled, err := iv.HandleVariantAction(g, p, variantAction)
 		if err != nil {
 			return nil, false, err
 		}
 		if handled {
+			g.recordAction(variantAction, p.PlayerID, 0, nil, false)
 			if len(g.pendingLogs) > 0 {
 				g.logChan <- g.pendingLogs
 				g.pendingLogs = make([]*playable.LogMessage, 0)
@@ -38,6 +40,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	}
 
 	canGoAllIn := false
+	amount, _ := message.AdditionalData.GetInt("amount")
 	switch action {
 	case ActionCheck:
 		if err := g.participantChecks(p); err != nil {
@@ -46,7 +49,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
 	case ActionBet:
-		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount <= 0 {
 			return nil, false, errors.New("invalid amount")
 		}
@@ -58,7 +60,6 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		canGoAllIn = true
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
 	case ActionRaise:
-		amount, _ := message.AdditionalData.GetInt("amount")
 		if amount <= 0 {
 			return nil, false, errors.New("invalid amount")
 		}
@@ -84,9 +85,12 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
 	}
 
-	if canGoAllIn && p.isAllIn() {
+	allIn := canGoAllIn && p.isAllIn()
+	if allIn {
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} is all-in")
 	}
+
+	g.recordAction(action, p.PlayerID, amount, nil, allIn)
 
 	// Track the last action for UI feedback
 	g.lastAction = &lastAction{
@@ -122,11 +126,9 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 		balanceAdjustments[p.PlayerID] = p.balance
 	}
 
-	gameState := g.getGameState()
-
 	return &playable.GameOverDetails{
 		BalanceAdjustments: balanceAdjustments,
-		Log:                gameState,
+		Log:                g.finalGameLog(),
 	}, true
 }
 

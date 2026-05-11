@@ -45,6 +45,7 @@ type Game struct {
 	pendingLogs []*playable.LogMessage
 	logChan     chan []*playable.LogMessage
 	logger      logrus.FieldLogger
+	log         *gameLog
 
 	setDoneAt time.Time // set done to true after this time
 
@@ -102,6 +103,15 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 		)
 	}
 
+	seats := make([]*gameLogSeat, len(players))
+	for i, player := range players {
+		seats[i] = &gameLogSeat{
+			PlayerID:   player.GetPlayerID(),
+			TableStake: player.GetTableStake(),
+			SeatIndex:  i,
+		}
+	}
+
 	game := &Game{
 		deck:            d,
 		options:         options,
@@ -112,6 +122,13 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 		pendingLogs:     make([]*playable.LogMessage, 0),
 		logChan:         make(chan []*playable.LogMessage, 256),
 		logger:          logger,
+		log: &gameLog{
+			Variant: options.Variant.Name(),
+			Ante:    options.Ante,
+			Seats:   seats,
+			Deals:   make([]*gameLogDeal, 0, 5),
+			Actions: make([]*gameLogAction, 0, 32),
+		},
 	}
 
 	return game, nil
@@ -302,6 +319,7 @@ func (g *Game) determineFirstToAct() {
 }
 
 func (g *Game) dealCards(faceDown bool) error {
+	dealt := make([]*gameLogDealCard, 0, len(g.playerIDs))
 	for _, pid := range g.playerIDs {
 		participant := g.idToParticipant[pid]
 		if !participant.didFold {
@@ -315,10 +333,16 @@ func (g *Game) dealCards(faceDown bool) error {
 			}
 
 			participant.hand.AddCard(card)
+			dealt = append(dealt, &gameLogDealCard{
+				PlayerID: pid,
+				Card:     card.Clone(),
+				FaceUp:   !faceDown,
+			})
 			g.options.Variant.ParticipantReceivedCard(g, participant, card)
 		}
 	}
 
+	g.recordDeal(streetName(g.round), dealt)
 	return nil
 }
 

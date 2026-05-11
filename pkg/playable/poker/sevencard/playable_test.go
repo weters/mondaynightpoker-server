@@ -130,7 +130,7 @@ func TestGame_GetEndOfGameDetails(t *testing.T) {
 	details, isGameOver = game.GetEndOfGameDetails()
 	a.True(isGameOver)
 	a.NotNil(details)
-	a.IsType(GameState{}, details.Log)
+	a.IsType(&gameLog{}, details.Log)
 	a.Equal(map[int64]int{
 		1: -25,
 		2: -25,

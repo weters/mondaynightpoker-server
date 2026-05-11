@@ -41,6 +41,7 @@ type Game struct {
 
 	logger  logrus.FieldLogger
 	logChan chan []*playable.LogMessage
+	log     *gameLog
 
 	pendingDealerAction *pendingDealerAction
 
@@ -198,6 +199,9 @@ func (g *Game) endGame() error {
 			return err
 		}
 
+		// chain the new hand's log back to the just-completed hand
+		game.log.Parent = g.log
+
 		if err := game.Deal(); err != nil {
 			return err
 		}
@@ -249,7 +253,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: adjustments,
-		Log:                result,
+		Log:                g.log,
 	}, true
 }
 
@@ -326,6 +330,13 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 		playerDiscards: make(map[*Player][]*deck.Card),
 		logChan:        make(chan []*playable.LogMessage, 256),
 		logger:         logger,
+		log: &gameLog{
+			Options:    opts,
+			Ante:       opts.Ante,
+			InitialPot: pot,
+			Discards:   make([]*gameLogDiscard, 0, len(players)),
+			Tricks:     make([]*gameLogTrick, 0, 5),
+		},
 	}
 
 	messages = append(messages, newLogMessage(0, nil, "New game of Bourré started with a pot of ${%d}", pot))
@@ -361,6 +372,7 @@ func (g *Game) Deal() error {
 	g.sendLogMessages(newLogMessage(0, trumpCard, "The trump card has been selected"))
 
 	g.trumpCard = trumpCard
+	g.captureDeal()
 	return nil
 }
 
@@ -453,6 +465,7 @@ func (g *Game) replaceDiscards() error {
 	for _, player := range players {
 		if player.folded {
 			g.foldedPlayers[player] = true
+			g.recordDiscard(player.PlayerID, true, nil, nil)
 			continue
 		}
 
@@ -464,6 +477,7 @@ func (g *Game) replaceDiscards() error {
 			panic(fmt.Sprintf("could not find player discards: %v", player))
 		}
 
+		drawn := make([]*deck.Card, 0, len(discards))
 		for _, card := range discards {
 			if err := player.playerDidPlayCard(card); err != nil {
 				panic(err)
@@ -478,8 +492,10 @@ func (g *Game) replaceDiscards() error {
 				panic(err)
 			}
 			player.AddCard(newCard)
+			drawn = append(drawn, newCard)
 		}
 
+		g.recordDiscard(player.PlayerID, false, discards, drawn)
 		discardPile = append(discardPile, discards...)
 	}
 
@@ -591,6 +607,7 @@ func (g *Game) buildResults() error {
 		idToPlayer:    g.idToPlayer,
 	}
 
+	g.recordResult(g.result)
 	return nil
 }
 
@@ -661,6 +678,11 @@ func (g *Game) playerDidPlayCard(player *Player, card *deck.Card) error {
 	}
 
 	g.cardsPlayed = append(g.cardsPlayed, playedCard)
+
+	if len(g.cardsPlayed) == 1 {
+		g.startTrick()
+	}
+	g.recordCardPlay(player.PlayerID, card)
 
 	if g.shouldCalculateRoundWinner() {
 		return g.calculateRoundWinner()
@@ -760,6 +782,7 @@ func (g *Game) nextRound() error {
 	}
 
 	g.sendLogMessages(newLogMessage(g.winningCardPlayed.player.PlayerID, nil, "{} won the trick"))
+	g.recordTrickWinner(g.winningCardPlayed.player.PlayerID)
 	g.roundWinnerCalculated = false
 	g.winningCardPlayed = nil
 	g.cardsPlayed = []*playedCard{}

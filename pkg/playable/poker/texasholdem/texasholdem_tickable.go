@@ -51,6 +51,7 @@ func (g *Game) Tick() (bool, error) {
 			flop[i] = card
 		}
 
+		g.recordStreet("flop", flop...)
 		g.logChan <- []*playable.LogMessage{{
 			UUID:      uuid.New().String(),
 			PlayerIDs: nil,
@@ -66,6 +67,7 @@ func (g *Game) Tick() (bool, error) {
 			return false, err
 		}
 
+		g.recordStreet("turn", card)
 		g.logChan <- []*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the turn")}
 		g.dealerState = DealerStateTurnBettingRound
 		return true, nil
@@ -75,6 +77,7 @@ func (g *Game) Tick() (bool, error) {
 			return false, err
 		}
 
+		g.recordStreet("river", card)
 		g.logChan <- []*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the river")}
 		g.dealerState = DealerStateFinalBettingRound
 		return true, nil

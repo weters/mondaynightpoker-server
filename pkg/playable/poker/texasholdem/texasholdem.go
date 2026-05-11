@@ -35,6 +35,7 @@ type Game struct {
 	lastAction         *lastAction
 	community          deck.Hand
 	logChan            chan []*playable.LogMessage
+	log                *gameLog
 
 	// if true, GetEndOfGameDetails() returns
 	finished bool
@@ -103,7 +104,15 @@ func NewGame(_ logrus.FieldLogger, players []playable.Player, opts Options) (*Ga
 		pendingDealerState: nil,
 		community:          make(deck.Hand, 0, 5),
 		logChan:            lc,
-		potManager:         mgr,
+		log: &gameLog{
+			Variant:    opts.Variant,
+			Ante:       opts.Ante,
+			SmallBlind: opts.SmallBlind,
+			BigBlind:   opts.BigBlind,
+			Streets:    make([]*gameLogStreet, 0, 3),
+			Actions:    make([]*gameLogAction, 0, 32),
+		},
+		potManager: mgr,
 	}, nil
 }
 
@@ -137,6 +146,8 @@ func (g *Game) dealStartingCardsToEachParticipant() error {
 			p.cards.AddCard(card)
 		}
 	}
+
+	g.captureSeats()
 
 	if g.options.Variant == Pineapple {
 		g.dealerState = DealerStateDiscardRound

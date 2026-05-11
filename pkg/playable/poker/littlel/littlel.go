@@ -46,6 +46,7 @@ type Game struct {
 
 	done    bool
 	winners map[*Participant]int
+	log     *gameLog
 
 	endGameAt time.Time
 }
@@ -102,6 +103,12 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 		logChan:         make(chan []*playable.LogMessage, 256),
 		logger:          logger,
 		tradeIns:        tradeIns,
+		log: &gameLog{
+			Ante:        options.Ante,
+			InitialDeal: options.InitialDeal,
+			TradeIns:    options.TradeIns,
+			Actions:     make([]*gameLogAction, 0, 16),
+		},
 	}
 
 	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
@@ -141,6 +148,7 @@ func (g *Game) DealCards() error {
 	}
 	g.community = community
 
+	g.captureSeats()
 	return nil
 }
 

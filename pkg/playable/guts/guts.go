@@ -72,6 +72,7 @@ type Game struct {
 	tradesMade         map[int64]int  // Track cards traded per player
 
 	done bool
+	log  *gameLog
 
 	logger  logrus.FieldLogger
 	logChan chan []*playable.LogMessage
@@ -189,7 +190,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: adjustments,
-		Log:                g.showdownResult,
+		Log:                g.log,
 	}, true
 }
 
@@ -236,6 +237,12 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 		decisions:        make(map[int64]bool),
 		logger:           logger,
 		logChan:          make(chan []*playable.LogMessage, 256),
+		log: &gameLog{
+			Options:    opts,
+			InitialPot: pot,
+			Players:    append([]int64(nil), playerIDs...),
+			Rounds:     make([]*gameLogRound, 0, 4),
+		},
 	}
 
 	messages = append(messages, newLogMessage(0, "New game of %s started with a pot of ${%d}", NameFromOptions(opts), pot))
@@ -277,6 +284,7 @@ func (g *Game) Deal() error {
 		g.pendingDecisions[p.PlayerID] = true
 	}
 
+	g.startRound()
 	g.phase = PhaseDeclaration
 	g.sendLogMessages(newLogMessage(0, "Round %d: Cards dealt, declare In or Out", g.roundNumber))
 
@@ -295,6 +303,7 @@ func (g *Game) submitDecision(playerID int64, goIn bool) error {
 
 	g.decisions[playerID] = goIn
 	delete(g.pendingDecisions, playerID)
+	g.recordDecision(playerID, goIn)
 
 	// Log that player has decided (without revealing the decision)
 	g.sendLogMessages(newLogMessage(playerID, "{} has decided"))
@@ -355,6 +364,7 @@ func (g *Game) calculateShowdown() {
 	if len(playersIn) == 0 {
 		result.AllFolded = true
 		g.showdownResult = result
+		g.recordShowdown(result)
 		g.sendLogMessages(newLogMessage(0, "No one went in! Everyone re-antes."))
 
 		// Schedule next round
@@ -382,6 +392,7 @@ func (g *Game) calculateShowdown() {
 		result.PotWon = g.pot
 		result.SingleWinner = true
 		g.showdownResult = result
+		g.recordShowdown(result)
 
 		g.sendLogMessages(newLogMessageWithCards(player.PlayerID, player.hand,
 			"{} reveals %s and wins ${%d}", result.WinningHand.Type.String(), g.pot))
@@ -457,6 +468,7 @@ func (g *Game) calculateShowdown() {
 	result.NextPot = nextPot
 
 	g.showdownResult = result
+	g.recordShowdown(result)
 
 	// Log results
 	if len(winners) == 1 {
@@ -625,6 +637,8 @@ func (g *Game) resolveBloodyGuts() {
 			ExecuteAfter: time.Now().Add(time.Second * 5),
 		}
 	}
+
+	g.recordShowdown(result)
 }
 
 // scheduleOverflowOrEnd checks if there's an overflow pot to carry over into the next round,
@@ -831,13 +845,16 @@ func (g *Game) submitTrade(playerID int64, cards []*deck.Card) error {
 		}
 	}
 
+	discarded := make([]*deck.Card, 0, len(cards))
 	// Remove cards from hand and add to discards
 	for _, card := range cards {
 		currentTrader.removeCard(card)
 		g.discards = append(g.discards, card)
+		discarded = append(discarded, card)
 	}
 
 	// Draw replacement cards
+	drawn := make([]*deck.Card, 0, len(cards))
 	for i := 0; i < len(cards); i++ {
 		// Check if deck is empty and reshuffle if needed
 		if len(g.deck.Cards) == 0 {
@@ -857,10 +874,12 @@ func (g *Game) submitTrade(playerID int64, cards []*deck.Card) error {
 			break
 		}
 		currentTrader.AddCard(card)
+		drawn = append(drawn, card)
 	}
 
 	g.tradesMade[playerID] = len(cards)
 	currentTrader.traded = len(cards)
+	g.recordTrade(playerID, discarded, drawn)
 
 	// Log the trade
 	if len(cards) == 0 {

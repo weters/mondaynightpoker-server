@@ -84,11 +84,16 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.setPendingDealerState(DealerState(int(g.dealerState)+1), time.Second*1)
 	}
 
+	allIn := wentAllIn(foundAction) && g.potManager.IsParticipantAllIn(p)
+	if foundAction != action.Discard {
+		g.recordAction(foundAction, p.PlayerID, amount, nil, allIn)
+	}
+
 	logs := []*playable.LogMessage{
 		playable.SimpleLogMessage(p.PlayerID, "{} %s", foundAction.LogMessage(amount)),
 	}
 
-	if wentAllIn(foundAction) && g.potManager.IsParticipantAllIn(p) {
+	if allIn {
 		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} is all-in"))
 	}
 
@@ -128,7 +133,7 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: balanceAdjustments,
-		Log:                g.gameLog(),
+		Log:                g.finalGameLog(),
 	}, true
 }
 
@@ -286,7 +291,8 @@ func (g *Game) discardCardForParticipant(p *Participant, cards deck.Hand) error 
 	}
 
 	oldHand := p.cards.Clone()
-	if p.cards.Discard(cards[0]) != 1 {
+	discarded := cards[0]
+	if p.cards.Discard(discarded) != 1 {
 		return errors.New("you do not have that card")
 	}
 
@@ -296,6 +302,8 @@ func (g *Game) discardCardForParticipant(p *Participant, cards deck.Hand) error 
 		p.cards = oldHand
 		return err
 	}
+
+	g.recordAction(action.Discard, p.PlayerID, 0, []*deck.Card{discarded}, false)
 
 	g.logChan <- []*playable.LogMessage{
 		playable.SimpleLogMessage(p.PlayerID, "{} discarded a hole card"),

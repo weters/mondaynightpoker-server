@@ -3,7 +3,6 @@ package littlel
 import (
 	"errors"
 	"fmt"
-	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker"
 	"mondaynightpoker-server/pkg/playable/poker/action"
@@ -20,12 +19,16 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 	logs := make([]*playable.LogMessage, 0, 2)
 	canGoAllIn := false
+	currentAction := action.Action(message.Action)
+	amount := 0
 
-	switch action.Action(message.Action) {
+	switch currentAction {
 	case action.Trade:
 		if err := g.tradeCardsForParticipant(p, message.Cards); err != nil {
 			return nil, false, err
 		}
+
+		g.recordAction(action.Trade, p.PlayerID, 0, message.Cards, false)
 
 		if len(message.Cards) == 0 {
 			logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} stands pat (no trades)"))
@@ -57,7 +60,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	case action.Raise:
 		fallthrough
 	case action.Bet:
-		amount, _ := message.AdditionalData.GetInt("amount")
+		amount, _ = message.AdditionalData.GetInt("amount")
 		if amount == 0 {
 			return nil, false, errors.New("amount must be > 0")
 		}
@@ -76,9 +79,12 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, fmt.Errorf("unknown action: %s", message.Action)
 	}
 
-	if canGoAllIn && g.potManager.IsParticipantAllIn(p) {
+	allIn := canGoAllIn && g.potManager.IsParticipantAllIn(p)
+	if allIn {
 		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} is all-in"))
 	}
+
+	g.recordAction(currentAction, p.PlayerID, amount, nil, allIn)
 
 	g.logChan <- logs
 	return playable.OK(), true, nil
@@ -179,31 +185,14 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 		return nil, false
 	}
 
-	c := g.GetCommunityCards()
 	balanceAdjustments := make(map[int64]int)
-	hands := make(map[int64]*participantJSON)
 	for _, p := range g.idToParticipant {
 		balanceAdjustments[p.PlayerID] = p.balance
-		hands[p.PlayerID] = &participantJSON{
-			PlayerID:   p.PlayerID,
-			DidFold:    p.didFold,
-			Balance:    p.balance,
-			CurrentBet: 0,
-			Traded:     p.traded,
-			Hand:       p.hand,
-			HandRank:   p.GetBestHand(c).analyzer.GetHand().String(),
-		}
 	}
 
 	return &playable.GameOverDetails{
 		BalanceAdjustments: balanceAdjustments,
-		Log: struct {
-			Hands     map[int64]*participantJSON
-			Community deck.Hand
-		}{
-			Hands:     hands,
-			Community: c,
-		},
+		Log:                g.finalGameLog(),
 	}, true
 }
 
