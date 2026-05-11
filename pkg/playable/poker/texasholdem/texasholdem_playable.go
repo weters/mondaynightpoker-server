@@ -84,8 +84,25 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		g.setPendingDealerState(DealerState(int(g.dealerState)+1), time.Second*1)
 	}
 
-	g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} %s", foundAction.LogMessage(amount))
+	logs := []*playable.LogMessage{
+		playable.SimpleLogMessage(p.PlayerID, "{} %s", foundAction.LogMessage(amount)),
+	}
+
+	if wentAllIn(foundAction) && g.potManager.IsParticipantAllIn(p) {
+		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} is all-in"))
+	}
+
+	g.logChan <- logs
 	return playable.OK(), true, nil
+}
+
+// wentAllIn returns true if the action could put a player all-in
+func wentAllIn(a action.Action) bool {
+	switch a {
+	case action.Call, action.Bet, action.Raise:
+		return true
+	}
+	return false
 }
 
 // GetPlayerState returns the current state for the player
@@ -194,12 +211,12 @@ func (g *Game) endGame() error {
 			Message:   "",
 		}
 		if p.result == resultWon {
-			msg.Message = fmt.Sprintf("{} won ${%d} (${%d}) with a %s", p.winnings, p.balance, hand)
+			msg.Message = fmt.Sprintf("{} reveals %s and won ${%d} (${%d})", hand, p.winnings, p.balance)
 			msg.Cards = p.cards
 		} else if p.folded {
 			msg.Message = fmt.Sprintf("{} folded and lost ${%d}", -1*p.balance)
 		} else {
-			msg.Message = fmt.Sprintf("{} lost ${%d} with a %s", -1*p.balance, hand)
+			msg.Message = fmt.Sprintf("{} reveals %s and lost ${%d}", hand, -1*p.balance)
 			msg.Cards = p.cards
 		}
 
@@ -278,6 +295,10 @@ func (g *Game) discardCardForParticipant(p *Participant, cards deck.Hand) error 
 		logrus.WithError(err).Error("could not advance decision")
 		p.cards = oldHand
 		return err
+	}
+
+	g.logChan <- []*playable.LogMessage{
+		playable.SimpleLogMessage(p.PlayerID, "{} discarded a hole card"),
 	}
 
 	return nil

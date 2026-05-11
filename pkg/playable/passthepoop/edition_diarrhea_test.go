@@ -119,6 +119,7 @@ func TestDiarrheaEdition_EndRound_DoubleDouble(t *testing.T) {
 					LivesLost: 3,
 				},
 			},
+			Reason: "tied for low card — all lives lost",
 		},
 		{
 			Order: 1,
@@ -134,6 +135,7 @@ func TestDiarrheaEdition_EndRound_DoubleDouble(t *testing.T) {
 					LivesLost: 3,
 				},
 			},
+			Reason: "tied for low card — all lives lost",
 		},
 	}, lg)
 
@@ -144,6 +146,7 @@ func TestDiarrheaEdition_EndRound_DoubleDouble(t *testing.T) {
 	assert.Equal(t, 0, participants[4].lives)
 }
 
+//nolint:dupl // structurally similar EndRound assertions are intentional
 func TestDiarrheaEdition_EndRound_DoubleDoubleBail(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},
@@ -171,6 +174,7 @@ func TestDiarrheaEdition_EndRound_DoubleDoubleBail(t *testing.T) {
 					LivesLost: 3,
 				},
 			},
+			Reason: "tied for low card — all lives lost",
 		},
 	}, lg)
 
@@ -205,12 +209,14 @@ func TestDiarrheaEdition_EndRound_AcePassBack(t *testing.T) {
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 1, Card: card("14d"), LivesLost: 1},
 			},
+			Reason: "passed an Ace and lost a life",
 		},
 		{
 			Order: 1,
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 2, Card: card("4c"), LivesLost: 1},
 			},
+			Reason: "low card",
 		},
 	}, game.loserGroups)
 
@@ -249,6 +255,7 @@ func TestDiarrheaEdition_EndRound_AceFromDeck(t *testing.T) {
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 5, Card: card("14c"), LivesLost: 1},
 			},
+			Reason: "passed an Ace and lost a life",
 		},
 		{
 			Order: 1,
@@ -256,12 +263,14 @@ func TestDiarrheaEdition_EndRound_AceFromDeck(t *testing.T) {
 				{PlayerID: 1, Card: card("6c"), LivesLost: 3},
 				{PlayerID: 2, Card: card("6d"), LivesLost: 3},
 			},
+			Reason: "tied for low card — all lives lost",
 		},
 		{
 			Order: 2,
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 3, Card: card("7c"), LivesLost: 1},
 			},
+			Reason: "low card",
 		},
 	}, game.loserGroups)
 
@@ -298,6 +307,7 @@ func TestDiarrheaEdition_EndRound_TripleAce(t *testing.T) {
 				{PlayerID: 1, Card: card("14d"), LivesLost: 1},
 				{PlayerID: 2, Card: card("14h"), LivesLost: 1},
 			},
+			Reason: "passed an Ace and lost a life",
 		},
 	}, game.loserGroups)
 
@@ -361,6 +371,7 @@ func TestDiarrheaEdition_EndRound_DoubleAce_DoubleD(t *testing.T) {
 				{PlayerID: 1, Card: card("14c"), LivesLost: 1},
 				{PlayerID: 2, Card: card("14d"), LivesLost: 1},
 			},
+			Reason: "passed an Ace and lost a life",
 		}}, game.loserGroups)
 
 	assert.Equal(t, 0, game.participants[0].lives)
@@ -396,6 +407,7 @@ func TestDiarrheaEdition_EndRound_AceToKing(t *testing.T) {
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 3, Card: card("14c"), LivesLost: 1},
 			},
+			Reason: "low card",
 		},
 	}, game.loserGroups)
 
@@ -439,12 +451,14 @@ func TestDiarrheaEdition_EndRound_AcePassBack_2(t *testing.T) {
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 2, Card: card("14c"), LivesLost: 1},
 			},
+			Reason: "passed an Ace and lost a life",
 		},
 		{
 			Order: 1,
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 3, Card: card("2c"), LivesLost: 1},
 			},
+			Reason: "low card",
 		},
 	}, game.loserGroups)
 
@@ -476,6 +490,7 @@ func TestDiarrheaEdition_EndRound_AcePassBack_2(t *testing.T) {
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 2, Card: card("14c"), LivesLost: 1},
 			},
+			Reason: "low card",
 		},
 	}, game.loserGroups)
 
@@ -515,6 +530,7 @@ func TestDiarrheaEdition_EndRound_AceFromDeck_DoubleD_Safe(t *testing.T) {
 			RoundLosers: []*RoundLoser{
 				{PlayerID: 4, Card: card("14c"), LivesLost: 1},
 			},
+			Reason: "passed an Ace and lost a life",
 		},
 		{
 			Order: 1,
@@ -522,6 +538,7 @@ func TestDiarrheaEdition_EndRound_AceFromDeck_DoubleD_Safe(t *testing.T) {
 				{PlayerID: 1, Card: card("6c"), LivesLost: 3},
 				{PlayerID: 2, Card: card("6d"), LivesLost: 3},
 			},
+			Reason: "tied for low card — all lives lost",
 		},
 	}, game.loserGroups)
 

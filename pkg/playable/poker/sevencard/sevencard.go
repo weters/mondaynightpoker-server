@@ -123,14 +123,14 @@ func (g *Game) Start() error {
 		return errors.New("the game has already started")
 	}
 
+	g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(0, "New game of %s started (ante: ${%d})", g.Name(), g.options.Ante))
+
 	// deal two face-down, one face-up
 	for _, faceDown := range []bool{true, true, false} {
 		if err := g.dealCards(faceDown); err != nil {
 			return err
 		}
 	}
-
-	g.pendingLogs = append(g.pendingLogs, playable.SimpleLogMessage(0, "New game of %s started (ante: ${%d})", g.Name(), g.options.Ante))
 
 	// A variant's ParticipantReceivedCard hook (e.g. Chiggs mushroom folding
 	// all but one player) may have ended the game during dealing. In that case
@@ -422,13 +422,19 @@ func (g *Game) endGame() {
 func (g *Game) sendEndOfGameLogMessages(handWinnings, splitWinnings map[*participant]int, splitCard *deck.Card, splitDescription string) {
 	lms := make([]*playable.LogMessage, 0, len(g.idToParticipant))
 
-	// Log hand winners
+	// Log hand winners with their revealed cards
 	for winner, amount := range handWinnings {
 		hand := winner.getHandAnalyzer().GetHand().String()
-		lms = append(lms, playable.SimpleLogMessage(winner.PlayerID, "{} had a %s and won ${%d}", hand, amount))
+		lms = append(lms, playable.SimpleLogMessageWithCards(
+			winner.PlayerID,
+			revealedHand(winner),
+			"{} reveals %s and wins ${%d}",
+			hand,
+			amount,
+		))
 	}
 
-	// Log split pot winners (with card in the log message)
+	// Log split pot winners (with the qualifying card in the log message)
 	for winner, amount := range splitWinnings {
 		lms = append(lms, playable.SimpleLogMessageWithCard(
 			winner.PlayerID,
@@ -450,9 +456,26 @@ func (g *Game) sendEndOfGameLogMessages(handWinnings, splitWinnings map[*partici
 			lms = append(lms, playable.SimpleLogMessage(p.PlayerID, "{} folded and lost ${%d}", -1*p.balance))
 		} else {
 			hand := p.getHandAnalyzer().GetHand().String()
-			lms = append(lms, playable.SimpleLogMessage(p.PlayerID, "{} had a %s and lost ${%d}", hand, -1*p.balance))
+			lms = append(lms, playable.SimpleLogMessageWithCards(
+				p.PlayerID,
+				revealedHand(p),
+				"{} reveals %s and loses ${%d}",
+				hand,
+				-1*p.balance,
+			))
 		}
 	}
 
 	g.pendingLogs = append(g.pendingLogs, lms...)
+}
+
+// revealedHand returns the cards a participant shows at showdown, excluding any discarded ones.
+func revealedHand(p *participant) []*deck.Card {
+	cards := make([]*deck.Card, 0, len(p.hand))
+	for _, c := range p.hand {
+		if !c.IsBitSet(wasDiscarded) {
+			cards = append(cards, c)
+		}
+	}
+	return cards
 }

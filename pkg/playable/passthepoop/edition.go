@@ -13,6 +13,9 @@ type RoundLoser struct {
 type LoserGroup struct {
 	Order       int           `json:"order"`
 	RoundLosers []*RoundLoser `json:"roundLosers"`
+	// Reason is an optional human-readable description of why this group lost
+	// (e.g. "trips of Aces", "mutual low card"). Used for game logs.
+	Reason string `json:"reason,omitempty"`
 }
 
 func newLoserGroup(roundLosers ...[]*RoundLoser) []*LoserGroup {

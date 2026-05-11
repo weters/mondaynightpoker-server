@@ -1,6 +1,7 @@
 package passthepoop
 
 import (
+	"fmt"
 	"math"
 	"mondaynightpoker-server/pkg/deck"
 )
@@ -67,7 +68,9 @@ func (p *PairsEdition) EndRound(participants []*Participant) ([]*LoserGroup, err
 			}
 		}
 
-		return newLoserGroup(roundLosers), nil
+		groups := newLoserGroup(roundLosers)
+		groups[0].Reason = fmt.Sprintf("%d players share rank %s — rest lose all lives", largestGroupSize, rankNameForPairs(largestGroupRank))
+		return groups, nil
 	}
 
 	// otherwise, find the lowest rank in the smallest group
@@ -107,5 +110,27 @@ func (p *PairsEdition) EndRound(participants []*Participant) ([]*LoserGroup, err
 		}
 	}
 
-	return newLoserGroup(roundLosers), nil
+	groups := newLoserGroup(roundLosers)
+	if smallestGroupSize > 1 {
+		groups[0].Reason = fmt.Sprintf("smallest group of rank %s lost", rankNameForPairs(lowestRank))
+	} else {
+		groups[0].Reason = fmt.Sprintf("lowest card %s lost", rankNameForPairs(lowestRank))
+	}
+	return groups, nil
+}
+
+// rankNameForPairs returns a player-friendly rank name. Pairs uses ace-low ranks (1..13).
+func rankNameForPairs(rank int) string {
+	switch rank {
+	case 1:
+		return "Ace"
+	case deck.Jack:
+		return "Jack"
+	case deck.Queen:
+		return "Queen"
+	case deck.King:
+		return "King"
+	default:
+		return fmt.Sprintf("%d", rank)
+	}
 }

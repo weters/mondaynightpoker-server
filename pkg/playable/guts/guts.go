@@ -384,7 +384,7 @@ func (g *Game) calculateShowdown() {
 		g.showdownResult = result
 
 		g.sendLogMessages(newLogMessageWithCards(player.PlayerID, player.hand,
-			"{} wins ${%d} with %s", g.pot, result.WinningHand.Type.String()))
+			"{} reveals %s and wins ${%d}", result.WinningHand.Type.String(), g.pot))
 
 		g.scheduleOverflowOrEnd()
 		return
@@ -461,17 +461,23 @@ func (g *Game) calculateShowdown() {
 	// Log results
 	if len(winners) == 1 {
 		g.sendLogMessages(newLogMessageWithCards(winners[0].PlayerID, winners[0].hand,
-			"{} wins ${%d} with %s", g.pot, result.WinningHand.Type.String()))
+			"{} reveals %s and wins ${%d}", result.WinningHand.Type.String(), g.pot))
 	} else {
 		playerIDs := make([]int64, len(winners))
 		for i, w := range winners {
 			playerIDs[i] = w.PlayerID
 		}
 		g.sendLogMessages(newLogMessageWithPlayers(playerIDs, "{} split the pot of ${%d}", g.pot))
+		for _, w := range winners {
+			g.sendLogMessages(newLogMessageWithCards(w.PlayerID, w.hand,
+				"{} reveals %s", AnalyzeHand(w.hand).Type.String()))
+		}
 	}
 
 	for _, loser := range losers {
-		g.sendLogMessages(newLogMessage(loser.PlayerID, "{} pays penalty of ${%d}", penalty))
+		loserHand := AnalyzeHand(loser.hand)
+		g.sendLogMessages(newLogMessageWithCards(loser.PlayerID, loser.hand,
+			"{} reveals %s and pays penalty of ${%d}", loserHand.Type.String(), penalty))
 	}
 
 	// If there are losers who paid penalties, continue the game
@@ -585,7 +591,9 @@ func (g *Game) resolveBloodyGuts() {
 
 		g.sendLogMessages(
 			newLogMessageWithCards(player.PlayerID, player.hand,
-				"{} beats the deck with %s and wins ${%d}", playerHand.Type.String(), g.pot),
+				"{} reveals %s and beats the deck — wins ${%d}", playerHand.Type.String(), g.pot),
+			newLogMessageWithCards(0, bestDeckCards,
+				"Deck had %s", deckHandResult.Type.String()),
 		)
 
 		g.scheduleOverflowOrEnd()
@@ -605,8 +613,10 @@ func (g *Game) resolveBloodyGuts() {
 		result.NextPot = g.pot
 
 		g.sendLogMessages(
-			newLogMessage(player.PlayerID, "The deck wins with %s! {} pays penalty of ${%d}",
-				deckHandResult.Type.String(), penalty),
+			newLogMessageWithCards(0, bestDeckCards,
+				"Deck wins with %s", deckHandResult.Type.String()),
+			newLogMessageWithCards(player.PlayerID, player.hand,
+				"{} reveals %s and pays penalty of ${%d}", playerHand.Type.String(), penalty),
 		)
 
 		// Continue to next round

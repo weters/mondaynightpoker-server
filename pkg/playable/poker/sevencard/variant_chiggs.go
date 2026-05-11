@@ -101,7 +101,10 @@ func (c *Chiggs) triggerMushroomEvent(game *Game, p *participant, mushroomCard *
 
 	neighbors := c.getNeighbors(game, p.PlayerID)
 
-	game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} reveals a mushroom!")
+	game.pendingLogs = append(
+		game.pendingLogs,
+		playable.SimpleLogMessageWithCard(p.PlayerID, mushroomCard, "{} reveals a Mushroom (%s)!", mushroomCard.String()),
+	)
 
 	for _, neighborID := range neighbors {
 		neighbor := game.idToParticipant[neighborID]
@@ -120,7 +123,10 @@ func (c *Chiggs) triggerMushroomEvent(game *Game, p *participant, mushroomCard *
 				PlayerID: neighborID,
 			})
 			neighbor.didFold = true
-			game.logChan <- playable.SimpleLogMessageSlice(neighborID, "{} has no antidote and folds!")
+			game.pendingLogs = append(
+				game.pendingLogs,
+				playable.SimpleLogMessage(neighborID, "{} has no antidote and folds!"),
+			)
 		}
 	}
 
@@ -259,7 +265,10 @@ func (c *Chiggs) handlePlayAntidote(game *Game, p *participant) (bool, error) {
 	// Remove from pending responses
 	delete(c.pendingResponses, p.PlayerID)
 
-	game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} plays an antidote!")
+	game.pendingLogs = append(
+		game.pendingLogs,
+		playable.SimpleLogMessageWithCard(p.PlayerID, antidoteCard, "{} plays an antidote (%s)!", antidoteCard.String()),
+	)
 
 	// If no more pending responses, mushroom phase is complete
 	if len(c.pendingResponses) == 0 {

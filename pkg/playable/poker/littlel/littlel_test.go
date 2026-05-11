@@ -551,11 +551,11 @@ ForLoop:
 	msg := <-game.logChan
 	assert.Equal(t, 3, len(msg))
 	assert.Equal(t, []int64{2}, msg[0].PlayerIDs)
-	assert.Equal(t, "{} had a Royal flush and won ${75} (${50})", msg[0].Message)
+	assert.Equal(t, "{} reveals Royal flush and won ${75} (${50})", msg[0].Message)
 	assert.Equal(t, []int64{1}, msg[1].PlayerIDs)
 	assert.Equal(t, "{} folded and lost ${25}", msg[1].Message)
 	assert.Equal(t, []int64{3}, msg[2].PlayerIDs)
-	assert.Equal(t, "{} had a Three of a kind and lost ${25}", msg[2].Message)
+	assert.Equal(t, "{} reveals Three of a kind and lost ${25}", msg[2].Message)
 }
 
 func TestGame_getFutureActionsForPlayer(t *testing.T) {

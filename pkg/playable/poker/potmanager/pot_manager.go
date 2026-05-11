@@ -230,6 +230,16 @@ func (p *PotManager) GetParticipantAllInAmount(pt Participant) int {
 	return pip.amountInPlay + pip.Balance()
 }
 
+// IsParticipantAllIn returns true if the participant is all-in
+func (p *PotManager) IsParticipantAllIn(pt Participant) bool {
+	pip, ok := p.participants[pt.ID()]
+	if !ok {
+		return false
+	}
+
+	return pip.isAllIn
+}
+
 // AdvanceDecision will advance a decision without taking an explicit action
 func (p *PotManager) AdvanceDecision() error {
 	if _, err := p.GetInTurnParticipant(); err != nil {

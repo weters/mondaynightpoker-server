@@ -12,6 +12,7 @@ func TestPairsEdition_Name(t *testing.T) {
 	assert.Equal(t, "Pairs", p.Name())
 }
 
+//nolint:dupl // structurally similar EndRound assertions are intentional
 func TestPairsEdition_EndRound_NoPairs(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},
@@ -23,19 +24,20 @@ func TestPairsEdition_EndRound_NoPairs(t *testing.T) {
 	lg, err := std.EndRound(participants)
 	assert.NoError(t, err)
 	assert.NotNil(t, lg)
-	assert.Equal(t, newLoserGroup([]*RoundLoser{
-		{
-			PlayerID:  2,
-			Card:      card("14c"),
-			LivesLost: 1,
+	assert.Equal(t, []*LoserGroup{{
+		Order: 0,
+		RoundLosers: []*RoundLoser{
+			{PlayerID: 2, Card: card("14c"), LivesLost: 1},
 		},
-	}), lg)
+		Reason: "lowest card Ace lost",
+	}}, lg)
 
 	assert.Equal(t, 3, participants[0].lives)
 	assert.Equal(t, 2, participants[1].lives)
 	assert.Equal(t, 3, participants[2].lives)
 }
 
+//nolint:dupl // structurally similar EndRound assertions are intentional
 func TestPairsEdition_EndRound_SinglePair(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},
@@ -47,19 +49,20 @@ func TestPairsEdition_EndRound_SinglePair(t *testing.T) {
 	lg, err := std.EndRound(participants)
 	assert.NoError(t, err)
 	assert.NotNil(t, lg)
-	assert.Equal(t, newLoserGroup([]*RoundLoser{
-		{
-			PlayerID:  3,
-			Card:      card("13c"),
-			LivesLost: 1,
+	assert.Equal(t, []*LoserGroup{{
+		Order: 0,
+		RoundLosers: []*RoundLoser{
+			{PlayerID: 3, Card: card("13c"), LivesLost: 1},
 		},
-	}), lg)
+		Reason: "lowest card King lost",
+	}}, lg)
 
 	assert.Equal(t, 3, participants[0].lives)
 	assert.Equal(t, 3, participants[1].lives)
 	assert.Equal(t, 2, participants[2].lives)
 }
 
+//nolint:dupl // structurally similar EndRound assertions are intentional
 func TestPairsEdition_EndRound_DoublePair(t *testing.T) {
 	participants := []*Participant{
 		{PlayerID: 1, lives: 3, card: card("2c")},
@@ -72,18 +75,14 @@ func TestPairsEdition_EndRound_DoublePair(t *testing.T) {
 	lg, err := std.EndRound(participants)
 	assert.NoError(t, err)
 	assert.NotNil(t, lg)
-	assert.Equal(t, newLoserGroup([]*RoundLoser{
-		{
-			PlayerID:  1,
-			Card:      card("2c"),
-			LivesLost: 1,
+	assert.Equal(t, []*LoserGroup{{
+		Order: 0,
+		RoundLosers: []*RoundLoser{
+			{PlayerID: 1, Card: card("2c"), LivesLost: 1},
+			{PlayerID: 2, Card: card("2h"), LivesLost: 1},
 		},
-		{
-			PlayerID:  2,
-			Card:      card("2h"),
-			LivesLost: 1,
-		},
-	}), lg)
+		Reason: "smallest group of rank 2 lost",
+	}}, lg)
 
 	assert.Equal(t, 2, participants[0].lives)
 	assert.Equal(t, 2, participants[1].lives)
@@ -106,12 +105,16 @@ func TestPairsEdition_EndRound_Trips(t *testing.T) {
 	lg, err := std.EndRound(participants)
 	assert.NoError(t, err)
 	assert.NotNil(t, lg)
-	assert.Equal(t, newLoserGroup([]*RoundLoser{
-		{PlayerID: 1, Card: card("13c"), LivesLost: 3},
-		{PlayerID: 5, Card: card("2c"), LivesLost: 3},
-		{PlayerID: 6, Card: card("2h"), LivesLost: 3},
-		{PlayerID: 7, Card: card("2d"), LivesLost: 3},
-	}), lg)
+	assert.Equal(t, []*LoserGroup{{
+		Order: 0,
+		RoundLosers: []*RoundLoser{
+			{PlayerID: 1, Card: card("13c"), LivesLost: 3},
+			{PlayerID: 5, Card: card("2c"), LivesLost: 3},
+			{PlayerID: 6, Card: card("2h"), LivesLost: 3},
+			{PlayerID: 7, Card: card("2d"), LivesLost: 3},
+		},
+		Reason: "3 players share rank 3 — rest lose all lives",
+	}}, lg)
 
 	assert.Equal(t, 0, participants[0].lives)
 	assert.Equal(t, 3, participants[1].lives)

@@ -18,39 +18,42 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, errors.New("participant is not in the game")
 	}
 
+	logs := make([]*playable.LogMessage, 0, 2)
+	canGoAllIn := false
+
 	switch action.Action(message.Action) {
 	case action.Trade:
 		if err := g.tradeCardsForParticipant(p, message.Cards); err != nil {
 			return nil, false, err
 		}
 
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} traded %d", len(message.Cards))
+		if len(message.Cards) == 0 {
+			logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} stands pat (no trades)"))
+		} else {
+			logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} traded %d card(s)", len(message.Cards)))
+		}
 
+		g.logChan <- logs
 		return playable.OK(), true, nil
 	case action.Check:
 		if err := g.ParticipantChecks(p); err != nil {
 			return nil, false, err
 		}
 
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
-
-		return playable.OK(), true, nil
+		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} checks"))
 	case action.Fold:
 		if err := g.ParticipantFolds(p); err != nil {
 			return nil, false, err
 		}
 
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
-
-		return playable.OK(), true, nil
+		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} folds"))
 	case action.Call:
 		if err := g.ParticipantCalls(p); err != nil {
 			return nil, false, err
 		}
 
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
-
-		return playable.OK(), true, nil
+		canGoAllIn = true
+		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} calls"))
 	case action.Raise:
 		fallthrough
 	case action.Bet:
@@ -63,16 +66,22 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		canGoAllIn = true
 		if message.Action == "raise" {
-			g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} raises to ${%d}", amount)
+			logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} raises to ${%d}", amount))
 		} else {
-			g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
+			logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} bets ${%d}", amount))
 		}
-
-		return playable.OK(), true, nil
+	default:
+		return nil, false, fmt.Errorf("unknown action: %s", message.Action)
 	}
 
-	return nil, false, fmt.Errorf("unknown action: %s", message.Action)
+	if canGoAllIn && g.potManager.IsParticipantAllIn(p) {
+		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} is all-in"))
+	}
+
+	g.logChan <- logs
+	return playable.OK(), true, nil
 }
 
 // GetPlayerState returns the state of the player

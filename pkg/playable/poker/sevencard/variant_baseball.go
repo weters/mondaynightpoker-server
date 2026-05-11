@@ -35,7 +35,10 @@ func (b *Baseball) ParticipantReceivedCard(game *Game, p *participant, c *deck.C
 				panic(fmt.Errorf("could not draw card: %v", err))
 			}
 
-			game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "receives an extra card")
+			game.pendingLogs = append(
+				game.pendingLogs,
+				playable.SimpleLogMessageWithCard(p.PlayerID, c, "{} flipped a 4 (%s) and receives an extra face-down card (extra #%d)", c.String(), b.extraCards+1),
+			)
 			p.hand.AddCard(newCard)
 			b.ParticipantReceivedCard(game, p, newCard)
 

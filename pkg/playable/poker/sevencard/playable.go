@@ -37,6 +37,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		return nil, false, err
 	}
 
+	canGoAllIn := false
 	switch action {
 	case ActionCheck:
 		if err := g.participantChecks(p); err != nil {
@@ -54,6 +55,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		canGoAllIn = true
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
 	case ActionRaise:
 		amount, _ := message.AdditionalData.GetInt("amount")
@@ -65,12 +67,14 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
+		canGoAllIn = true
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} raises to ${%d}", amount)
 	case ActionCall:
 		if err := g.participantCalls(p); err != nil {
 			return nil, false, err
 		}
 
+		canGoAllIn = true
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
 	case ActionFold:
 		if err := g.participantFolds(p); err != nil {
@@ -78,6 +82,10 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
+	}
+
+	if canGoAllIn && p.isAllIn() {
+		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} is all-in")
 	}
 
 	// Track the last action for UI feedback

@@ -154,7 +154,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
-		g.sendLogMessages(newLogMessage(player.PlayerID, message.Cards[0], "{} played a card"))
+		g.sendLogMessages(newLogMessage(player.PlayerID, message.Cards[0], "{} played a card (trick %d)", g.roundNo))
 		return playable.OK(), true, nil
 	default:
 		return nil, false, fmt.Errorf("unknown action: %s", message.Action)
@@ -178,6 +178,7 @@ func (g *Game) endGame() error {
 	}
 
 	if len(res.PaidPot) > 0 {
+		messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} went Bourré (won no tricks)"))
 		messages = append(messages, newLogMessageWithPlayers(res.PaidPot, "{} pays the pot of ${%d}", res.OldPot))
 	}
 

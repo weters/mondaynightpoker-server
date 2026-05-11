@@ -2,6 +2,7 @@ package sevencard
 
 import (
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
 )
 
 // FollowTheQueen is follow the queen
@@ -22,15 +23,23 @@ func (f *FollowTheQueen) Start() {
 }
 
 // ParticipantReceivedCard will update the wilds
-func (f *FollowTheQueen) ParticipantReceivedCard(game *Game, _ *participant, c *deck.Card) {
+func (f *FollowTheQueen) ParticipantReceivedCard(game *Game, p *participant, c *deck.Card) {
 	wildDidChange := false
 	if c.IsBitSet(faceUp) && c.Rank == deck.Queen {
 		f.queenWasFlipped = true
 		wildDidChange = true
+		game.pendingLogs = append(
+			game.pendingLogs,
+			playable.SimpleLogMessageWithCard(p.PlayerID, c, "{} flipped a Queen — next face-up card sets the wild rank"),
+		)
 	} else {
 		if f.queenWasFlipped && c.IsBitSet(faceUp) {
 			f.wildRank = c.Rank
 			wildDidChange = true
+			game.pendingLogs = append(
+				game.pendingLogs,
+				playable.SimpleLogMessageWithCard(p.PlayerID, c, "{} followed the Queen — all %ss are now wild", rankName(c.Rank)),
+			)
 		}
 
 		f.queenWasFlipped = false

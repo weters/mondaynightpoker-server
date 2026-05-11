@@ -213,6 +213,7 @@ func (g *Game) InDecisionRound() bool {
 }
 
 func (g *Game) newRoundSetup() {
+	potCountBefore := len(g.potManager.Pots())
 	if err := g.potManager.NextRound(); err != nil {
 		return
 	}
@@ -221,5 +222,14 @@ func (g *Game) newRoundSetup() {
 
 	for _, p := range g.participants {
 		p.NewRound()
+	}
+
+	pots := g.potManager.Pots()
+	if len(pots) > potCountBefore {
+		logs := make([]*playable.LogMessage, 0, len(pots)-potCountBefore)
+		for i := potCountBefore; i < len(pots); i++ {
+			logs = append(logs, playable.SimpleLogMessage(0, "Side pot #%d created with ${%d}", i, pots[i].Amount))
+		}
+		g.logChan <- logs
 	}
 }

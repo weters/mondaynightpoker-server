@@ -141,6 +141,13 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 		g.sendLogMessage(playerID, "{} trades their card")
 	case ActionAccept:
 		g.sendLogMessage(playerID, "{} accepted the trade")
+		// In Diarrhea, the player who just received the traded-away card may have caught an Ace
+		if g.decisionIndex >= 1 {
+			prev := g.participants[g.decisionIndex-1]
+			if prev.deadCard {
+				g.sendLogMessage(prev.PlayerID, "{} was passed an Ace and lost a life!", prev.card)
+			}
+		}
 	case ActionFlipKing:
 		p := g.idToParticipant[playerID]
 		g.sendLogMessage(playerID, "{} revealed a King", p.card)
@@ -149,6 +156,9 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 	case ActionDrawFromDeck:
 		p := g.idToParticipant[playerID]
 		g.sendLogMessage(playerID, "{} pulled a card from the deck", p.card)
+		if p.deadCard {
+			g.sendLogMessage(playerID, "{} drew an Ace and lost a life!", p.card)
+		}
 	case ActionStay:
 		g.sendLogMessage(playerID, "{} will stay")
 	default:
@@ -317,6 +327,9 @@ func (g *Game) EndRound() error {
 	messages := make([]*playable.LogMessage, 0)
 	g.loserGroups = loserGroups
 	for _, group := range loserGroups {
+		if group.Reason != "" {
+			messages = append(messages, newLogMessage(0, group.Reason, nil))
+		}
 		for _, loser := range group.RoundLosers {
 			messages = append(messages, newLogMessage(loser.PlayerID, fmt.Sprintf("{} lost the round (-%d)", loser.LivesLost), loser.Card))
 		}
@@ -342,6 +355,8 @@ func (g *Game) endGame() error {
 
 	foundWinner := false
 	adjustments := make(map[int64]int)
+	var winnerID int64
+	winningAmount := g.pot
 	for id, p := range g.idToParticipant {
 		if p.lives > 0 {
 			if foundWinner {
@@ -351,12 +366,18 @@ func (g *Game) endGame() error {
 			foundWinner = true
 			p.balance += g.pot
 			g.gameLog.Winner = p.PlayerID
+			winnerID = p.PlayerID
 		}
 
 		adjustments[id] = p.balance
 	}
 
 	g.balanceAdjustments = adjustments
+
+	if foundWinner {
+		g.sendLogMessage(winnerID, fmt.Sprintf("{} is the last one standing and wins the pot of ${%d}", winningAmount))
+	}
+
 	return nil
 }
 

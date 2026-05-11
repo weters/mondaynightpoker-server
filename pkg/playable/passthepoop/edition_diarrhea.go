@@ -51,6 +51,7 @@ func (d *DiarrheaEdition) EndRound(participants []*Participant) ([]*LoserGroup, 
 		loserGroups = append(loserGroups, &LoserGroup{
 			Order:       0,
 			RoundLosers: aceLosers,
+			Reason:      "passed an Ace and lost a life",
 		})
 	}
 
@@ -102,9 +103,14 @@ func (d *DiarrheaEdition) EndRound(participants []*Participant) ([]*LoserGroup, 
 			return loserGroups, nil
 		}
 
+		reason := "low card"
+		if len(roundLosers) > 1 {
+			reason = "tied for low card — all lives lost"
+		}
 		loserGroups = append(loserGroups, &LoserGroup{
 			Order:       i,
 			RoundLosers: roundLosers,
+			Reason:      reason,
 		})
 
 		// only one loser (i.e., no automatic loss) or one participant remaining (i.e. winner)

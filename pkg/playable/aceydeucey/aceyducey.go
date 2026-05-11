@@ -69,6 +69,10 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		logger:              logger,
 	}
 
+	a.logChan <- []*playable.LogMessage{
+		playable.SimpleLogMessage(0, "New game of %s started — %d players ante ${%d} each (pot ${%d})", a.Name(), len(playerIDs), options.Ante, a.pot),
+	}
+
 	a.newRound()
 	return a, nil
 }
