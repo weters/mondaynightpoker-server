@@ -318,6 +318,26 @@ func TestPlayer_CloneTable_playerNotAtTable(t *testing.T) {
 	assert.Equal(t, "only a table admin can clone a table", err.Error())
 }
 
+func TestPlayer_CloneTable_siteAdminNotAtTable(t *testing.T) {
+	a := assert.New(t)
+
+	_, source := playerAndTable()
+
+	siteAdmin := player()
+	siteAdmin.IsSiteAdmin = true
+	a.NoError(siteAdmin.Save(cbg))
+
+	cloned, err := siteAdmin.CloneTable(cbg, source, "Clone")
+	a.NoError(err)
+	a.NotNil(cloned)
+	a.Equal("Clone", cloned.Name)
+	a.Equal(siteAdmin.ID, cloned.PlayerID)
+
+	srcPlayers, _ := source.GetPlayers(cbg)
+	clonedPlayers, _ := cloned.GetPlayers(cbg)
+	a.Equal(len(srcPlayers), len(clonedPlayers))
+}
+
 func TestTable_Save(t *testing.T) {
 	a := assert.New(t)
 

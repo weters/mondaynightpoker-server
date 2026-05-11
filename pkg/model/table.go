@@ -90,20 +90,22 @@ VALUES ($1, $2, true)`
 	}, nil
 }
 
-// CloneTable creates a new table from an existing one. The caller must be a table admin
-// at the source table. All players from the source are added to the new table in randomized
-// order with their balances zeroed and active set to false (sit-out). Table stake and
-// admin/permission flags are carried over from the source.
+// CloneTable creates a new table from an existing one. The caller must be a site admin
+// or a table admin at the source table. All players from the source are added to the new
+// table in randomized order with their balances zeroed and active set to false (sit-out).
+// Table stake and admin/permission flags are carried over from the source.
 func (p *Player) CloneTable(ctx context.Context, source *Table, name string) (*Table, error) {
-	pt, err := p.GetPlayerTable(ctx, source)
-	if err != nil {
-		if errors.Is(err, ErrPlayerNotAtTable) {
+	if !p.IsSiteAdmin {
+		pt, err := p.GetPlayerTable(ctx, source)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotAtTable) {
+				return nil, UserError("only a table admin can clone a table")
+			}
+			return nil, err
+		}
+		if !pt.IsTableAdmin {
 			return nil, UserError("only a table admin can clone a table")
 		}
-		return nil, err
-	}
-	if !pt.IsTableAdmin {
-		return nil, UserError("only a table admin can clone a table")
 	}
 
 	if err := p.canCreateTable(ctx); err != nil {
