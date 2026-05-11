@@ -2,6 +2,8 @@ package model
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -179,6 +181,141 @@ func TestGetTables(t *testing.T) {
 
 	// sanity check
 	a.NotEqual(p2.Email, p3.Email)
+}
+
+func TestPlayer_CloneTable(t *testing.T) {
+	a := assert.New(t)
+
+	admin, source := playerAndTable()
+	admin.IsSiteAdmin = true // bypass create-table cooldown
+	a.NoError(admin.Save(cbg))
+
+	adminPT, _ := admin.GetPlayerTable(cbg, source)
+	adminPT.TableStake = 5000
+	a.NoError(adminPT.Save(cbg))
+	a.NoError(adminPT.AdjustBalance(cbg, 100, "won pot", nil))
+
+	p2 := player()
+	pt2, _ := p2.Join(cbg, source)
+	pt2.TableStake = 3000
+	pt2.IsBlocked = true
+	a.NoError(pt2.Save(cbg))
+	a.NoError(pt2.AdjustBalance(cbg, -50, "lost pot", nil))
+
+	p3 := player()
+	pt3, _ := p3.Join(cbg, source)
+	pt3.CanStart = true
+	pt3.CanRestart = true
+	pt3.CanTerminate = true
+	pt3.IsTableAdmin = true
+	a.NoError(pt3.Save(cbg))
+
+	p4 := player()
+	_, _ = p4.Join(cbg, source)
+
+	cloned, err := admin.CloneTable(cbg, source, "Cloned Table")
+	a.NoError(err)
+	a.NotNil(cloned)
+	a.Equal("Cloned Table", cloned.Name)
+	a.NotEqual(source.UUID, cloned.UUID)
+	a.Equal(admin.ID, cloned.PlayerID)
+
+	players, err := cloned.GetPlayers(cbg)
+	a.NoError(err)
+	a.Equal(4, len(players))
+
+	byID := make(map[int64]*PlayerTable, len(players))
+	for _, pt := range players {
+		byID[pt.PlayerID] = pt
+		a.Equal(0, pt.Balance, "player %d balance must be zero", pt.PlayerID)
+		a.False(pt.Active, "player %d must start in sit-out state", pt.PlayerID)
+	}
+
+	a.True(byID[admin.ID].IsTableAdmin)
+	a.Equal(5000, byID[admin.ID].TableStake)
+	a.False(byID[admin.ID].IsBlocked)
+
+	a.Equal(3000, byID[p2.ID].TableStake)
+	a.True(byID[p2.ID].IsBlocked)
+	a.False(byID[p2.ID].IsTableAdmin)
+
+	a.True(byID[p3.ID].IsTableAdmin)
+	a.True(byID[p3.ID].CanStart)
+	a.True(byID[p3.ID].CanRestart)
+	a.True(byID[p3.ID].CanTerminate)
+
+	a.Equal(2000, byID[p4.ID].TableStake)
+	a.False(byID[p4.ID].IsTableAdmin)
+
+	// source table is untouched
+	srcPlayers, _ := source.GetPlayers(cbg)
+	a.Equal(4, len(srcPlayers))
+	for _, sp := range srcPlayers {
+		switch sp.PlayerID {
+		case admin.ID:
+			a.Equal(100, sp.Balance)
+			a.True(sp.Active)
+		case p2.ID:
+			a.Equal(-50, sp.Balance)
+		}
+	}
+}
+
+func TestPlayer_CloneTable_randomizesOrder(t *testing.T) {
+	a := assert.New(t)
+
+	admin, source := playerAndTable()
+	admin.IsSiteAdmin = true
+	a.NoError(admin.Save(cbg))
+
+	for i := 0; i < 7; i++ {
+		_, _ = player().Join(cbg, source)
+	}
+
+	srcPlayers, _ := source.GetPlayers(cbg)
+	srcOrder := make([]int64, len(srcPlayers))
+	for i, sp := range srcPlayers {
+		srcOrder[i] = sp.PlayerID
+	}
+
+	// Across several clones, ordering should differ from the source at least once.
+	differs := false
+	for i := 0; i < 8 && !differs; i++ {
+		cloned, err := admin.CloneTable(cbg, source, fmt.Sprintf("clone-%d", i))
+		a.NoError(err)
+
+		clonedPlayers, _ := cloned.GetPlayers(cbg)
+		a.Equal(len(srcOrder), len(clonedPlayers))
+		for j, cp := range clonedPlayers {
+			if cp.PlayerID != srcOrder[j] {
+				differs = true
+				break
+			}
+		}
+	}
+	a.True(differs, "expected at least one cloned ordering to differ from the source order")
+}
+
+func TestPlayer_CloneTable_notTableAdmin(t *testing.T) {
+	_, source := playerAndTable()
+
+	p2 := player()
+	_, _ = p2.Join(cbg, source)
+
+	_, err := p2.CloneTable(cbg, source, "Clone")
+	var ue UserError
+	assert.True(t, errors.As(err, &ue))
+	assert.Equal(t, "only a table admin can clone a table", err.Error())
+}
+
+func TestPlayer_CloneTable_playerNotAtTable(t *testing.T) {
+	_, source := playerAndTable()
+	stranger := player()
+
+	_, err := stranger.CloneTable(cbg, source, "Clone")
+	var ue UserError
+	assert.True(t, errors.As(err, &ue))
+	assert.Equal(t, "only a table admin can clone a table", err.Error())
 }
 
 func TestTable_Save(t *testing.T) {

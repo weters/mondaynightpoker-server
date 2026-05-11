@@ -103,6 +103,37 @@ func (m *Mux) postTableUUIDSeat() http.Handler {
 	})
 }
 
+func (m *Mux) postTableUUIDClone() http.Handler {
+	var wordChar = regexp.MustCompile(`\w`)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var pp postTablePayload
+		if !decodeRequest(w, r, &pp) {
+			return
+		}
+
+		if !wordChar.MatchString(pp.Name) || len(pp.Name) < 3 || len(pp.Name) > 40 {
+			writeJSONError(w, http.StatusBadRequest, errors.New("name must be 3-40 characters"))
+			return
+		}
+
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
+		tbl := r.Context().Value(ctxTableKey).(*model.Table)
+
+		newTable, err := player.CloneTable(r.Context(), tbl, pp.Name)
+		if err != nil {
+			var ue model.UserError
+			if errors.As(err, &ue) {
+				writeJSONError(w, http.StatusBadRequest, err)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, newTable)
+	})
+}
+
 func (m *Mux) tableMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uuid := mux.Vars(r)["uuid"]

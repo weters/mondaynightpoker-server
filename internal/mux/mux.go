@@ -95,6 +95,7 @@ func NewMux(version string) *Mux {
 		tr.Methods(http.MethodGet).Path("").Handler(this.getTableUUID())
 		tr.Methods(http.MethodGet).Path("/ws").Handler(this.getTableUUIDWS())
 		tr.Methods(http.MethodPost).Path("/seat").Handler(this.postTableUUIDSeat())
+		tr.Methods(http.MethodPost).Path("/clone").Handler(this.postTableUUIDClone())
 	}
 
 	// requires admin access

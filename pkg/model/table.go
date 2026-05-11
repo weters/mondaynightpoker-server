@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"math/rand"
 	"mondaynightpoker-server/pkg/db"
 	"time"
 )
@@ -73,6 +74,82 @@ VALUES ($1, $2, true)`
 	if _, err = tx.ExecContext(ctx, query2, p.ID, u); err != nil {
 		rollback(tx)
 		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &Table{
+		UUID:     u,
+		Name:     name,
+		PlayerID: p.ID,
+		Created:  created,
+		Modified: modified,
+		Deleted:  deleted,
+	}, nil
+}
+
+// CloneTable creates a new table from an existing one. The caller must be a table admin
+// at the source table. All players from the source are added to the new table in randomized
+// order with their balances zeroed and active set to false (sit-out). Table stake and
+// admin/permission flags are carried over from the source.
+func (p *Player) CloneTable(ctx context.Context, source *Table, name string) (*Table, error) {
+	pt, err := p.GetPlayerTable(ctx, source)
+	if err != nil {
+		if errors.Is(err, ErrPlayerNotAtTable) {
+			return nil, UserError("only a table admin can clone a table")
+		}
+		return nil, err
+	}
+	if !pt.IsTableAdmin {
+		return nil, UserError("only a table admin can clone a table")
+	}
+
+	if err := p.canCreateTable(ctx); err != nil {
+		return nil, err
+	}
+
+	sourcePlayers, err := source.GetPlayers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rand.Shuffle(len(sourcePlayers), func(i, j int) {
+		sourcePlayers[i], sourcePlayers[j] = sourcePlayers[j], sourcePlayers[i]
+	})
+
+	tx, err := db.Instance().BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	u := uuid.New().String()
+	const tableQuery = `
+INSERT INTO tables (uuid, name, player_id)
+VALUES ($1, $2, $3)
+RETURNING created, modified, deleted`
+
+	var created, modified time.Time
+	var deleted bool
+	if err := tx.QueryRowContext(ctx, tableQuery, u, name, p.ID).Scan(&created, &modified, &deleted); err != nil {
+		rollback(tx)
+		return nil, err
+	}
+
+	const ptQuery = `
+INSERT INTO players_tables (player_id, table_uuid, is_table_admin, can_start, can_restart, can_terminate, table_stake, active, is_blocked)
+VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)`
+
+	for _, src := range sourcePlayers {
+		if _, err := tx.ExecContext(ctx, ptQuery,
+			src.PlayerID, u,
+			src.IsTableAdmin, src.CanStart, src.CanRestart, src.CanTerminate,
+			src.TableStake, src.IsBlocked,
+		); err != nil {
+			rollback(tx)
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

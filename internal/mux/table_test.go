@@ -96,6 +96,48 @@ func Test_postTableUUIDJoin(t *testing.T) {
 	assert.True(t, respObj.Active)
 }
 
+func Test_postTableUUIDClone(t *testing.T) {
+	setupJWT()
+	ts := httptest.NewServer(NewMux(""))
+	defer ts.Close()
+
+	admin, jAdmin := player()
+	_ = admin.SetIsSiteAdmin(context.Background(), true) // bypass cooldown
+	tbl, _ := admin.CreateTable(context.Background(), "Original")
+
+	p2, j2 := player()
+	_, _ = p2.Join(context.Background(), tbl)
+
+	path := fmt.Sprintf("/table/%s/clone", tbl.UUID)
+
+	// non-admin at table is rejected
+	var errObj errorResponse
+	assertPost(t, ts, path, postTablePayload{Name: "Clone"}, &errObj, 400, j2)
+	assert.Equal(t, "only a table admin can clone a table", errObj.Message)
+
+	// invalid name
+	errObj = errorResponse{}
+	assertPost(t, ts, path, postTablePayload{Name: "no"}, &errObj, 400, jAdmin)
+	assert.Equal(t, "name must be 3-40 characters", errObj.Message)
+
+	// admin can clone
+	var newTbl *model.Table
+	assertPost(t, ts, path, postTablePayload{Name: "Cloned"}, &newTbl, 201, jAdmin)
+	assert.Equal(t, "Cloned", newTbl.Name)
+	assert.NotEqual(t, tbl.UUID, newTbl.UUID)
+	assert.Equal(t, admin.ID, newTbl.PlayerID)
+
+	clonedTbl, err := model.GetTableByUUID(context.Background(), newTbl.UUID)
+	assert.NoError(t, err)
+	clonedPlayers, err := clonedTbl.GetPlayers(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(clonedPlayers))
+	for _, cp := range clonedPlayers {
+		assert.Equal(t, 0, cp.Balance)
+		assert.False(t, cp.Active)
+	}
+}
+
 func Test_getTableUUID(t *testing.T) {
 	setupJWT()
 	ts := httptest.NewServer(NewMux(""))
