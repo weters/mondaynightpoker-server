@@ -48,6 +48,12 @@ type Model struct {
 	logBuf      *LogBuffer
 	playerNames map[int64]string
 
+	// lastActorBotID is the ID of the bot currently "up to act" — the one the
+	// view has auto-snapped to. While the same actor is still up, manual tabs
+	// stick; when the actor changes (i.e., the previous one has lost their
+	// valid actions), the view jumps to the new actor. Zero means no actor.
+	lastActorBotID int
+
 	// Sub-models
 	overlay    OverlayModel
 	gameSelect GameSelectModel
@@ -83,20 +89,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case BotStateMsg:
 		m.errMsg = ""
-		// Auto-focus: switch to this bot if it has actions and current bot doesn't
 		botIdx := m.botIndexByID(msg.BotID)
-		if botIdx >= 0 {
-			bot := m.bots[botIdx]
-			gs := bot.GetGameState()
-			if gs != nil && len(gs.ValidActions) > 0 && !bot.AutoPilot {
-				currentBot := m.bots[m.active]
-				currentGS := currentBot.GetGameState()
-				if currentGS == nil || len(currentGS.ValidActions) == 0 || currentBot.AutoPilot {
-					m.active = botIdx
-					// Clear any active input when switching
-					m.inputMode = inputNone
-				}
-			}
+		if botIdx < 0 {
+			return m, nil
+		}
+
+		// Re-check whether the previously-tracked actor is still acting.
+		// If they no longer have actions (or went on auto-pilot), they've
+		// yielded the turn, so clear them and let the next actor claim it.
+		if m.lastActorBotID != 0 && !m.botIsActor(m.lastActorBotID) {
+			m.lastActorBotID = 0
+		}
+
+		bot := m.bots[botIdx]
+		gs := bot.GetGameState()
+		hasActions := gs != nil && len(gs.ValidActions) > 0 && !bot.AutoPilot
+
+		// If no one is currently the actor and this bot has actions, claim
+		// them and snap focus. While the same actor is up, repeated state
+		// updates leave m.active alone — the user keeps any manual tab.
+		if hasActions && m.lastActorBotID == 0 {
+			m.active = botIdx
+			m.lastActorBotID = msg.BotID
+			m.inputMode = inputNone
 		}
 		return m, nil
 
@@ -593,6 +608,22 @@ func (m Model) botIndexByID(id int) int {
 		}
 	}
 	return -1
+}
+
+// botIsActor reports whether the bot with the given ID currently has valid
+// actions and is not on auto-pilot — i.e., a human at the TUI is expected to
+// act for them.
+func (m Model) botIsActor(id int) bool {
+	idx := m.botIndexByID(id)
+	if idx < 0 {
+		return false
+	}
+	bot := m.bots[idx]
+	if bot.AutoPilot {
+		return false
+	}
+	gs := bot.GetGameState()
+	return gs != nil && len(gs.ValidActions) > 0
 }
 
 func formatGameName(name string) string {

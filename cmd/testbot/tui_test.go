@@ -52,28 +52,149 @@ func TestModelBotStateAutoFocus(t *testing.T) {
 	updated, _ := m.Update(BotStateMsg{BotID: 2})
 	um := updated.(Model)
 	assert.Equal(t, 1, um.active) // should auto-focus to bot index 1
+	assert.Equal(t, 2, um.lastActorBotID)
 }
 
-func TestModelBotStateNoFocusWhenCurrentHasActions(t *testing.T) {
+func TestModelBotStateNoFocusWhenAnotherIsAlreadyActor(t *testing.T) {
+	// While bot 1 is the active actor, an out-of-band state update for bot 2
+	// (e.g. simultaneous decisions) must not steal focus.
 	m := newTestModel()
 	m.width = 120
 	m.height = 40
 
-	// Current bot (index 0) has actions
 	m.bots[0].gameState = &GameState{
 		GameName:     gameTexasHoldEm,
 		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
 	}
+	updated, _ := m.Update(BotStateMsg{BotID: 1})
+	um := updated.(Model)
+	assert.Equal(t, 0, um.active)
+	assert.Equal(t, 1, um.lastActorBotID)
 
-	// Bot 2 also gets actions
+	// Bot 2 also gains actions while bot 1 still has theirs.
 	m.bots[1].gameState = &GameState{
 		GameName:     gameTexasHoldEm,
 		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
 	}
+	updated, _ = um.Update(BotStateMsg{BotID: 2})
+	um = updated.(Model)
+	assert.Equal(t, 0, um.active) // stay on bot 1
+	assert.Equal(t, 1, um.lastActorBotID)
+}
 
+func TestModelTabAwayPersistsForSameActor(t *testing.T) {
+	// After auto-focusing to bot 1, the user tabs away to bot 2.
+	// Re-receiving the same actor's state must not yank focus back.
+	m := newTestModel()
+	m.width = 120
+	m.height = 40
+
+	m.bots[0].gameState = &GameState{
+		GameName:     gameTexasHoldEm,
+		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
+	}
+	updated, _ := m.Update(BotStateMsg{BotID: 1})
+	um := updated.(Model)
+	assert.Equal(t, 0, um.active)
+
+	// User tabs away to bot 2 (index 1).
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyTab})
+	um = updated.(Model)
+	assert.Equal(t, 1, um.active)
+
+	// Same actor's state arrives again — focus must not move back.
+	updated, _ = um.Update(BotStateMsg{BotID: 1})
+	um = updated.(Model)
+	assert.Equal(t, 1, um.active)
+	assert.Equal(t, 1, um.lastActorBotID)
+}
+
+func TestModelActorAdvanceOverridesTabAway(t *testing.T) {
+	// When the user has tabbed away and the action advances to a new bot,
+	// the TUI must snap focus to the new actor.
+	m := newTestModel()
+	m.width = 120
+	m.height = 40
+
+	m.bots[0].gameState = &GameState{
+		GameName:     gameTexasHoldEm,
+		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
+	}
+	updated, _ := m.Update(BotStateMsg{BotID: 1})
+	um := updated.(Model)
+	assert.Equal(t, 0, um.active)
+
+	// User tabs to bot 3.
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyTab})
+	um = updated.(Model)
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyTab})
+	um = updated.(Model)
+	assert.Equal(t, 2, um.active)
+
+	// Bot 1 acts: their state arrives with no remaining actions.
+	m.bots[0].gameState = &GameState{GameName: gameTexasHoldEm}
+	updated, _ = um.Update(BotStateMsg{BotID: 1})
+	um = updated.(Model)
+	assert.Equal(t, 0, um.lastActorBotID) // actor cleared
+	assert.Equal(t, 2, um.active)         // still on bot 3 (no new actor yet)
+
+	// Action advances to bot 2: focus must follow even though user had tabbed.
+	m.bots[1].gameState = &GameState{
+		GameName:     gameTexasHoldEm,
+		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
+	}
+	updated, _ = um.Update(BotStateMsg{BotID: 2})
+	um = updated.(Model)
+	assert.Equal(t, 1, um.active)
+	assert.Equal(t, 2, um.lastActorBotID)
+}
+
+func TestModelAutoPilotBotNotActor(t *testing.T) {
+	// An auto-pilot bot with actions must not claim the actor slot,
+	// since the human at the TUI isn't meant to act for them.
+	m := newTestModel()
+	m.width = 120
+	m.height = 40
+
+	m.bots[1].AutoPilot = true
+	m.bots[1].gameState = &GameState{
+		GameName:     gameTexasHoldEm,
+		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
+	}
 	updated, _ := m.Update(BotStateMsg{BotID: 2})
 	um := updated.(Model)
-	assert.Equal(t, 0, um.active) // should stay on current bot
+	assert.Equal(t, 0, um.active) // no switch
+	assert.Equal(t, 0, um.lastActorBotID)
+}
+
+func TestModelActorAdvancesWhenPreviousGoesAutoPilot(t *testing.T) {
+	// If the current actor flips to auto-pilot before acting, the next
+	// state update from another bot should claim the actor slot.
+	m := newTestModel()
+	m.width = 120
+	m.height = 40
+
+	m.bots[0].gameState = &GameState{
+		GameName:     gameTexasHoldEm,
+		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
+	}
+	updated, _ := m.Update(BotStateMsg{BotID: 1})
+	um := updated.(Model)
+	assert.Equal(t, 1, um.lastActorBotID)
+
+	// Bot 1 flips to auto-pilot (e.g., via overlay toggle). No state msg yet.
+	um.bots[0].AutoPilot = true
+
+	// A new state for bot 2 arrives — bot 1 should no longer count as the
+	// actor, so bot 2 claims it.
+	um.bots[1].gameState = &GameState{
+		GameName:     gameTexasHoldEm,
+		ValidActions: []ValidAction{{Action: "check", Name: "Check"}},
+	}
+	updated, _ = um.Update(BotStateMsg{BotID: 2})
+	um = updated.(Model)
+	assert.Equal(t, 1, um.active)
+	assert.Equal(t, 2, um.lastActorBotID)
 }
 
 func TestModelTabCyclesBots(t *testing.T) {
