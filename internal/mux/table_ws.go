@@ -2,11 +2,15 @@ package mux
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room"
-	"net/http"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -16,11 +20,39 @@ const writeWait = time.Second * 10
 const pongWait = time.Second * 60
 const pingPeriod = pongWait * 9 / 10
 
+// checkOrigin reports whether the request may open a WebSocket connection.
+// Requests without an Origin header (non-browser clients) are allowed; browsers
+// must match one of the configured origins.
+func checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		logrus.WithField("origin", origin).Warn("rejecting WebSocket connection with unparseable origin")
+		return false
+	}
+
+	for _, allowed := range config.Instance().WebSocketOrigins() {
+		allowedURL, err := url.Parse(allowed)
+		if err != nil {
+			continue
+		}
+
+		if strings.EqualFold(originURL.Scheme, allowedURL.Scheme) && strings.EqualFold(originURL.Host, allowedURL.Host) {
+			return true
+		}
+	}
+
+	logrus.WithField("origin", origin).Warn("rejecting WebSocket connection from disallowed origin")
+	return false
+}
+
 func (m *Mux) getTableUUIDWS() http.HandlerFunc {
 	upgrader := &websocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool {
-			return true
-		},
+		CheckOrigin: checkOrigin,
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {

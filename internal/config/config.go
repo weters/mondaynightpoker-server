@@ -38,8 +38,11 @@ var defaultConfig = Config{
 
 // Config provides configuration for Monday Night Poker
 type Config struct {
-	loaded            bool
-	Host              string
+	loaded bool
+	Host   string
+	// AllowedOrigins is the list of origins allowed to open a WebSocket connection.
+	// If empty, only Host is allowed.
+	AllowedOrigins    []string `yaml:"allowedOrigins" envconfig:"allowed_origins"`
 	Log               Log
 	Database          Database
 	JWT               JWT
@@ -47,6 +50,15 @@ type Config struct {
 	StartGameDelay    int    `yaml:"startGameDelay" envconfig:"start_game_delay"`
 	PlayerCreateDelay int    `yaml:"playerCreateDelay" envconfig:"player_create_delay"`
 	Email             Email
+}
+
+// WebSocketOrigins returns the origins allowed to open a WebSocket connection
+func (c Config) WebSocketOrigins() []string {
+	if len(c.AllowedOrigins) > 0 {
+		return c.AllowedOrigins
+	}
+
+	return []string{c.Host}
 }
 
 // Log represents logging configuration

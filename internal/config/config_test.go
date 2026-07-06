@@ -32,6 +32,14 @@ func TestDefaults(t *testing.T) {
 	assert.Equal(t, "no-reply@mondaynight.bid", cfg.Email.Sender)
 }
 
+func TestConfig_WebSocketOrigins(t *testing.T) {
+	cfg := Config{Host: "https://mondaynight.bid"}
+	assert.Equal(t, []string{"https://mondaynight.bid"}, cfg.WebSocketOrigins())
+
+	cfg.AllowedOrigins = []string{"http://localhost:8080", "https://mondaynight.bid"}
+	assert.Equal(t, []string{"http://localhost:8080", "https://mondaynight.bid"}, cfg.WebSocketOrigins())
+}
+
 func setEnv(key, val string) func() {
 	orig := os.Getenv(key)
 	_ = os.Setenv(key, val)
