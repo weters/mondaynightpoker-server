@@ -2,11 +2,13 @@ package mux
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"mondaynightpoker-server/pkg/model"
 )
 
 func TestMux_getAdminTable(t *testing.T) {
@@ -72,4 +74,9 @@ func TestMux_adminPostTableUUID(t *testing.T) {
 
 	assertPost(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{false}, &resp, http.StatusOK, jwt)
 	a.False(resp.Deleted)
+
+	// the route must match uppercase hex UUIDs like the non-admin table routes do
+	// (postgres' uuid type compares case-insensitively, so the request succeeds end-to-end)
+	assertPost(t, ts, fmt.Sprintf("/admin/table/%s", strings.ToUpper(table.UUID)), postAdminTableUUIDPayload{true}, &resp, http.StatusOK, jwt)
+	a.True(resp.Deleted)
 }

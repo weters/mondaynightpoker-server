@@ -103,13 +103,12 @@ func NewMux(version string) *Mux {
 	{
 		r := this.adminRouter
 		r.Methods(http.MethodGet).Path("/player").Handler(this.getPlayer())
-		r.Methods(http.MethodGet).Path("/player/{id:[0-9]+}/table").Handler(this.getPlayerIDTable())
 		r.Methods(http.MethodGet).Path("/player/{id:[0-9]+}/profile").Handler(this.getPlayerIDProfile())
 
 		r.Methods(http.MethodPost).Path("/admin/test-player").Handler(this.postAdminTestPlayer())
 		r.Methods(http.MethodPost).Path("/admin/player/{id:[0-9]+}").Handler(this.postAdminPlayerID())
 		r.Methods(http.MethodGet).Path("/admin/table").Handler(this.getAdminTable())
-		r.Methods(http.MethodPost).Path("/admin/table/{uuid:[a-z0-9]{8}(?:-[a-z0-9]{4}){3}-[a-z0-9]{12}}").Handler(this.postAdminTableUUID())
+		r.Methods(http.MethodPost).Path("/admin/table/{uuid:(?i)[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}}").Handler(this.postAdminTableUUID())
 	}
 
 	return this
