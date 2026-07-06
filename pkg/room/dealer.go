@@ -37,6 +37,7 @@ const (
 type Dealer struct {
 	pitBoss *PitBoss
 	table   *model.Table
+	// note: clients must only be accessed within the run loop
 	clients map[*Client]bool
 	game    playable.Playable
 	ticker  *time.Ticker
@@ -148,11 +149,14 @@ func (d *Dealer) runLoop() {
 // AddClient adds a client
 // This method must return quickly
 func (d *Dealer) AddClient(client *Client) {
-	client.dealer = d
-	d.clients[client] = true
+	client.setDealer(d)
 
-	d.stateChanged <- stateClientEvent
 	d.execInRunLoop <- func() {
+		d.clients[client] = true
+
+		// send clientState before allLogs so the client can resolve player names in log messages
+		d.sendPlayerData()
+
 		client.Send(playable.Response{
 			Key:   "allLogs",
 			Value: "",
@@ -184,18 +188,22 @@ func (d *Dealer) AddClient(client *Client) {
 	}
 }
 
-// RemoveClient adds a client
-// This method must return quickly
+// RemoveClient removes a client and reports whether it was the dealer's last client
+// This method blocks until the run loop processes the removal
 func (d *Dealer) RemoveClient(client *Client) (lastClient bool) {
-	delete(d.clients, client)
-	nClients := len(d.clients)
+	res := make(chan bool, 1)
+	d.execInRunLoop <- func() {
+		delete(d.clients, client)
+		if len(d.clients) > 0 {
+			d.sendPlayerData()
+			res <- false
+			return
+		}
 
-	if nClients > 0 {
-		d.stateChanged <- stateClientEvent
-		return false
+		res <- true
 	}
 
-	return true
+	return <-res
 }
 
 // EndShift is called when the dealer is no longer needed

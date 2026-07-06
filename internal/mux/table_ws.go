@@ -42,19 +42,17 @@ func (m *Mux) getTableUUIDWS() http.HandlerFunc {
 
 		m.pitBoss.ClientConnected(client)
 
-		waitForCloseFrame := make(chan bool)
 		defer func() {
 			m.pitBoss.ClientDisconnected(client)
 			_ = conn.Close()
-			close(waitForCloseFrame)
 		}()
 
-		go m.webSocketWriteLoop(client, waitForCloseFrame)
+		go m.webSocketWriteLoop(client)
 		m.webSocketReadLoop(client)
 	}
 }
 
-func (m *Mux) webSocketWriteLoop(client *room.Client, waitForCloseFrame chan bool) {
+func (m *Mux) webSocketWriteLoop(client *room.Client) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -68,16 +66,6 @@ func (m *Mux) webSocketWriteLoop(client *room.Client, waitForCloseFrame chan boo
 			if err := client.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-		case reason := <-client.Close:
-			_ = client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
-			_ = client.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, reason))
-
-			// wait for the close frame
-			select {
-			case <-waitForCloseFrame:
-			case <-time.After(time.Second):
-			}
-			return
 		case msg, ok := <-client.SendChan():
 			if !ok {
 				return
@@ -105,7 +93,6 @@ func (m *Mux) webSocketReadLoop(client *room.Client) {
 				logrus.WithError(err).Error("could not read onMessage")
 			}
 
-			client.CloseError = err
 			return
 		}
 

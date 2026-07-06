@@ -42,8 +42,9 @@ func (p *PitBoss) runLoop() {
 			logrus.WithField("player", client.String()).Debug("client disconnected")
 			dealer, found := p.dealers[client.table.UUID]
 			if !found {
-				logrus.WithField("uuid", client.table.UUID).WithField("type", "exception").Error("table not found")
-				return
+				// can legitimately happen if the dealer was already retired
+				logrus.WithField("uuid", client.table.UUID).Warn("table not found")
+				continue
 			}
 
 			if dealer.RemoveClient(client) {

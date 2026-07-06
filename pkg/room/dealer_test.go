@@ -1,6 +1,7 @@
 package room
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,14 +10,62 @@ import (
 
 func TestDealer_AddClient(t *testing.T) {
 	d := NewDealer(&PitBoss{}, &model.Table{})
-	c := NewClient(nil, nil, nil)
-	c2 := NewClient(nil, nil, nil)
+	d.StartShift()
+	defer d.EndShift()
+
+	c := NewClient(nil, &model.Player{ID: 1}, &model.Table{})
+	c2 := NewClient(nil, &model.Player{ID: 2}, &model.Table{})
 
 	d.AddClient(c)
 	d.AddClient(c2)
 
 	assert.False(t, d.RemoveClient(c))
 	assert.True(t, d.RemoveClient(c2))
+}
+
+// TestDealer_clientChurnRace exercises concurrent client adds/removes while the run
+// loop iterates the clients map. Run with -race; fails if the map is mutated outside
+// the run loop.
+func TestDealer_clientChurnRace(t *testing.T) {
+	d := NewDealer(&PitBoss{}, &model.Table{})
+	d.StartShift()
+
+	done := make(chan bool)
+	pumpStopped := make(chan bool)
+	go func() {
+		defer close(pumpStopped)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				// sendGameScheduled ranges the clients map without touching the database
+				d.stateChanged <- stateGameScheduled
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for i := int64(1); i <= 50; i++ {
+		wg.Add(1)
+		go func(id int64) {
+			defer wg.Done()
+			c := NewClient(nil, &model.Player{ID: id}, &model.Table{})
+			d.AddClient(c)
+			d.RemoveClient(c)
+		}(i)
+	}
+
+	wg.Wait()
+	close(done)
+	<-pumpStopped
+
+	// every add was paired with a remove, so one final client must be the last one
+	c := NewClient(nil, &model.Player{ID: 999}, &model.Table{})
+	d.AddClient(c)
+	assert.True(t, d.RemoveClient(c))
+
+	d.EndShift()
 }
 
 func newPlayerTable(id int64, displayName string, active bool, blocked bool) *model.PlayerTable {
