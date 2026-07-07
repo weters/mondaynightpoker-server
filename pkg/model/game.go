@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"mondaynightpoker-server/pkg/db"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -22,16 +21,6 @@ type Game struct {
 }
 
 const gamesColumns = `id, parent_id, table_uuid, game_type, data, created, ended`
-
-// GameByID returns a game object by its ID
-func GameByID(ctx context.Context, id int64) (*Game, error) {
-	const query = `
-SELECT ` + gamesColumns + `
-FROM games
-WHERE id = $1`
-	row := db.Instance().QueryRowContext(ctx, query, id)
-	return gameByRow(row)
-}
 
 func gameByRow(row *sql.Row) (*Game, error) {
 	var parentID sql.NullInt64
@@ -55,19 +44,32 @@ func gameByRow(row *sql.Row) (*Game, error) {
 	return &g, nil
 }
 
+// CreateGame will create a new game for the table
+func (r *GameRepo) CreateGame(ctx context.Context, t *Table, gameType string) (*Game, error) {
+	const query = `
+INSERT INTO games (parent_id, table_uuid, game_type)
+VALUES ($1, $2, $3)
+RETURNING ` + gamesColumns
+
+	row := r.db.QueryRowContext(ctx, query, nil, t.UUID, gameType)
+	return gameByRow(row)
+}
+
 // EndGame will end the game and set the data
-func (g *Game) EndGame(ctx context.Context, data interface{}, balanceAdjustments map[int64]int) error {
-	tbl, err := GetTableByUUID(ctx, g.TableUUID)
+func (r *GameRepo) EndGame(ctx context.Context, g *Game, data interface{}, balanceAdjustments map[int64]int) error {
+	tables := &TableRepo{db: r.db}
+
+	tbl, err := tables.GetTableByUUID(ctx, g.TableUUID)
 	if err != nil {
 		return err
 	}
 
-	players, err := tbl.GetPlayers(ctx)
+	players, err := tables.GetPlayers(ctx, tbl)
 	if err != nil {
 		return err
 	}
 
-	tx, err := db.Instance().BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -125,4 +127,11 @@ RETURNING ended`
 	commit = true
 	g.Ended = ended
 	return nil
+}
+
+// EndGame will end the game and set the data
+//
+// Deprecated: use Repositories.Games.EndGame instead.
+func (g *Game) EndGame(ctx context.Context, data interface{}, balanceAdjustments map[int64]int) error {
+	return deprecatedRepos().Games.EndGame(ctx, g, data, balanceAdjustments)
 }

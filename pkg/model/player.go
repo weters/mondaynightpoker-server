@@ -87,18 +87,25 @@ func getPlayerByRow(row db.Scanner) (*Player, error) {
 }
 
 // GetPlayerByID returns player based on the ID
-func GetPlayerByID(ctx context.Context, id int64) (*Player, error) {
+func (r *PlayerRepo) GetPlayerByID(ctx context.Context, id int64) (*Player, error) {
 	const query = `
 SELECT ` + playerColumns + `
 FROM players
 WHERE id = $1`
 
-	row := db.Instance().QueryRowContext(ctx, query, id)
+	row := r.db.QueryRowContext(ctx, query, id)
 	return getPlayerByRow(row)
 }
 
+// GetPlayerByID returns player based on the ID
+//
+// Deprecated: use Repositories.Players.GetPlayerByID instead.
+func GetPlayerByID(ctx context.Context, id int64) (*Player, error) {
+	return deprecatedRepos().Players.GetPlayerByID(ctx, id)
+}
+
 // Save will persist any changes made to the user to the database
-func (p *Player) Save(ctx context.Context) error {
+func (r *PlayerRepo) Save(ctx context.Context, p *Player) error {
 	const query = `
 UPDATE players
 SET email = $1,
@@ -109,24 +116,38 @@ SET email = $1,
     updated = (NOW() AT TIME ZONE 'utc')
 WHERE id = $6`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.Email, p.passwordHash, p.DisplayName, p.IsSiteAdmin, p.Status, p.ID)
+	_, err := r.db.ExecContext(ctx, query, p.Email, p.passwordHash, p.DisplayName, p.IsSiteAdmin, p.Status, p.ID)
 	return err
 }
 
+// Save will persist any changes made to the user to the database
+//
+// Deprecated: use Repositories.Players.Save instead.
+func (p *Player) Save(ctx context.Context) error {
+	return deprecatedRepos().Players.Save(ctx, p)
+}
+
 // GetPlayerByEmail will return a user by the email address
-func GetPlayerByEmail(ctx context.Context, email string) (*Player, error) {
+func (r *PlayerRepo) GetPlayerByEmail(ctx context.Context, email string) (*Player, error) {
 	const query = `
 SELECT ` + playerColumns + `
 FROM players
 WHERE lower(email) = Lower($1)`
 
-	row := db.Instance().QueryRowContext(ctx, query, email)
+	row := r.db.QueryRowContext(ctx, query, email)
 	return getPlayerByRow(row)
 }
 
+// GetPlayerByEmail will return a user by the email address
+//
+// Deprecated: use Repositories.Players.GetPlayerByEmail instead.
+func GetPlayerByEmail(ctx context.Context, email string) (*Player, error) {
+	return deprecatedRepos().Players.GetPlayerByEmail(ctx, email)
+}
+
 // GetPlayerByEmailAndPassword will return a user if the email and password are valid
-func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*Player, error) {
-	player, err := GetPlayerByEmail(ctx, email)
+func (r *PlayerRepo) GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*Player, error) {
+	player, err := r.GetPlayerByEmail(ctx, email)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// prevent timing attacks
@@ -148,6 +169,13 @@ func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*
 	return player, nil
 }
 
+// GetPlayerByEmailAndPassword will return a user if the email and password are valid
+//
+// Deprecated: use Repositories.Players.GetPlayerByEmailAndPassword instead.
+func GetPlayerByEmailAndPassword(ctx context.Context, email, password string) (*Player, error) {
+	return deprecatedRepos().Players.GetPlayerByEmailAndPassword(ctx, email, password)
+}
+
 // ValidatePassword will validate a user's password
 // Returns nil if the password is valid
 func (p *Player) ValidatePassword(password string) error {
@@ -160,22 +188,30 @@ func (p *Player) ValidatePassword(password string) error {
 
 // LastPlayerCreatedAt returns the last time a player was created by the remote address
 // If a player hasn't been created yet, this will return a nil error and a time.Time{} object (i.e., zero)
-func LastPlayerCreatedAt(ctx context.Context, remoteAddr string) (time.Time, error) {
+func (r *PlayerRepo) LastPlayerCreatedAt(ctx context.Context, remoteAddr string) (time.Time, error) {
 	const query = `
 SELECT MAX(created)
 FROM players
 WHERE remote_addr = $1`
 
 	var created sql.NullTime
-	if err := db.Instance().QueryRowContext(ctx, query, remoteAddr).Scan(&created); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, remoteAddr).Scan(&created); err != nil {
 		return time.Time{}, err
 	}
 
 	return created.Time, nil
 }
 
+// LastPlayerCreatedAt returns the last time a player was created by the remote address
+// If a player hasn't been created yet, this will return a nil error and a time.Time{} object (i.e., zero)
+//
+// Deprecated: use Repositories.Players.LastPlayerCreatedAt instead.
+func LastPlayerCreatedAt(ctx context.Context, remoteAddr string) (time.Time, error) {
+	return deprecatedRepos().Players.LastPlayerCreatedAt(ctx, remoteAddr)
+}
+
 // CreatePlayer creates a new player
-func CreatePlayer(ctx context.Context, email, displayName, password, remoteAddr string) (*Player, error) {
+func (r *PlayerRepo) CreatePlayer(ctx context.Context, email, displayName, password, remoteAddr string) (*Player, error) {
 	hashPassword, err := argon2id.DefaultHashPassword(password)
 	if err != nil {
 		return nil, err
@@ -186,7 +222,7 @@ INSERT INTO players (email, display_name, password_hash, remote_addr)
 VALUES ($1, $2, $3, $4)
 RETURNING ` + playerColumns
 
-	row := db.Instance().QueryRowContext(ctx, query, email, displayName, hashPassword, remoteAddr)
+	row := r.db.QueryRowContext(ctx, query, email, displayName, hashPassword, remoteAddr)
 	player, err := getPlayerByRow(row)
 	if err != nil {
 		if err, ok := err.(*pq.Error); ok && err.Code == pqDuplicateKeyErrorCode {
@@ -197,6 +233,13 @@ RETURNING ` + playerColumns
 	}
 
 	return player, nil
+}
+
+// CreatePlayer creates a new player
+//
+// Deprecated: use Repositories.Players.CreatePlayer instead.
+func CreatePlayer(ctx context.Context, email, displayName, password, remoteAddr string) (*Player, error) {
+	return deprecatedRepos().Players.CreatePlayer(ctx, email, displayName, password, remoteAddr)
 }
 
 // SetPassword will set a new password on the player instance
@@ -212,14 +255,14 @@ func (p *Player) SetPassword(password string) error {
 }
 
 // GetPlayerTable gets the PlayerTable record from for the associated table
-func (p *Player) GetPlayerTable(ctx context.Context, table *Table) (*PlayerTable, error) {
+func (r *TableRepo) GetPlayerTable(ctx context.Context, p *Player, table *Table) (*PlayerTable, error) {
 	const query = `
 SELECT ` + playerColumns + `, ` + playerTableColumns + `
 FROM players_tables
 INNER JOIN players ON players_tables.player_id = players.id
 WHERE players_tables.player_id = $1 AND players_tables.table_uuid = $2`
 
-	row := db.Instance().QueryRowContext(ctx, query, p.ID, table.UUID)
+	row := r.db.QueryRowContext(ctx, query, p.ID, table.UUID)
 	pt, err := getPlayerTableByRow(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -231,8 +274,15 @@ WHERE players_tables.player_id = $1 AND players_tables.table_uuid = $2`
 	return pt, nil
 }
 
+// GetPlayerTable gets the PlayerTable record from for the associated table
+//
+// Deprecated: use Repositories.Tables.GetPlayerTable instead.
+func (p *Player) GetPlayerTable(ctx context.Context, table *Table) (*PlayerTable, error) {
+	return deprecatedRepos().Tables.GetPlayerTable(ctx, p, table)
+}
+
 // Join joins the table
-func (p *Player) Join(ctx context.Context, table *Table) (*PlayerTable, error) {
+func (r *TableRepo) Join(ctx context.Context, p *Player, table *Table) (*PlayerTable, error) {
 	const query = `
 WITH pt AS (
 	INSERT INTO players_tables (player_id, table_uuid)
@@ -243,7 +293,7 @@ SELECT ` + playerColumns + `, ` + playerTableColumns + `
 FROM pt AS players_tables
 INNER JOIN players ON players_tables.player_id = players.id
 `
-	row := db.Instance().QueryRowContext(ctx, query, p.ID, table.UUID)
+	row := r.db.QueryRowContext(ctx, query, p.ID, table.UUID)
 
 	pt, err := getPlayerTableByRow(row)
 	if err != nil {
@@ -257,8 +307,15 @@ INNER JOIN players ON players_tables.player_id = players.id
 	return pt, nil
 }
 
+// Join joins the table
+//
+// Deprecated: use Repositories.Tables.Join instead.
+func (p *Player) Join(ctx context.Context, table *Table) (*PlayerTable, error) {
+	return deprecatedRepos().Tables.Join(ctx, p, table)
+}
+
 // SetIsSiteAdmin sets whether the player is a site admin
-func (p *Player) SetIsSiteAdmin(ctx context.Context, isSiteAdmin bool) error {
+func (r *PlayerRepo) SetIsSiteAdmin(ctx context.Context, p *Player, isSiteAdmin bool) error {
 	if p.IsSiteAdmin == isSiteAdmin {
 		return nil
 	}
@@ -270,7 +327,7 @@ WHERE id = $2
 RETURNING updated`
 
 	var updated sql.NullTime
-	if err := db.Instance().QueryRowContext(ctx, query, isSiteAdmin, p.ID).Scan(&updated); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, isSiteAdmin, p.ID).Scan(&updated); err != nil {
 		return err
 	}
 
@@ -279,8 +336,15 @@ RETURNING updated`
 	return nil
 }
 
+// SetIsSiteAdmin sets whether the player is a site admin
+//
+// Deprecated: use Repositories.Players.SetIsSiteAdmin instead.
+func (p *Player) SetIsSiteAdmin(ctx context.Context, isSiteAdmin bool) error {
+	return deprecatedRepos().Players.SetIsSiteAdmin(ctx, p, isSiteAdmin)
+}
+
 // GetTables returns a list of tables the player belongs to
-func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithBalance, error) {
+func (r *PlayerRepo) GetTables(ctx context.Context, p *Player, offset int64, limit int) ([]*TableWithBalance, error) {
 	const query = `
 SELECT ` + tableColumns + `, players_tables.balance
 FROM tables
@@ -291,7 +355,7 @@ ORDER BY players_tables.id DESC
 OFFSET $2
 LIMIT $3`
 
-	rows, err := db.Instance().QueryContext(ctx, query, p.ID, offset, limit)
+	rows, err := r.db.QueryContext(ctx, query, p.ID, offset, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +378,13 @@ LIMIT $3`
 	return records, nil
 }
 
+// GetTables returns a list of tables the player belongs to
+//
+// Deprecated: use Repositories.Players.GetTables instead.
+func (p *Player) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithBalance, error) {
+	return deprecatedRepos().Players.GetTables(ctx, p, offset, limit)
+}
+
 func getPlayers(rows *sql.Rows, err error) ([]*Player, error) {
 	if err != nil {
 		return nil, err
@@ -333,9 +404,9 @@ func getPlayers(rows *sql.Rows, err error) ([]*Player, error) {
 }
 
 // GetPlayersWithSearch will return a list of players match the specified search string
-func GetPlayersWithSearch(ctx context.Context, search string, offset int64, limit int) ([]*Player, error) {
+func (r *PlayerRepo) GetPlayersWithSearch(ctx context.Context, search string, offset int64, limit int) ([]*Player, error) {
 	if search == "" {
-		return GetPlayers(ctx, offset, limit)
+		return r.GetPlayers(ctx, offset, limit)
 	}
 
 	if searchInt, _ := strconv.ParseInt(search, 10, 64); searchInt > 0 {
@@ -344,7 +415,7 @@ SELECT ` + playerColumns + `
 FROM players
 WHERE id = $1`
 
-		return getPlayers(db.Instance().QueryContext(ctx, query, searchInt))
+		return getPlayers(r.db.QueryContext(ctx, query, searchInt))
 	}
 
 	const query = `
@@ -355,11 +426,18 @@ ORDER BY id ASC
 OFFSET $2
 LIMIT $3`
 
-	return getPlayers(db.Instance().QueryContext(ctx, query, search, offset, limit))
+	return getPlayers(r.db.QueryContext(ctx, query, search, offset, limit))
+}
+
+// GetPlayersWithSearch will return a list of players match the specified search string
+//
+// Deprecated: use Repositories.Players.GetPlayersWithSearch instead.
+func GetPlayersWithSearch(ctx context.Context, search string, offset int64, limit int) ([]*Player, error) {
+	return deprecatedRepos().Players.GetPlayersWithSearch(ctx, search, offset, limit)
 }
 
 // GetPlayers returns a list of players
-func GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
+func (r *PlayerRepo) GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
 	const query = `
 SELECT ` + playerColumns + `
 FROM players
@@ -367,29 +445,50 @@ ORDER BY id ASC
 OFFSET $1
 LIMIT $2`
 
-	return getPlayers(db.Instance().QueryContext(ctx, query, offset, limit))
+	return getPlayers(r.db.QueryContext(ctx, query, offset, limit))
+}
+
+// GetPlayers returns a list of players
+//
+// Deprecated: use Repositories.Players.GetPlayers instead.
+func GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
+	return deprecatedRepos().Players.GetPlayers(ctx, offset, limit)
 }
 
 // CreatePasswordResetRequest generates a new password request and returns the token
-func (p *Player) CreatePasswordResetRequest(ctx context.Context) (string, error) {
-	if err := p.expirePlayerTokens(ctx, tokenTypePasswordReset); err != nil {
+func (r *PlayerRepo) CreatePasswordResetRequest(ctx context.Context, p *Player) (string, error) {
+	if err := r.expirePlayerTokens(ctx, p, tokenTypePasswordReset); err != nil {
 		return "", err
 	}
 
-	return p.createPlayerToken(ctx, tokenTypePasswordReset)
+	return r.createPlayerToken(ctx, p, tokenTypePasswordReset)
+}
+
+// CreatePasswordResetRequest generates a new password request and returns the token
+//
+// Deprecated: use Repositories.Players.CreatePasswordResetRequest instead.
+func (p *Player) CreatePasswordResetRequest(ctx context.Context) (string, error) {
+	return deprecatedRepos().Players.CreatePasswordResetRequest(ctx, p)
 }
 
 // CreateAccountVerificationToken generates a new account verification token
-func (p *Player) CreateAccountVerificationToken(ctx context.Context) (string, error) {
-	if err := p.expirePlayerTokens(ctx, tokenTypeAccountVerification); err != nil {
+func (r *PlayerRepo) CreateAccountVerificationToken(ctx context.Context, p *Player) (string, error) {
+	if err := r.expirePlayerTokens(ctx, p, tokenTypeAccountVerification); err != nil {
 		return "", err
 	}
 
-	return p.createPlayerToken(ctx, tokenTypeAccountVerification)
+	return r.createPlayerToken(ctx, p, tokenTypeAccountVerification)
+}
+
+// CreateAccountVerificationToken generates a new account verification token
+//
+// Deprecated: use Repositories.Players.CreateAccountVerificationToken instead.
+func (p *Player) CreateAccountVerificationToken(ctx context.Context) (string, error) {
+	return deprecatedRepos().Players.CreateAccountVerificationToken(ctx, p)
 }
 
 // createPlayerToken creates a new player token
-func (p *Player) createPlayerToken(ctx context.Context, tokenType string) (string, error) {
+func (r *PlayerRepo) createPlayerToken(ctx context.Context, p *Player, tokenType string) (string, error) {
 	const query = `
 INSERT INTO player_tokens (token, player_id, type)
 VALUES ($1, $2, $3)`
@@ -399,7 +498,7 @@ VALUES ($1, $2, $3)`
 		return "", err
 	}
 
-	if _, err := db.Instance().ExecContext(ctx, query, resetToken, p.ID, tokenType); err != nil {
+	if _, err := r.db.ExecContext(ctx, query, resetToken, p.ID, tokenType); err != nil {
 		return "", err
 	}
 
@@ -407,18 +506,18 @@ VALUES ($1, $2, $3)`
 }
 
 // expirePlayerTokens ensures all existing password requests are disabled
-func (p *Player) expirePlayerTokens(ctx context.Context, tokenType string) error {
+func (r *PlayerRepo) expirePlayerTokens(ctx context.Context, p *Player, tokenType string) error {
 	const query = `
 UPDATE player_tokens
 SET active = 'f'
 WHERE player_id = $1 AND type = $2`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.ID, tokenType)
+	_, err := r.db.ExecContext(ctx, query, p.ID, tokenType)
 	return err
 }
 
 // ResetPassword will attempt to reset the player's password
-func (p *Player) ResetPassword(ctx context.Context, newPassword, resetToken string) error {
+func (r *PlayerRepo) ResetPassword(ctx context.Context, p *Player, newPassword, resetToken string) error {
 	newPasswordHash, err := argon2id.DefaultHashPassword(newPassword)
 	if err != nil {
 		return err
@@ -428,7 +527,7 @@ func (p *Player) ResetPassword(ctx context.Context, newPassword, resetToken stri
 SELECT reset_password
 FROM reset_password($1, $2, $3, $4)`
 
-	row := db.Instance().QueryRowContext(ctx, query, p.ID, newPasswordHash, resetToken, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+	row := r.db.QueryRowContext(ctx, query, p.ID, newPasswordHash, resetToken, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
 
 	var ok bool
 	if err := row.Scan(&ok); err != nil {
@@ -442,37 +541,59 @@ FROM reset_password($1, $2, $3, $4)`
 	return nil
 }
 
+// ResetPassword will attempt to reset the player's password
+//
+// Deprecated: use Repositories.Players.ResetPassword instead.
+func (p *Player) ResetPassword(ctx context.Context, newPassword, resetToken string) error {
+	return deprecatedRepos().Players.ResetPassword(ctx, p, newPassword, resetToken)
+}
+
 // Delete will mark a player as deleted
 // The player isn't actually deleted from the database, but their email is destroyed and their password is changed
-func (p *Player) Delete(ctx context.Context) error {
+func (r *PlayerRepo) Delete(ctx context.Context, p *Player) error {
 	newDisplayName := util.GetRandomName()
 	newEmail := uuid.New().String() + "@deleted.mondaynight.bid"
 
 	p.DisplayName = newDisplayName
 	p.Email = newEmail
 	p.Status = PlayerStatusDeleted
-	if err := p.Save(ctx); err != nil {
+	if err := r.Save(ctx, p); err != nil {
 		return err
 	}
 
 	return p.SetPassword(uuid.New().String())
 }
 
+// Delete will mark a player as deleted
+// The player isn't actually deleted from the database, but their email is destroyed and their password is changed
+//
+// Deprecated: use Repositories.Players.Delete instead.
+func (p *Player) Delete(ctx context.Context) error {
+	return deprecatedRepos().Players.Delete(ctx, p)
+}
+
 // IsPasswordResetTokenValid will return an error if the token is not valid
-func IsPasswordResetTokenValid(ctx context.Context, t string) error {
-	_, err := isPlayerTokenValid(ctx, t, tokenTypePasswordReset, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
+func (r *PlayerRepo) IsPasswordResetTokenValid(ctx context.Context, t string) error {
+	_, err := r.isPlayerTokenValid(ctx, t, tokenTypePasswordReset, time.Now().In(time.UTC).Add(-1*passwordResetRequestTTL))
 	return err
 }
 
+// IsPasswordResetTokenValid will return an error if the token is not valid
+//
+// Deprecated: use Repositories.Players.IsPasswordResetTokenValid instead.
+func IsPasswordResetTokenValid(ctx context.Context, t string) error {
+	return deprecatedRepos().Players.IsPasswordResetTokenValid(ctx, t)
+}
+
 // isPlayerTokenValid checks if the token is still valid
-func isPlayerTokenValid(ctx context.Context, playerToken, expectedType string, createdAfter time.Time) (int64, error) {
+func (r *PlayerRepo) isPlayerTokenValid(ctx context.Context, playerToken, expectedType string, createdAfter time.Time) (int64, error) {
 	const query = `
 SELECT player_id, type, created
 FROM player_tokens
 WHERE token = $1
   AND active`
 
-	row := db.Instance().QueryRowContext(ctx, query, playerToken)
+	row := r.db.QueryRowContext(ctx, query, playerToken)
 
 	var playerID int64
 	var tokenType string
@@ -489,13 +610,13 @@ WHERE token = $1
 }
 
 // VerifyAccount will verify the account if the token is valid
-func VerifyAccount(ctx context.Context, verifyToken string) error {
-	playerID, err := isPlayerTokenValid(ctx, verifyToken, tokenTypeAccountVerification, time.Time{})
+func (r *PlayerRepo) VerifyAccount(ctx context.Context, verifyToken string) error {
+	playerID, err := r.isPlayerTokenValid(ctx, verifyToken, tokenTypeAccountVerification, time.Time{})
 	if err != nil {
 		return err
 	}
 
-	player, err := GetPlayerByID(ctx, playerID)
+	player, err := r.GetPlayerByID(ctx, playerID)
 	if err != nil {
 		return err
 	}
@@ -503,21 +624,28 @@ func VerifyAccount(ctx context.Context, verifyToken string) error {
 	if player.Status != PlayerStatusCreated {
 		return errors.New("player cannot be verified")
 	}
-	if err := expireToken(ctx, verifyToken); err != nil {
+	if err := r.expireToken(ctx, verifyToken); err != nil {
 		return err
 	}
 
 	player.Status = PlayerStatusVerified
-	return player.Save(ctx)
+	return r.Save(ctx, player)
 }
 
-func expireToken(ctx context.Context, t string) error {
+// VerifyAccount will verify the account if the token is valid
+//
+// Deprecated: use Repositories.Players.VerifyAccount instead.
+func VerifyAccount(ctx context.Context, verifyToken string) error {
+	return deprecatedRepos().Players.VerifyAccount(ctx, verifyToken)
+}
+
+func (r *PlayerRepo) expireToken(ctx context.Context, t string) error {
 	const query = `
 UPDATE player_tokens
 SET active = 'f'
 WHERE token = $1`
 
-	_, err := db.Instance().ExecContext(ctx, query, t)
+	_, err := r.db.ExecContext(ctx, query, t)
 	return err
 }
 
@@ -545,7 +673,7 @@ type PlayerProfile struct {
 }
 
 // GetPlayerStats returns aggregate stats for a player within the given time range
-func GetPlayerStats(ctx context.Context, playerID int64, from, to time.Time) (*PlayerStats, error) {
+func (r *PlayerRepo) GetPlayerStats(ctx context.Context, playerID int64, from, to time.Time) (*PlayerStats, error) {
 	stats := &PlayerStats{
 		WinningsByGame:   make(map[string]int),
 		GamesCountByType: make(map[string]int),
@@ -560,7 +688,7 @@ WHERE pt.player_id = $1
   AND NOT t.deleted
   AND pt.created >= $2 AND pt.created <= $3`
 
-	if err := db.Instance().QueryRowContext(ctx, tablesQuery, playerID, from, to).Scan(&stats.TablesJoined); err != nil {
+	if err := r.db.QueryRowContext(ctx, tablesQuery, playerID, from, to).Scan(&stats.TablesJoined); err != nil {
 		return nil, err
 	}
 
@@ -573,7 +701,7 @@ WHERE pt.player_id = $1
   AND ptt.game_id IS NOT NULL
   AND ptt.created >= $2 AND ptt.created <= $3`
 
-	if err := db.Instance().QueryRowContext(ctx, gamesQuery, playerID, from, to).Scan(&stats.GamesPlayed); err != nil {
+	if err := r.db.QueryRowContext(ctx, gamesQuery, playerID, from, to).Scan(&stats.GamesPlayed); err != nil {
 		return nil, err
 	}
 
@@ -586,7 +714,7 @@ WHERE pt.player_id = $1
   AND ptt.game_id IS NOT NULL
   AND ptt.created >= $2 AND ptt.created <= $3`
 
-	if err := db.Instance().QueryRowContext(ctx, winningsQuery, playerID, from, to).Scan(&stats.TotalWinnings); err != nil {
+	if err := r.db.QueryRowContext(ctx, winningsQuery, playerID, from, to).Scan(&stats.TotalWinnings); err != nil {
 		return nil, err
 	}
 
@@ -600,7 +728,7 @@ WHERE pt.player_id = $1
   AND ptt.created >= $2 AND ptt.created <= $3
 GROUP BY g.game_type`
 
-	rows, err := db.Instance().QueryContext(ctx, byGameQuery, playerID, from, to)
+	rows, err := r.db.QueryContext(ctx, byGameQuery, playerID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -619,6 +747,13 @@ GROUP BY g.game_type`
 	}
 
 	return stats, nil
+}
+
+// GetPlayerStats returns aggregate stats for a player within the given time range
+//
+// Deprecated: use Repositories.Players.GetPlayerStats instead.
+func GetPlayerStats(ctx context.Context, playerID int64, from, to time.Time) (*PlayerStats, error) {
+	return deprecatedRepos().Players.GetPlayerStats(ctx, playerID, from, to)
 }
 
 // sevenCardVariants lists the display names of seven-card poker variants
@@ -665,7 +800,7 @@ func gameTypeGroup(gameType string) string {
 }
 
 // GetPlayerTablesFiltered returns tables with balances for a player, filtered by date range
-func GetPlayerTablesFiltered(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) ([]*TableWithBalance, error) {
+func (r *PlayerRepo) GetPlayerTablesFiltered(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) ([]*TableWithBalance, error) {
 	const query = `
 SELECT ` + tableColumns + `, players_tables.balance
 FROM tables
@@ -677,7 +812,7 @@ ORDER BY players_tables.id DESC
 OFFSET $4
 LIMIT $5`
 
-	rows, err := db.Instance().QueryContext(ctx, query, playerID, from, to, offset, limit)
+	rows, err := r.db.QueryContext(ctx, query, playerID, from, to, offset, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -700,8 +835,15 @@ LIMIT $5`
 	return records, nil
 }
 
+// GetPlayerTablesFiltered returns tables with balances for a player, filtered by date range
+//
+// Deprecated: use Repositories.Players.GetPlayerTablesFiltered instead.
+func GetPlayerTablesFiltered(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) ([]*TableWithBalance, error) {
+	return deprecatedRepos().Players.GetPlayerTablesFiltered(ctx, playerID, from, to, offset, limit)
+}
+
 // GetPlayerGraphData returns lightweight balance data points for the profile graph
-func GetPlayerGraphData(ctx context.Context, playerID int64, from, to time.Time) ([]*GraphPoint, error) {
+func (r *PlayerRepo) GetPlayerGraphData(ctx context.Context, playerID int64, from, to time.Time) ([]*GraphPoint, error) {
 	const query = `
 SELECT players_tables.created, players_tables.balance
 FROM players_tables
@@ -711,7 +853,7 @@ WHERE NOT tables.deleted
   AND players_tables.created >= $2 AND players_tables.created <= $3
 ORDER BY players_tables.id ASC`
 
-	rows, err := db.Instance().QueryContext(ctx, query, playerID, from, to)
+	rows, err := r.db.QueryContext(ctx, query, playerID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -729,24 +871,31 @@ ORDER BY players_tables.id ASC`
 	return points, nil
 }
 
+// GetPlayerGraphData returns lightweight balance data points for the profile graph
+//
+// Deprecated: use Repositories.Players.GetPlayerGraphData instead.
+func GetPlayerGraphData(ctx context.Context, playerID int64, from, to time.Time) ([]*GraphPoint, error) {
+	return deprecatedRepos().Players.GetPlayerGraphData(ctx, playerID, from, to)
+}
+
 // GetPlayerProfile returns the full player profile including stats and tables
-func GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) (*PlayerProfile, error) {
-	player, err := GetPlayerByID(ctx, playerID)
+func (r *PlayerRepo) GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) (*PlayerProfile, error) {
+	player, err := r.GetPlayerByID(ctx, playerID)
 	if err != nil {
 		return nil, err
 	}
 
-	stats, err := GetPlayerStats(ctx, playerID, from, to)
+	stats, err := r.GetPlayerStats(ctx, playerID, from, to)
 	if err != nil {
 		return nil, err
 	}
 
-	tables, err := GetPlayerTablesFiltered(ctx, playerID, from, to, offset, limit)
+	tables, err := r.GetPlayerTablesFiltered(ctx, playerID, from, to, offset, limit)
 	if err != nil {
 		return nil, err
 	}
 
-	graphData, err := GetPlayerGraphData(ctx, playerID, from, to)
+	graphData, err := r.GetPlayerGraphData(ctx, playerID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -757,4 +906,11 @@ func GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, o
 		Tables:    tables,
 		GraphData: graphData,
 	}, nil
+}
+
+// GetPlayerProfile returns the full player profile including stats and tables
+//
+// Deprecated: use Repositories.Players.GetPlayerProfile instead.
+func GetPlayerProfile(ctx context.Context, playerID int64, from, to time.Time, offset int64, limit int) (*PlayerProfile, error) {
+	return deprecatedRepos().Players.GetPlayerProfile(ctx, playerID, from, to, offset, limit)
 }

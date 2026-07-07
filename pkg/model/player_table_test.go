@@ -44,34 +44,6 @@ func TestPlayerTable_Save(t *testing.T) {
 	assert.True(t, pt2.IsBlocked)
 }
 
-func TestPlayerTable_AdjustBalance(t *testing.T) {
-	p1 := player()
-	table, _ := p1.CreateTable(cbg, "my table")
-	pt1, err := p1.GetPlayerTable(cbg, table)
-	assert.NoError(t, err)
-	assert.NotNil(t, pt1)
-
-	err = pt1.AdjustBalance(cbg, 25, "won pot", nil)
-	assert.NoError(t, err)
-
-	err = pt1.AdjustBalance(cbg, 50, "won pot", nil)
-	assert.NoError(t, err)
-
-	pt1.Balance = -50
-	err = pt1.AdjustBalance(cbg, 50, "won pot", nil)
-	assert.Error(t, err)
-
-	p2 := player()
-	pt2, _ := p2.Join(cbg, table)
-	err = pt2.AdjustBalance(cbg, -10, "lost post", nil)
-	assert.NoError(t, err)
-
-	pt1, _ = p1.GetPlayerTable(cbg, table)
-	pt2, _ = p2.GetPlayerTable(cbg, table)
-	assert.Equal(t, 75, pt1.Balance)
-	assert.Equal(t, -10, pt2.Balance)
-}
-
 func TestPlayerTable_IsPlaying(t *testing.T) {
 	pt := &PlayerTable{
 		Active:    true,

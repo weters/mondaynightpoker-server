@@ -54,26 +54,8 @@ func getPlayerTableByRow(row db.Scanner) (*PlayerTable, error) {
 	return &pt, nil
 }
 
-// AdjustBalance will adjust the balance of the player at the table
-func (p *PlayerTable) AdjustBalance(ctx context.Context, byAmount int, reason string, game *Game) error {
-	const query = `SELECT adjust_balance($1, $2, $3, $4, $5)`
-	var gameID *int64
-	if game != nil {
-		gameID = &game.ID
-	}
-
-	_, err := db.Instance().ExecContext(ctx, query, p.ID, p.Balance, byAmount, gameID, reason)
-	if err != nil {
-		return err
-	}
-
-	p.Balance += byAmount
-
-	return nil
-}
-
-// Save will save non-balance values
-func (p *PlayerTable) Save(ctx context.Context) error {
+// SavePlayerTable will save non-balance values
+func (r *TableRepo) SavePlayerTable(ctx context.Context, pt *PlayerTable) error {
 	const query = `
 UPDATE players_tables
 SET active = $1,
@@ -86,8 +68,15 @@ SET active = $1,
     updated = (NOW() AT TIME ZONE 'utc')
 WHERE id = $8`
 
-	_, err := db.Instance().ExecContext(ctx, query, p.Active, p.TableStake, p.IsTableAdmin, p.CanStart, p.CanRestart, p.CanTerminate, p.IsBlocked, p.ID)
+	_, err := r.db.ExecContext(ctx, query, pt.Active, pt.TableStake, pt.IsTableAdmin, pt.CanStart, pt.CanRestart, pt.CanTerminate, pt.IsBlocked, pt.ID)
 	return err
+}
+
+// Save will save non-balance values
+//
+// Deprecated: use Repositories.Tables.SavePlayerTable instead.
+func (p *PlayerTable) Save(ctx context.Context) error {
+	return deprecatedRepos().Tables.SavePlayerTable(ctx, p)
 }
 
 // IsPlaying returns true if the player should be dealt in the next hand

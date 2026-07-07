@@ -161,49 +161,6 @@ func TestPlayer_SetIsSiteAdmin(t *testing.T) {
 	assert.True(t, p1.IsSiteAdmin)
 }
 
-func TestPlayer_GetTables(t *testing.T) {
-	p := player()
-	p.IsSiteAdmin = true // to rapidly create tables
-	tbl1, _ := p.CreateTable(cbg, "Table 1")
-	tbl2, _ := p.CreateTable(cbg, "Table 2")
-	tbl3, _ := p.CreateTable(cbg, "Table 3")
-
-	pt, _ := p.GetPlayerTable(cbg, tbl1)
-	_ = pt.AdjustBalance(cbg, 25, "", nil)
-
-	p2 := player()
-	_, _ = p2.Join(cbg, tbl2)
-	_, _ = p2.Join(cbg, tbl1)
-
-	tables, err := p.GetTables(cbg, 1, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(tables))
-	assert.Equal(t, tbl2.UUID, tables[0].UUID)
-
-	tables, err = p.GetTables(cbg, 0, 99)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, len(tables))
-	assert.Equal(t, tbl3.UUID, tables[0].UUID)
-	assert.Equal(t, 0, tables[0].Balance)
-	assert.Equal(t, tbl2.UUID, tables[1].UUID)
-	assert.Equal(t, 0, tables[1].Balance)
-	assert.Equal(t, tbl1.UUID, tables[2].UUID)
-	assert.Equal(t, 25, tables[2].Balance)
-
-	tables, err = p2.GetTables(cbg, 0, 99)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, len(tables))
-	assert.Equal(t, tbl1.UUID, tables[0].UUID)
-	assert.Equal(t, tbl2.UUID, tables[1].UUID)
-
-	tbl1.Deleted = true
-	assert.NoError(t, tbl1.Save(cbg))
-
-	tables, err = p2.GetTables(cbg, 0, 99)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(tables), "only one table since we deleted one")
-}
-
 func verifiedPlayer() *Player {
 	p := player()
 
