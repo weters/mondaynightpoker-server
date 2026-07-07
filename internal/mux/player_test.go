@@ -213,6 +213,27 @@ func Test_postPlayerAuth(t *testing.T) {
 	assert.Equal(t, email, playerObj.Email)
 }
 
+func Test_postPlayerAuthRefresh(t *testing.T) {
+	ts := httptest.NewServer(NewMux(testDeps()))
+	defer ts.Close()
+
+	p, j := player()
+
+	var resp postPlayerAuthResponse
+	assertPost(t, ts, "/player/auth/refresh", nil, &resp, http.StatusOK, j)
+	assert.NotEmpty(t, resp.JWT)
+	assert.NotEqual(t, j, resp.JWT, "refresh must issue a new token")
+
+	id, err := testSigner.ValidUserID(resp.JWT)
+	assert.NoError(t, err)
+	assert.Equal(t, p.ID, id)
+	assert.Equal(t, p.Email, resp.Player.Email)
+
+	// requires authentication
+	var errResp errorResponse
+	assertPost(t, ts, "/player/auth/refresh", nil, &errResp, http.StatusUnauthorized)
+}
+
 func Test_getPlayerAuthJWT_BadRequests(t *testing.T) {
 	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()

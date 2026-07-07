@@ -99,6 +99,7 @@ func NewMux(deps Deps) *Mux {
 	{
 		r := this.authRouter
 
+		r.Methods(http.MethodPost).Path("/player/auth/refresh").Handler(this.postPlayerAuthRefresh())
 		r.Methods(http.MethodPost).Path("/player/{id:[0-9]+}").Handler(this.postPlayerID())
 		r.Methods(http.MethodDelete).Path("/player/{id:[0-9]+}").Handler(this.deletePlayerID())
 		r.Methods(http.MethodGet).Path("/player/profile").Handler(this.getPlayerProfile())

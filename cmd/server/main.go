@@ -23,8 +23,9 @@ import (
 const readTimeout = time.Second * 5
 const writeTimeout = time.Second * 10
 
-// tokenTTL is how long issued player JWTs remain valid
-const tokenTTL = 0 // no expiry yet; enabled with the refresh endpoint
+// tokenTTL is how long issued player JWTs remain valid. Active clients
+// refresh past the half-life via POST /player/auth/refresh.
+const tokenTTL = 30 * 24 * time.Hour
 
 // Version is the server version
 var Version = "v0.0.0-dev"

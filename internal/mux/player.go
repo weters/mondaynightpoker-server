@@ -275,6 +275,28 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 	}
 }
 
+// postPlayerAuthRefresh exchanges a valid token for a freshly issued one so
+// active players roll onto new expiries without logging in again
+func (m *Mux) postPlayerAuthRefresh() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
+
+		signedToken, err := m.tokens.Sign(player.ID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, postPlayerAuthResponse{
+			JWT: signedToken,
+			Player: playerWithEmail{
+				Player: player,
+				Email:  player.Email,
+			},
+		})
+	}
+}
+
 func (m *Mux) getPlayerAuthJWT() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		signedToken := mux.Vars(r)["jwt"]
