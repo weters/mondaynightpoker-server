@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // HTTPClient provides HTTP helpers for interacting with the server.
@@ -163,9 +164,14 @@ func (c *HTTPClient) SetPlayerPassword(adminJWT string, playerID int64, newPassw
 	return nil
 }
 
-// JoinTable joins a player to a table.
+// JoinTable joins a player to a table. Already being seated (e.g., the table
+// creator, who is seated on creation) is not an error.
 func (c *HTTPClient) JoinTable(jwt, tableUUID string) error {
 	if err := c.postJSON("/table/"+tableUUID+"/seat", jwt, nil, nil); err != nil {
+		if strings.Contains(err.Error(), "player is already at the table") {
+			return nil
+		}
+
 		return fmt.Errorf("join table: %w", err)
 	}
 	return nil
