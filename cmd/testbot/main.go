@@ -20,7 +20,13 @@ func main() {
 	game := flag.String("game", "", "game to auto-start after setup")
 	autoPilot := flag.Bool("auto", false, "start bots in auto-pilot mode")
 	join := flag.Bool("join", false, "join existing table players instead of creating new ones (requires -table)")
+	speed := flag.String("speed", "normal", "auto-pilot speed: instant, fast, normal, or slow")
 	flag.Parse()
+
+	if !setSpeed(*speed) {
+		fmt.Fprintf(os.Stderr, "Error: unknown -speed %q (want instant, fast, normal, or slow)\n", *speed)
+		os.Exit(1)
+	}
 
 	if *adminEmail == "" || *adminPassword == "" {
 		fmt.Fprintln(os.Stderr, "Error: -admin-email and -admin-password are required")

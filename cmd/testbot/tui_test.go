@@ -304,7 +304,7 @@ func TestModelBetInputFlow(t *testing.T) {
 	}
 	// Mock sendCh to avoid blocking
 	m.bots[0].sendCh = make(chan outgoingMessage, 64)
-	m.bots[0].done = make(chan struct{})
+	m.bots[0].closed = make(chan struct{})
 
 	// Press 1 for bet
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
@@ -493,6 +493,208 @@ func TestModelOverlayQuit(t *testing.T) {
 	updated, cmd := um.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	_ = updated.(Model)
 	assert.NotNil(t, cmd) // should return tea.Quit
+}
+
+func keyRune(r rune) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+}
+
+func TestModelDashboardToggle(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.height = 40
+
+	updated, _ := m.Update(keyRune('d'))
+	um := updated.(Model)
+	assert.True(t, um.showDashboard)
+	assert.Contains(t, um.View(), "Dashboard")
+
+	updated, _ = um.Update(keyRune('d'))
+	um = updated.(Model)
+	assert.False(t, um.showDashboard)
+}
+
+func TestModelHelpToggle(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.height = 40
+
+	updated, _ := m.Update(keyRune('?'))
+	um := updated.(Model)
+	assert.True(t, um.showHelp)
+	assert.Contains(t, um.View(), "Keys")
+
+	// Any key dismisses help
+	updated, _ = um.Update(keyRune('x'))
+	um = updated.(Model)
+	assert.False(t, um.showHelp)
+}
+
+func TestModelAutoPilotKey(t *testing.T) {
+	m := newTestModel()
+	m.bots[0].sendCh = make(chan outgoingMessage, 64)
+	m.bots[0].closed = make(chan struct{})
+
+	updated, _ := m.Update(keyRune('a'))
+	um := updated.(Model)
+	assert.True(t, um.bots[0].AutoPilot)
+
+	updated, _ = um.Update(keyRune('a'))
+	um = updated.(Model)
+	assert.False(t, um.bots[0].AutoPilot)
+}
+
+func TestModelAllAutoPilotKey(t *testing.T) {
+	m := newTestModel()
+
+	updated, _ := m.Update(keyRune('A'))
+	um := updated.(Model)
+	for _, b := range um.bots {
+		assert.True(t, b.AutoPilot)
+	}
+
+	updated, _ = um.Update(keyRune('A'))
+	um = updated.(Model)
+	for _, b := range um.bots {
+		assert.False(t, b.AutoPilot)
+	}
+}
+
+func TestModelSpeedKey(t *testing.T) {
+	resetSpeed(t)
+	m := newTestModel()
+
+	updated, _ := m.Update(keyRune('s'))
+	um := updated.(Model)
+	assert.Equal(t, speedFast, currentSpeed())
+
+	entries := um.logBuf.Recent(1)
+	assert.Contains(t, entries[0].Message, "fast")
+}
+
+func TestModelGameSelectKey(t *testing.T) {
+	m := newTestModel()
+
+	updated, _ := m.Update(keyRune('g'))
+	um := updated.(Model)
+	assert.True(t, um.gameSelect.Active)
+}
+
+func TestModelRestartKey(t *testing.T) {
+	m := newTestModel()
+	m.bots[0].sendCh = make(chan outgoingMessage, 64)
+	m.bots[0].closed = make(chan struct{})
+
+	// No game seen yet: error flash, nothing sent
+	updated, _ := m.Update(keyRune('r'))
+	um := updated.(Model)
+	assert.NotEmpty(t, um.errMsg)
+	assert.Empty(t, um.bots[0].sendCh)
+
+	// A state update establishes the last game
+	um.bots[0].gameState = &GameState{GameName: gameGuts}
+	updated, _ = um.Update(BotStateMsg{BotID: 1})
+	um = updated.(Model)
+	assert.Equal(t, gameGuts, um.lastGame)
+
+	updated, _ = um.Update(keyRune('r'))
+	um = updated.(Model)
+	msg := <-um.bots[0].sendCh
+	assert.Equal(t, "createGame", msg.Action)
+	assert.Equal(t, gameGuts, msg.Subject)
+}
+
+func TestModelTerminateKey(t *testing.T) {
+	m := newTestModel()
+	m.bots[0].sendCh = make(chan outgoingMessage, 64)
+	m.bots[0].closed = make(chan struct{})
+
+	updated, _ := m.Update(keyRune('T'))
+	um := updated.(Model)
+	msg := <-um.bots[0].sendCh
+	assert.Equal(t, "terminateGame", msg.Action)
+}
+
+func TestModelLogScrollKeys(t *testing.T) {
+	m := newTestModel()
+	for range 30 {
+		m.logBuf.Add("entry")
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	um := updated.(Model)
+	assert.Equal(t, logScrollStep, um.logScroll)
+
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	um = updated.(Model)
+	assert.Equal(t, 0, um.logScroll)
+
+	// PgDn at the tail stays at zero
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	um = updated.(Model)
+	assert.Equal(t, 0, um.logScroll)
+
+	// Scrolling up is clamped to the buffer length
+	for range 20 {
+		updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+		um = updated.(Model)
+	}
+	assert.Equal(t, 30, um.logScroll)
+
+	// End jumps back to the live tail
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	um = updated.(Model)
+	assert.Equal(t, 0, um.logScroll)
+}
+
+func TestModelBotConnMsg(t *testing.T) {
+	m := newTestModel()
+
+	updated, _ := m.Update(BotConnMsg{BotID: 2, Connected: false})
+	um := updated.(Model)
+	entries := um.logBuf.Recent(1)
+	assert.Contains(t, entries[0].Message, "connection lost")
+
+	updated, _ = um.Update(BotConnMsg{BotID: 2, Connected: true})
+	um = updated.(Model)
+	entries = um.logBuf.Recent(1)
+	assert.Contains(t, entries[0].Message, "reconnected")
+}
+
+func TestModelOverlayTerminate(t *testing.T) {
+	m := newTestModel()
+	m.bots[0].sendCh = make(chan outgoingMessage, 64)
+	m.bots[0].closed = make(chan struct{})
+
+	// Open overlay, move to "Terminate Game" (second item), confirm
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	um := updated.(Model)
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyDown})
+	um = updated.(Model)
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	um = updated.(Model)
+
+	assert.False(t, um.overlay.Active)
+	msg := <-um.bots[0].sendCh
+	assert.Equal(t, "terminateGame", msg.Action)
+}
+
+func TestGameSelectDigitPick(t *testing.T) {
+	gs := NewGameSelect()
+	_, gameName := gs.Update(keyRune('3'))
+	assert.Equal(t, gs.Items[2].Name, gameName)
+
+	// Out-of-range digit is a no-op
+	_, gameName = gs.Update(keyRune('9'))
+	assert.Equal(t, "", gameName)
+}
+
+func TestModelStatusBarShowsSpeed(t *testing.T) {
+	resetSpeed(t)
+	m := newTestModel()
+	bar := m.renderStatusBar(120)
+	assert.Contains(t, bar, "speed:normal")
+	assert.Contains(t, bar, "?:help")
 }
 
 func TestModelStatusBar(t *testing.T) {

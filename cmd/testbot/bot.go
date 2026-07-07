@@ -13,6 +13,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// reconnectInterval is the pause between reconnect attempts after a dropped connection.
+const reconnectInterval = 2 * time.Second
+
 // Bot represents a single bot player connected via WebSocket.
 type Bot struct {
 	ID        int
@@ -21,12 +24,16 @@ type Bot struct {
 	JWT       string
 	AutoPilot bool
 
+	serverURL     string
+	tableUUID     string
 	conn          *websocket.Conn
 	mu            sync.RWMutex
 	gameState     *GameState
 	autoPilotBusy bool // true while an autopilot goroutine is running
+	disconnected  bool // true after a dropped connection, until reconnected
 	sendCh        chan outgoingMessage
-	done          chan struct{}
+	closed        chan struct{}
+	closeOnce     sync.Once
 	program       *tea.Program // TUI program for sending messages
 	forwardLogs   bool         // only one bot should forward logs/clientState to avoid duplicates
 }
@@ -46,39 +53,103 @@ type wsResponse struct {
 	Context string          `json:"context"`
 }
 
-// Connect dials the WebSocket and starts read/write goroutines.
+// Connect dials the WebSocket and starts the connection manager, which
+// reconnects automatically if the connection drops.
 func (b *Bot) Connect(serverURL, tableUUID string) error {
-	wsURL := strings.Replace(serverURL, "http", "ws", 1)
-	u := fmt.Sprintf("%s/table/%s/ws?access_token=%s", wsURL, tableUUID, url.QueryEscape(b.JWT))
+	b.serverURL = serverURL
+	b.tableUUID = tableUUID
+	b.sendCh = make(chan outgoingMessage, 64)
+	b.closed = make(chan struct{})
+
+	conn, err := b.dial()
+	if err != nil {
+		return err
+	}
+
+	b.setConn(conn, false)
+	go b.run(conn)
+
+	return nil
+}
+
+func (b *Bot) dial() (*websocket.Conn, error) {
+	wsURL := strings.Replace(b.serverURL, "http", "ws", 1)
+	u := fmt.Sprintf("%s/table/%s/ws?access_token=%s", wsURL, b.tableUUID, url.QueryEscape(b.JWT))
 
 	conn, resp, err := websocket.DefaultDialer.Dial(u, nil)
 	if resp != nil && resp.Body != nil {
 		resp.Body.Close()
 	}
 	if err != nil {
-		return fmt.Errorf("bot %s: websocket dial: %w", b.Name, err)
+		return nil, fmt.Errorf("bot %s: websocket dial: %w", b.Name, err)
 	}
 
-	b.conn = conn
-	b.sendCh = make(chan outgoingMessage, 64)
-	b.done = make(chan struct{})
+	return conn, nil
+}
 
-	// Handle pings from server
+func (b *Bot) setConn(conn *websocket.Conn, disconnected bool) {
+	b.mu.Lock()
+	b.conn = conn
+	b.disconnected = disconnected
+	b.mu.Unlock()
+}
+
+// Disconnected reports whether the bot lost its connection and has not yet
+// reconnected.
+func (b *Bot) Disconnected() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.disconnected
+}
+
+// run serves the current connection and reconnects on failure until Close.
+func (b *Bot) run(conn *websocket.Conn) {
+	for {
+		b.serveConn(conn)
+
+		select {
+		case <-b.closed:
+			return
+		default:
+		}
+
+		b.setConn(nil, true)
+		b.sendTUI(BotConnMsg{BotID: b.ID, Connected: false})
+
+		var err error
+		for {
+			select {
+			case <-b.closed:
+				return
+			case <-time.After(reconnectInterval):
+			}
+
+			if conn, err = b.dial(); err == nil {
+				break
+			}
+		}
+
+		b.setConn(conn, false)
+		b.sendTUI(BotConnMsg{BotID: b.ID, Connected: true})
+		b.SetActive(true)
+	}
+}
+
+// serveConn reads and writes on a single connection until it fails.
+func (b *Bot) serveConn(conn *websocket.Conn) {
 	conn.SetPingHandler(func(appData string) error {
 		return conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
 	})
 
-	go b.readLoop()
-	go b.writeLoop()
-
-	return nil
+	done := make(chan struct{})
+	go b.writeLoop(conn, done)
+	b.readLoop(conn)
+	close(done)
 }
 
-func (b *Bot) readLoop() {
-	defer close(b.done)
-
+func (b *Bot) readLoop(conn *websocket.Conn) {
 	for {
-		_, message, err := b.conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				log.Printf("[%s] read error: %v", b.Name, err)
@@ -172,15 +243,17 @@ func (b *Bot) doAutoPilot(gs *GameState) {
 	b.Send(*msg)
 }
 
-func (b *Bot) writeLoop() {
+func (b *Bot) writeLoop(conn *websocket.Conn, done chan struct{}) {
 	for {
 		select {
 		case msg := <-b.sendCh:
-			if err := b.conn.WriteJSON(msg); err != nil {
+			if err := conn.WriteJSON(msg); err != nil {
 				log.Printf("[%s] write error: %v", b.Name, err)
 				return
 			}
-		case <-b.done:
+		case <-done:
+			return
+		case <-b.closed:
 			return
 		}
 	}
@@ -190,7 +263,7 @@ func (b *Bot) writeLoop() {
 func (b *Bot) Send(msg outgoingMessage) {
 	select {
 	case b.sendCh <- msg:
-	case <-b.done:
+	case <-b.closed:
 	}
 }
 
@@ -201,14 +274,24 @@ func (b *Bot) GetGameState() *GameState {
 	return b.gameState
 }
 
-// Close gracefully disconnects the bot.
+// Close gracefully disconnects the bot and stops reconnect attempts.
 func (b *Bot) Close() {
-	if b.conn != nil {
-		_ = b.conn.WriteMessage(
+	b.closeOnce.Do(func() {
+		if b.closed != nil {
+			close(b.closed)
+		}
+	})
+
+	b.mu.RLock()
+	conn := b.conn
+	b.mu.RUnlock()
+
+	if conn != nil {
+		_ = conn.WriteMessage(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 		)
-		_ = b.conn.Close()
+		_ = conn.Close()
 	}
 }
 
@@ -228,4 +311,14 @@ func (b *Bot) StartGame(gameName string) {
 		Action:  "createGame",
 		Subject: gameName,
 	})
+}
+
+// TerminateGame ends the current game early.
+func (b *Bot) TerminateGame() {
+	b.Send(outgoingMessage{Action: "terminateGame"})
+}
+
+// CancelGame cancels a scheduled (pending) game.
+func (b *Bot) CancelGame() {
+	b.Send(outgoingMessage{Action: "cancelGame"})
 }

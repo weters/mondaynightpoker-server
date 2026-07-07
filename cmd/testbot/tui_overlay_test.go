@@ -15,13 +15,15 @@ func TestNewOverlay(t *testing.T) {
 
 	m := NewOverlay(bots)
 	assert.True(t, m.Active)
-	// Should have: start, toggle:1, toggle:2, toggle-all, quit = 5 items
-	assert.Len(t, m.Items, 5)
+	// Should have: start, terminate, cancel-pending, toggle:1, toggle:2, toggle-all, quit = 7 items
+	assert.Len(t, m.Items, 7)
 	assert.Equal(t, "start", m.Items[0].Action)
-	assert.Equal(t, "toggle:1", m.Items[1].Action)
-	assert.Equal(t, "toggle:2", m.Items[2].Action)
-	assert.Equal(t, "toggle-all", m.Items[3].Action)
-	assert.Equal(t, "quit", m.Items[4].Action)
+	assert.Equal(t, "terminate", m.Items[1].Action)
+	assert.Equal(t, "cancel-pending", m.Items[2].Action)
+	assert.Equal(t, "toggle:1", m.Items[3].Action)
+	assert.Equal(t, "toggle:2", m.Items[4].Action)
+	assert.Equal(t, "toggle-all", m.Items[5].Action)
+	assert.Equal(t, "quit", m.Items[6].Action)
 }
 
 func TestOverlayNavigation(t *testing.T) {
@@ -67,8 +69,8 @@ func TestOverlayAutoPilotLabels(t *testing.T) {
 	}
 
 	m := NewOverlay(bots)
-	assert.Contains(t, m.Items[1].Label, "[OFF]")
-	assert.Contains(t, m.Items[2].Label, "[ON]")
+	assert.Contains(t, m.Items[3].Label, "[OFF]")
+	assert.Contains(t, m.Items[4].Label, "[ON]")
 }
 
 func TestOverlayView(t *testing.T) {

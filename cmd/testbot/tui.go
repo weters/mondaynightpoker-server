@@ -38,6 +38,12 @@ type ClientStateMsg struct {
 	PlayerNames map[int64]string
 }
 
+// BotConnMsg is sent when a bot's connection drops or is restored.
+type BotConnMsg struct {
+	BotID     int
+	Connected bool
+}
+
 // Model is the top-level Bubble Tea model for the testbot TUI.
 type Model struct {
 	bots   []*Bot
@@ -61,15 +67,29 @@ type Model struct {
 	cardSelect CardSelectModel
 	inputMode  inputMode
 
+	// View toggles
+	showDashboard bool
+	showHelp      bool
+
+	// logScroll is how many entries the log view is scrolled up from the
+	// live tail; 0 means following new entries.
+	logScroll int
+
+	// lastGame is the most recently seen game name, used by the restart key.
+	lastGame string
+
 	// Error flash
 	errMsg string
 }
+
+// logScrollStep is how many entries PgUp/PgDn move the log view.
+const logScrollStep = 5
 
 // NewModel creates a new TUI model.
 func NewModel(bots []*Bot) Model {
 	return Model{
 		bots:        bots,
-		logBuf:      NewLogBuffer(100),
+		logBuf:      NewLogBuffer(500),
 		playerNames: make(map[int64]string),
 	}
 }
@@ -103,6 +123,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		bot := m.bots[botIdx]
 		gs := bot.GetGameState()
+		if gs != nil && gs.GameName != "" {
+			m.lastGame = gs.GameName
+		}
 		hasActions := gs != nil && len(gs.ValidActions) > 0 && !bot.AutoPilot
 
 		// If no one is currently the actor and this bot has actions, claim
@@ -129,6 +152,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logBuf.Add("Game ended")
 		return m, nil
 
+	case BotConnMsg:
+		botIdx := m.botIndexByID(msg.BotID)
+		if botIdx < 0 {
+			return m, nil
+		}
+		bot := m.bots[botIdx]
+		if msg.Connected {
+			m.logBuf.Add(fmt.Sprintf("p%d %s: reconnected", bot.ID, bot.Name))
+		} else {
+			m.logBuf.Add(fmt.Sprintf("p%d %s: connection lost, reconnecting...", bot.ID, bot.Name))
+		}
+		return m, nil
+
 	case ErrorMsg:
 		m.errMsg = msg.Message
 		m.logBuf.Add(fmt.Sprintf("ERROR [p%d]: %s", msg.BotID, msg.Message))
@@ -145,6 +181,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle ctrl+c globally
 	if msg.Type == tea.KeyCtrlC {
 		return m, tea.Quit
+	}
+
+	// Help is modal: any key dismisses it
+	if m.showHelp {
+		m.showHelp = false
+		return m, nil
 	}
 
 	// If game select is active, route there
@@ -178,16 +220,108 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.inputMode = inputNone
 		return m, nil
 
+	case tea.KeyPgUp:
+		m.logScroll += logScrollStep
+		if limit := m.logBuf.Len(); m.logScroll > limit {
+			m.logScroll = limit
+		}
+		return m, nil
+
+	case tea.KeyPgDown:
+		m.logScroll -= logScrollStep
+		if m.logScroll < 0 {
+			m.logScroll = 0
+		}
+		return m, nil
+
+	case tea.KeyEnd:
+		m.logScroll = 0
+		return m, nil
+
 	case tea.KeyRunes:
 		if len(msg.Runes) == 1 {
-			r := msg.Runes[0]
-			if r >= '1' && r <= '9' {
-				return m.handleActionKey(int(r - '0'))
-			}
+			return m.handleRuneKey(msg.Runes[0])
 		}
 	}
 
 	return m, nil
+}
+
+// handleRuneKey processes single-character shortcuts in the main view.
+func (m Model) handleRuneKey(r rune) (tea.Model, tea.Cmd) {
+	switch {
+	case r >= '1' && r <= '9':
+		return m.handleActionKey(int(r - '0'))
+
+	case r == '?':
+		m.showHelp = true
+
+	case r == 'd':
+		m.showDashboard = !m.showDashboard
+
+	case r == 'a':
+		m.toggleAutoPilot(m.bots[m.active])
+
+	case r == 'A':
+		allAuto := true
+		for _, b := range m.bots {
+			if !b.AutoPilot {
+				allAuto = false
+				break
+			}
+		}
+		m.setAllAutoPilot(!allAuto)
+
+	case r == 's':
+		speed := cycleSpeed()
+		m.logBuf.Add(fmt.Sprintf("Auto-pilot speed: %s", speed))
+
+	case r == 'g':
+		m.gameSelect = NewGameSelect()
+
+	case r == 'r':
+		if m.lastGame == "" {
+			m.errMsg = "no game to restart yet"
+			return m, nil
+		}
+		m.bots[0].StartGame(m.lastGame)
+		m.logBuf.Add(fmt.Sprintf("Restarting game: %s", formatGameName(m.lastGame)))
+
+	case r == 'T':
+		m.bots[0].TerminateGame()
+		m.logBuf.Add("Terminating game...")
+	}
+
+	return m, nil
+}
+
+// toggleAutoPilot flips auto-pilot for a single bot and kicks it if it has
+// pending actions.
+func (m Model) toggleAutoPilot(b *Bot) {
+	b.AutoPilot = !b.AutoPilot
+	if b.AutoPilot {
+		m.logBuf.Add(fmt.Sprintf("p%d %s: auto-pilot ON", b.ID, b.Name))
+		gs := b.GetGameState()
+		if gs != nil && len(gs.ValidActions) > 0 {
+			go b.doAutoPilot(gs)
+		}
+	} else {
+		m.logBuf.Add(fmt.Sprintf("p%d %s: auto-pilot OFF", b.ID, b.Name))
+	}
+}
+
+// setAllAutoPilot sets auto-pilot for every bot and kicks any with pending
+// actions when enabling.
+func (m Model) setAllAutoPilot(on bool) {
+	for _, b := range m.bots {
+		b.AutoPilot = on
+	}
+	if on {
+		m.logBuf.Add("Auto-pilot enabled for all bots")
+		m.triggerAutoPilot()
+	} else {
+		m.logBuf.Add("Auto-pilot disabled for all bots")
+	}
 }
 
 func (m Model) handleActionKey(num int) (tea.Model, tea.Cmd) {
@@ -336,6 +470,16 @@ func (m Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.overlay.Active = false
 		m.gameSelect = NewGameSelect()
 		return m, nil
+	case action == "terminate":
+		m.overlay.Active = false
+		m.bots[0].TerminateGame()
+		m.logBuf.Add("Terminating game...")
+		return m, nil
+	case action == "cancel-pending":
+		m.overlay.Active = false
+		m.bots[0].CancelGame()
+		m.logBuf.Add("Cancelling pending game...")
+		return m, nil
 	case action == "toggle-all":
 		allAuto := true
 		for _, b := range m.bots {
@@ -344,32 +488,14 @@ func (m Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
-		newState := !allAuto
-		for _, b := range m.bots {
-			b.AutoPilot = newState
-		}
-		if newState {
-			m.logBuf.Add("Auto-pilot enabled for all bots")
-			m.triggerAutoPilot()
-		} else {
-			m.logBuf.Add("Auto-pilot disabled for all bots")
-		}
+		m.setAllAutoPilot(!allAuto)
 		m.overlay = NewOverlay(m.bots) // refresh
 		return m, nil
 	case strings.HasPrefix(action, "toggle:"):
 		idStr := strings.TrimPrefix(action, "toggle:")
 		for _, b := range m.bots {
 			if fmt.Sprintf("%d", b.ID) == idStr {
-				b.AutoPilot = !b.AutoPilot
-				if b.AutoPilot {
-					m.logBuf.Add(fmt.Sprintf("p%d %s: auto-pilot ON", b.ID, b.Name))
-					gs := b.GetGameState()
-					if gs != nil && len(gs.ValidActions) > 0 {
-						go b.doAutoPilot(gs)
-					}
-				} else {
-					m.logBuf.Add(fmt.Sprintf("p%d %s: auto-pilot OFF", b.ID, b.Name))
-				}
+				m.toggleAutoPilot(b)
 				break
 			}
 		}
@@ -387,7 +513,8 @@ func (m Model) handleGameSelectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if gameName != "" {
 		m.gameSelect.Active = false
 		m.bots[0].StartGame(gameName)
-		m.logBuf.Add(fmt.Sprintf("Starting game: %s", gameName))
+		m.lastGame = gameName
+		m.logBuf.Add(fmt.Sprintf("Starting game: %s", formatGameName(gameName)))
 	}
 
 	return m, nil
@@ -410,66 +537,10 @@ func (m Model) View() string {
 		return "Initializing..."
 	}
 
-	innerWidth := m.width - 4 // account for border padding
-
-	// Build sections
-	header := m.renderHeader(innerWidth)
-	hand := m.renderHand(innerWidth)
-	community := m.renderCommunity(innerWidth)
-	actions := m.renderActions(innerWidth)
-	inputView := m.renderInput(innerWidth)
-	logView := m.renderLogSection(innerWidth)
-	statusBar := m.renderStatusBar(innerWidth)
-
-	// Compose main view
-	var sections []string
-	sections = append(sections, header)
-	if hand != "" {
-		sections = append(sections, hand)
+	// Modals take over the whole screen
+	if m.showHelp {
+		return RenderHelp(m.width, m.height)
 	}
-	if community != "" {
-		sections = append(sections, community)
-	}
-	sections = append(sections, actions)
-	if inputView != "" {
-		sections = append(sections, inputView)
-	}
-	if m.errMsg != "" {
-		sections = append(sections, styleError.Render("  Error: "+m.errMsg))
-	}
-
-	mainContent := strings.Join(sections, "\n")
-
-	// Calculate log area height
-	contentLines := strings.Count(mainContent, "\n") + 1
-	statusLines := 1
-	borderLines := 2
-	dividerLines := 1
-	logLines := m.height - contentLines - statusLines - borderLines - dividerLines - 1
-	if logLines < 2 {
-		logLines = 2
-	}
-
-	// Build divider
-	divider := styleLogDivider.Render("├" + strings.Repeat("─", innerWidth) + "┤")
-
-	// Build log content
-	logContent := logView
-	// Truncate/pad log to fill space
-	logActualLines := strings.Count(logContent, "\n") + 1
-	if logActualLines < logLines {
-		logContent += strings.Repeat("\n", logLines-logActualLines)
-	}
-
-	fullContent := mainContent + "\n" + divider + "\n" + logContent
-
-	// Wrap in border
-	bordered := styleBorder.Width(innerWidth + 2).Render(fullContent)
-
-	// Status bar goes below the border
-	result := bordered + "\n" + statusBar
-
-	// If overlay or game select is active, render on top
 	if m.gameSelect.Active {
 		return m.gameSelect.View(m.width, m.height)
 	}
@@ -477,96 +548,178 @@ func (m Model) View() string {
 		return m.overlay.View(m.width, m.height)
 	}
 
-	return result
+	header := m.renderHeaderBar(m.width)
+	tabs := m.renderTabs()
+	footer := m.renderStatusBar(m.width)
+
+	actionsContent := m.renderActionsContent()
+	actionsHeight := lipgloss.Height(actionsContent) + 2
+
+	// header + tabs + footer = 3 lines
+	mainHeight := m.height - 3 - actionsHeight
+	if mainHeight < 5 {
+		mainHeight = 5
+	}
+
+	tableTitle := "Table"
+	if m.showDashboard {
+		tableTitle = "Dashboard"
+	}
+
+	var mainArea string
+	if m.width >= 90 {
+		// Wide: table and log side by side
+		logWidth := m.width * 2 / 5
+		if logWidth > 60 {
+			logWidth = 60
+		}
+		tableWidth := m.width - logWidth
+		tablePanel := panel(tableTitle, m.renderTableContent(tableWidth-4), tableWidth, mainHeight, true)
+		logPanel := panel("Log", m.renderLogContent(mainHeight-2, logWidth-4), logWidth, mainHeight, false)
+		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, tablePanel, logPanel)
+	} else {
+		// Narrow: table stacked above log
+		logHeight := mainHeight * 2 / 5
+		if logHeight < 4 {
+			logHeight = 4
+		}
+		tableHeight := mainHeight - logHeight
+		tablePanel := panel(tableTitle, m.renderTableContent(m.width-4), m.width, tableHeight, true)
+		logPanel := panel("Log", m.renderLogContent(logHeight-2, m.width-4), m.width, logHeight, false)
+		mainArea = tablePanel + "\n" + logPanel
+	}
+
+	bot := m.bots[m.active]
+	actionsTitle := fmt.Sprintf("Actions — p%d %s", bot.ID, bot.Name)
+	actionsPanel := panel(actionsTitle, actionsContent, m.width, actionsHeight, m.inputMode != inputNone)
+
+	return strings.Join([]string{header, tabs, mainArea, actionsPanel, footer}, "\n")
 }
 
-func (m Model) renderHeader(width int) string {
+// renderHeaderBar renders the full-width title bar with the current game and pot.
+func (m Model) renderHeaderBar(width int) string {
 	bot := m.bots[m.active]
 	gs := bot.GetGameState()
 
-	left := styleHeader.Render(fmt.Sprintf("  p%d %s", bot.ID, bot.Name))
+	left := " ♠ MONDAY NIGHT POKER · TESTBOT"
 	if gs != nil && gs.GameName != "" {
-		left += styleSectionLabel.Render(" — " + formatGameName(gs.GameName))
+		left += "  —  " + formatGameName(gs.GameName)
 	}
 
 	right := ""
 	if gs != nil && gs.Pot > 0 {
-		right = stylePot.Render(fmt.Sprintf("Pot: $%d  ", gs.Pot))
+		right = "POT " + formatCents(gs.Pot) + " "
 	}
 
-	// Pad to fill width
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 0 {
 		gap = 0
 	}
 
-	return left + strings.Repeat(" ", gap) + right
+	return styleAppHeader.Render(left + strings.Repeat(" ", gap) + right)
 }
 
-func (m Model) renderHand(width int) string {
-	bot := m.bots[m.active]
-	gs := bot.GetGameState()
-	if gs == nil || len(gs.Hand) == 0 {
-		return ""
+// renderTabs renders one tab per bot; the focused bot is highlighted and
+// bots with pending actions get an alert tab.
+func (m Model) renderTabs() string {
+	parts := make([]string, len(m.bots))
+	for i, b := range m.bots {
+		label := fmt.Sprintf("p%d %s", b.ID, b.Name)
+		gs := b.GetGameState()
+		needsAct := gs != nil && len(gs.ValidActions) > 0 && !b.AutoPilot
+
+		switch {
+		case i == m.active:
+			parts[i] = styleTabActive.Render(label)
+		case needsAct:
+			parts[i] = styleTabAlert.Render(label)
+		default:
+			parts[i] = styleTabInactive.Render(label)
+		}
 	}
 
-	label := styleSectionLabel.Render("  Your Hand:")
-	cards := indentBlock(RenderHand(gs.Hand, width), "  ")
-	return label + "\n" + cards
+	return " " + strings.Join(parts, " ")
 }
 
-func (m Model) renderCommunity(width int) string {
-	bot := m.bots[m.active]
-	gs := bot.GetGameState()
-	if gs == nil || len(gs.Community) == 0 {
-		return ""
+// renderTableContent renders the focused bot's cards (or the dashboard).
+func (m Model) renderTableContent(width int) string {
+	if m.showDashboard {
+		return RenderDashboard(m.bots, m.active)
 	}
 
-	label := styleSectionLabel.Render("  Community:")
-	cards := indentBlock(RenderHand(gs.Community, width), "  ")
-	return label + "\n" + cards
+	bot := m.bots[m.active]
+	gs := bot.GetGameState()
+	if gs == nil {
+		return styleSectionLabel.Render("No game in progress") + "\n\n" +
+			styleFooterHint.Render("Press ") + styleFooterKey.Render("g") + styleFooterHint.Render(" to start a game, or ") +
+			styleFooterKey.Render("?") + styleFooterHint.Render(" for help.")
+	}
+
+	var sections []string
+	if len(gs.Hand) > 0 {
+		sections = append(sections, styleSectionLabel.Render("Your Hand")+"\n"+RenderHand(gs.Hand, width))
+	}
+	if len(gs.Community) > 0 {
+		sections = append(sections, styleSectionLabel.Render("Community")+"\n"+RenderHand(gs.Community, width))
+	}
+	if gs.TrumpCard != nil {
+		sections = append(sections, styleSectionLabel.Render("Trump  ")+RenderHandInline([]CardInfo{*gs.TrumpCard}))
+	}
+	if len(gs.AceyCards) > 0 {
+		sections = append(sections, styleSectionLabel.Render("Board  ")+RenderHandInline(gs.AceyCards))
+	}
+
+	if len(sections) == 0 {
+		return styleSectionLabel.Render("Waiting for cards...")
+	}
+
+	return strings.Join(sections, "\n\n")
 }
 
-func (m Model) renderActions(width int) string {
+// renderLogContent renders the scrollable log for the log panel.
+func (m Model) renderLogContent(lines, width int) string {
+	return RenderLogWindow(m.logBuf, lines, width, m.logScroll)
+}
+
+// renderActionsContent renders the action chips, any active input, and error flash.
+func (m Model) renderActionsContent() string {
 	bot := m.bots[m.active]
 	gs := bot.GetGameState()
 
+	var lines []string
 	if gs == nil || len(gs.ValidActions) == 0 {
 		if bot.AutoPilot {
-			return styleSectionLabel.Render("  Auto-pilot active — waiting for turn...")
+			lines = append(lines, styleStatusAuto.Render("Auto-pilot active — waiting for turn..."))
+		} else {
+			lines = append(lines, styleSectionLabel.Render("Waiting for actions..."))
 		}
-		return styleSectionLabel.Render("  Waiting for actions...")
+	} else {
+		parts := make([]string, len(gs.ValidActions))
+		for i, a := range gs.ValidActions {
+			label := a.Name
+			if (a.Action == actionBet || a.Action == actionRaise || a.NeedsAmount) && gs.MinBet > 0 {
+				label += fmt.Sprintf(" ($%d-$%d)", gs.MinBet, gs.MaxBet)
+			}
+			parts[i] = styleAction.Render(fmt.Sprintf("%d", i+1)) + " " + styleActionLabel.Render(label)
+		}
+		lines = append(lines, strings.Join(parts, "  "))
 	}
 
-	_ = width
-	parts := make([]string, len(gs.ValidActions))
-	for i, a := range gs.ValidActions {
-		key := styleAction.Render(fmt.Sprintf("[%d]", i+1))
-		label := a.Name
-		if (a.Action == actionBet || a.Action == actionRaise || a.NeedsAmount) && gs.MinBet > 0 {
-			label += fmt.Sprintf(" ($%d-$%d)", gs.MinBet, gs.MaxBet)
-		}
-		parts[i] = key + " " + styleActionLabel.Render(label)
-	}
-
-	return "  " + strings.Join(parts, "   ")
-}
-
-func (m Model) renderInput(width int) string {
 	switch m.inputMode {
 	case inputBet:
-		return "  " + m.betInput.View()
+		lines = append(lines, m.betInput.View())
 	case inputCardSelect:
-		return "  " + m.cardSelect.View(width)
+		lines = append(lines, m.cardSelect.View(0))
 	}
-	return ""
+
+	if m.errMsg != "" {
+		lines = append(lines, styleError.Render("✖ "+m.errMsg))
+	}
+
+	return strings.Join(lines, "\n")
 }
 
-func (m Model) renderLogSection(width int) string {
-	logLines := 5 // default
-	return RenderLog(m.logBuf, logLines, width)
-}
-
+// renderStatusBar renders the footer: per-bot status dots and key hints.
 func (m Model) renderStatusBar(width int) string {
 	parts := make([]string, len(m.bots))
 	for i, b := range m.bots {
@@ -574,28 +727,30 @@ func (m Model) renderStatusBar(width int) string {
 		hasActions := gs != nil && len(gs.ValidActions) > 0
 
 		label := fmt.Sprintf("p%d %s", b.ID, b.Name)
-		var status string
-		if i == m.active && hasActions && !b.AutoPilot {
-			status = label + ":▶ACT"
-			parts[i] = styleStatusActive.Render(status)
-		} else if b.AutoPilot {
-			status = label + ":auto"
-			parts[i] = styleStatusAuto.Render(status)
-		} else if hasActions {
-			status = label + ":WAIT"
-			parts[i] = styleStatusActive.Render(status)
-		} else {
-			status = label + ":idle"
-			parts[i] = styleStatusIdle.Render(status)
+		switch {
+		case b.Disconnected():
+			parts[i] = styleError.Render("● " + label + " off")
+		case b.AutoPilot:
+			parts[i] = styleStatusAuto.Render("● " + label + " auto")
+		case hasActions && i == m.active:
+			parts[i] = styleStatusActive.Render("● " + label + " ACT")
+		case hasActions:
+			parts[i] = styleStatusActive.Render("● " + label + " WAIT")
+		default:
+			parts[i] = styleStatusIdle.Render("○ " + label)
 		}
 	}
 
-	bar := " " + strings.Join(parts, " │ ")
+	bar := " " + strings.Join(parts, "  ")
+	right := styleFooterKey.Render("d") + styleFooterHint.Render(" dash · ") +
+		styleFooterKey.Render("g") + styleFooterHint.Render(" game · ") +
+		styleFooterHint.Render(fmt.Sprintf("speed:%s · ", currentSpeed())) +
+		styleFooterKey.Render("?:help") + " "
 
-	// Pad to width
-	gap := width - lipgloss.Width(bar)
+	// Pad between left and right
+	gap := width - lipgloss.Width(bar) - lipgloss.Width(right)
 	if gap > 0 {
-		bar += strings.Repeat(" ", gap)
+		bar += strings.Repeat(" ", gap) + right
 	}
 
 	return bar
@@ -765,13 +920,4 @@ func formatCents(cents int) string {
 		s = "-" + s
 	}
 	return s
-}
-
-// indentBlock prepends prefix to every line of a multi-line string.
-func indentBlock(s, prefix string) string {
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = prefix + line
-	}
-	return strings.Join(lines, "\n")
 }

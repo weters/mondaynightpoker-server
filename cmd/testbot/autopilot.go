@@ -54,9 +54,8 @@ func AutoPilotAction(gs *GameState) *outgoingMessage {
 		return nil
 	}
 
-	// Random delay to simulate thinking
-	delay := time.Duration(500+cryptoIntn(1500)) * time.Millisecond
-	time.Sleep(delay)
+	// Random delay to simulate thinking, scaled by the current speed setting
+	time.Sleep(currentSpeed().delay())
 
 	switch gs.GameName {
 	case gameTexasHoldEm, gameTexasHoldEmPLO, gameSevenCard, gameLittleL:

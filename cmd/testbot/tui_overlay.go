@@ -25,6 +25,8 @@ type OverlayModel struct {
 func NewOverlay(bots []*Bot) OverlayModel {
 	items := []overlayItem{
 		{Label: "Start Game", Action: "start"},
+		{Label: "Terminate Game", Action: "terminate"},
+		{Label: "Cancel Pending Game", Action: "cancel-pending"},
 	}
 
 	// Add per-bot autopilot toggles
@@ -92,7 +94,7 @@ func (m OverlayModel) Update(msg tea.KeyMsg) (OverlayModel, string) {
 
 // View renders the overlay menu centered on screen.
 func (m OverlayModel) View(width, height int) string {
-	title := styleOverlayTitle.Render("  Menu  ")
+	title := styleOverlayTitle.Render(" Menu ")
 
 	lines := make([]string, len(m.Items))
 	for i, item := range m.Items {
@@ -103,7 +105,8 @@ func (m OverlayModel) View(width, height int) string {
 		}
 	}
 
-	content := title + "\n\n" + strings.Join(lines, "\n")
+	hint := styleOverlayHint.Render("↑/↓ move · enter select · esc close")
+	content := title + "\n\n" + strings.Join(lines, "\n") + "\n\n" + hint
 	box := styleOverlayBorder.Render(content)
 
 	// Center the overlay
@@ -165,6 +168,15 @@ func (m GameSelectModel) Update(msg tea.KeyMsg) (GameSelectModel, string) {
 			return m, m.Items[m.Cursor].Name
 		}
 		return m, ""
+	case tea.KeyRunes:
+		// Digit keys pick a game directly
+		if len(msg.Runes) == 1 {
+			r := msg.Runes[0]
+			if idx := int(r - '1'); r >= '1' && r <= '9' && idx < len(m.Items) {
+				return m, m.Items[idx].Name
+			}
+		}
+		return m, ""
 	default:
 		return m, ""
 	}
@@ -172,18 +184,20 @@ func (m GameSelectModel) Update(msg tea.KeyMsg) (GameSelectModel, string) {
 
 // View renders the game selection menu.
 func (m GameSelectModel) View(width, height int) string {
-	title := styleOverlayTitle.Render("  Select a Game  ")
+	title := styleOverlayTitle.Render(" Select a Game ")
 
 	lines := make([]string, len(m.Items))
 	for i, item := range m.Items {
+		key := styleFooterKey.Render(fmt.Sprintf("%d", i+1))
 		if i == m.Cursor {
-			lines[i] = styleOverlaySelected.Render("▸ " + item.Label)
+			lines[i] = styleOverlaySelected.Render("▸ ") + key + styleOverlaySelected.Render(" "+item.Label)
 		} else {
-			lines[i] = styleOverlayItem.Render("  " + item.Label)
+			lines[i] = "  " + key + styleOverlayItem.Render(" "+item.Label)
 		}
 	}
 
-	content := title + "\n\n" + strings.Join(lines, "\n")
+	hint := styleOverlayHint.Render("1-9 quick pick · enter select · esc close")
+	content := title + "\n\n" + strings.Join(lines, "\n") + "\n\n" + hint
 	box := styleOverlayBorder.Render(content)
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
