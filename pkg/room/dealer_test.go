@@ -3,13 +3,14 @@ package room
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/model"
 )
 
 func TestDealer_AddClient(t *testing.T) {
-	d := NewDealer(&PitBoss{}, &model.Table{})
+	d := NewDealer(NewPitBoss(testStore, PitBossOptions{StartGameDelay: time.Second}), &model.Table{})
 	d.StartShift()
 	defer d.EndShift()
 
@@ -27,7 +28,7 @@ func TestDealer_AddClient(t *testing.T) {
 // loop iterates the clients map. Run with -race; fails if the map is mutated outside
 // the run loop.
 func TestDealer_clientChurnRace(t *testing.T) {
-	d := NewDealer(&PitBoss{}, &model.Table{})
+	d := NewDealer(NewPitBoss(testStore, PitBossOptions{StartGameDelay: time.Second}), &model.Table{})
 	d.StartShift()
 
 	done := make(chan bool)

@@ -3,9 +3,12 @@ package main
 import (
 	"database/sql"
 	"flag"
-	"github.com/sirupsen/logrus"
-	"mondaynightpoker-server/pkg/db"
 	"time"
+
+	"mondaynightpoker-server/internal/config"
+	"mondaynightpoker-server/pkg/db"
+
+	"github.com/sirupsen/logrus"
 )
 
 var version = flag.Int("v", -1, "version to migrate to (if not specified, migrate up)")
@@ -13,29 +16,34 @@ var version = flag.Int("v", -1, "version to migrate to (if not specified, migrat
 func main() {
 	flag.Parse()
 
-	waitForDB()
+	cfg, err := config.Load()
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load configuration")
+	}
+
+	database := waitForDB(cfg.Database.DSN)
 
 	if *version >= 0 {
-		db.MigrateTo(uint(*version))
+		err = db.MigrateTo(database, cfg.Database.MigrationsPath, uint(*version))
 	} else {
-		db.Migrate()
+		err = db.Migrate(database, cfg.Database.MigrationsPath)
+	}
+
+	if err != nil {
+		logrus.WithError(err).Fatal("could not run migrations")
 	}
 }
 
-func waitForDB() {
+func waitForDB(dsn string) *sql.DB {
 	timeout := time.NewTimer(time.Second * 10)
 	for {
 		select {
 		case <-timeout.C:
 			logrus.Fatal("could not connect to database")
+			return nil
 		default:
-			dbh := func() *sql.DB {
-				defer func() { _ = recover() }()
-				return db.Instance()
-			}()
-
-			if dbh != nil {
-				return
+			if database, err := db.Connect(dsn); err == nil {
+				return database
 			}
 
 			time.Sleep(time.Millisecond * 500)

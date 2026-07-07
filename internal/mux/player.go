@@ -6,15 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"mondaynightpoker-server/internal/config"
-	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/badoux/checkmail"
 	"github.com/gorilla/mux"
@@ -66,13 +65,13 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 		}
 
 		addr := remoteAddr(r)
-		at, err := model.LastPlayerCreatedAt(r.Context(), addr)
+		at, err := m.repos.Players.LastPlayerCreatedAt(r.Context(), addr)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
 		}
 
-		playerCreateDelay := time.Second * time.Duration(config.Instance().PlayerCreateDelay)
+		playerCreateDelay := time.Second * time.Duration(m.cfg.PlayerCreateDelay)
 		if time.Since(at) < playerCreateDelay {
 			writeJSONError(w, http.StatusBadRequest, errors.New("please wait before creating another player"))
 			return
@@ -85,7 +84,7 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			displayName = util.GetRandomName()
 		}
 
-		player, err := model.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, addr)
+		player, err := m.repos.Players.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, addr)
 		if err != nil {
 			if err == model.ErrDuplicateKey {
 				writeJSONError(w, http.StatusBadRequest, errors.New("email address is already taken"))
@@ -96,7 +95,7 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 			return
 		}
 
-		verifyToken, err := player.CreateAccountVerificationToken(context.Background())
+		verifyToken, err := m.repos.Players.CreateAccountVerificationToken(context.Background(), player)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, err)
 			return
@@ -112,14 +111,14 @@ func (m *Mux) postPlayer() http.HandlerFunc {
 }
 
 func (m *Mux) sendAccountVerificationEmail(player *model.Player, verifyToken string) {
-	if config.Instance().Email.Disable {
+	if m.cfg.Email.Disable {
 		return
 	}
 
 	log := logrus.WithField("playerId", player.ID)
 
 	body, err := m.emailTemplates.RenderTemplate("verify_account.html", map[string]string{
-		"url":   fmt.Sprintf("%s/verify-account/%s", config.Instance().Host, verifyToken),
+		"url":   fmt.Sprintf("%s/verify-account/%s", m.cfg.Host, verifyToken),
 		"email": player.Email,
 	})
 
@@ -202,7 +201,7 @@ func (m *Mux) postPlayerID() http.HandlerFunc {
 		}
 
 		if update {
-			if err := player.Save(r.Context()); err != nil {
+			if err := m.repos.Players.Save(r.Context(), player); err != nil {
 				writeJSONError(w, http.StatusInternalServerError, err)
 				return
 			}
@@ -227,7 +226,7 @@ func (m *Mux) deletePlayerID() http.HandlerFunc {
 			return
 		}
 
-		if err := player.Delete(r.Context()); err != nil {
+		if err := m.repos.Players.Delete(r.Context(), player); err != nil {
 			writeJSON(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -248,7 +247,7 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 			return
 		}
 
-		player, err := model.GetPlayerByEmailAndPassword(r.Context(), pp.Email, pp.Password)
+		player, err := m.repos.Players.GetPlayerByEmailAndPassword(r.Context(), pp.Email, pp.Password)
 		if err != nil {
 			var ue model.UserError
 			if errors.As(err, &ue) {
@@ -260,7 +259,7 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 			return
 		}
 
-		signedToken, err := jwt.Sign(player.ID)
+		signedToken, err := m.tokens.Sign(player.ID)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -279,13 +278,13 @@ func (m *Mux) postPlayerAuth() http.HandlerFunc {
 func (m *Mux) getPlayerAuthJWT() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		signedToken := mux.Vars(r)["jwt"]
-		userID, err := jwt.ValidUserID(signedToken)
+		userID, err := m.tokens.ValidUserID(signedToken)
 		if err != nil {
 			writeJSONError(w, http.StatusUnauthorized, err)
 			return
 		}
 
-		player, err := model.GetPlayerByID(r.Context(), userID)
+		player, err := m.repos.Players.GetPlayerByID(r.Context(), userID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				writeJSONError(w, http.StatusNotFound, errors.New("player does not exist"))
@@ -311,7 +310,7 @@ func (m *Mux) getPlayer() http.HandlerFunc {
 			return
 		}
 
-		players, err := model.GetPlayersWithSearch(r.Context(), r.FormValue("search"), offset, limit)
+		players, err := m.repos.Players.GetPlayersWithSearch(r.Context(), r.FormValue("search"), offset, limit)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -337,7 +336,7 @@ type adminPostPlayerIDRequest struct {
 func (m *Mux) postAdminPlayerID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-		player, err := model.GetPlayerByID(r.Context(), playerID)
+		player, err := m.repos.Players.GetPlayerByID(r.Context(), playerID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				writeJSONError(w, http.StatusNotFound, nil)
@@ -372,7 +371,7 @@ func (m *Mux) postAdminPlayerID() http.HandlerFunc {
 				return
 			}
 
-			if err := player.Save(r.Context()); err != nil {
+			if err := m.repos.Players.Save(r.Context(), player); err != nil {
 				writeJSONError(w, http.StatusInternalServerError, err)
 				return
 			}
@@ -401,22 +400,22 @@ func (m *Mux) postPlayerResetPasswordRequest() http.HandlerFunc {
 			return
 		}
 
-		if player, _ := model.GetPlayerByEmail(r.Context(), payload.Email); player != nil {
-			token, err := player.CreatePasswordResetRequest(r.Context())
+		if player, _ := m.repos.Players.GetPlayerByEmail(r.Context(), payload.Email); player != nil {
+			token, err := m.repos.Players.CreatePasswordResetRequest(r.Context(), player)
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, err)
 				return
 			}
 
 			go func() {
-				if config.Instance().Email.Disable {
+				if m.cfg.Email.Disable {
 					return
 				}
 
 				data := map[string]string{
-					"url":   fmt.Sprintf("%s/reset-password/%s", config.Instance().Host, token),
+					"url":   fmt.Sprintf("%s/reset-password/%s", m.cfg.Host, token),
 					"email": player.Email,
-					"host":  config.Instance().Host,
+					"host":  m.cfg.Host,
 				}
 
 				msg, err := m.emailTemplates.RenderTemplate("password_reset.html", data)
@@ -441,7 +440,7 @@ func (m *Mux) postPlayerResetPasswordRequest() http.HandlerFunc {
 func (m *Mux) getPlayerResetPasswordToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := mux.Vars(r)["token"]
-		if err := model.IsPasswordResetTokenValid(r.Context(), token); err != nil {
+		if err := m.repos.Players.IsPasswordResetTokenValid(r.Context(), token); err != nil {
 			writeJSONError(w, http.StatusNotFound, nil)
 			return
 		}
@@ -464,7 +463,7 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 			return
 		}
 
-		if err := model.IsPasswordResetTokenValid(r.Context(), token); err != nil {
+		if err := m.repos.Players.IsPasswordResetTokenValid(r.Context(), token); err != nil {
 			writeJSONError(w, http.StatusNotFound, nil)
 			return
 		}
@@ -479,7 +478,7 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 			return
 		}
 
-		player, err := model.GetPlayerByEmail(r.Context(), payload.Email)
+		player, err := m.repos.Players.GetPlayerByEmail(r.Context(), payload.Email)
 		if err != nil {
 			if err != sql.ErrNoRows {
 				writeJSONError(w, http.StatusInternalServerError, err)
@@ -489,7 +488,7 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 			return
 		}
 
-		if err := player.ResetPassword(r.Context(), payload.Password, token); err != nil {
+		if err := m.repos.Players.ResetPassword(r.Context(), player, payload.Password, token); err != nil {
 			writeJSONError(w, http.StatusBadRequest, nil)
 			return
 		}
@@ -501,7 +500,7 @@ func (m *Mux) postPlayerResetPasswordToken() http.HandlerFunc {
 func (m *Mux) postPlayerVerifyAccountToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := mux.Vars(r)["token"]
-		if err := model.VerifyAccount(r.Context(), token); err != nil {
+		if err := m.repos.Players.VerifyAccount(r.Context(), token); err != nil {
 			if errors.Is(err, model.ErrTokenExpired) {
 				writeJSONError(w, http.StatusBadRequest, err)
 			} else {
@@ -548,7 +547,7 @@ func (m *Mux) postAdminTestPlayer() http.HandlerFunc {
 			displayName = util.GetRandomName()
 		}
 
-		player, err := model.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, "")
+		player, err := m.repos.Players.CreatePlayer(r.Context(), pp.Email, displayName, pp.Password, "")
 		if err != nil {
 			if err == model.ErrDuplicateKey {
 				writeJSONError(w, http.StatusBadRequest, errors.New("email address is already taken"))
@@ -560,7 +559,7 @@ func (m *Mux) postAdminTestPlayer() http.HandlerFunc {
 		}
 
 		player.Status = model.PlayerStatusVerified
-		if err := player.Save(r.Context()); err != nil {
+		if err := m.repos.Players.Save(r.Context(), player); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -575,18 +574,18 @@ func (m *Mux) postAdminTestPlayer() http.HandlerFunc {
 func (m *Mux) getPlayerProfile() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		player := r.Context().Value(ctxPlayerKey).(*model.Player)
-		writePlayerProfile(w, r, player.ID)
+		m.writePlayerProfile(w, r, player.ID)
 	}
 }
 
 func (m *Mux) getPlayerIDProfile() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playerID, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-		writePlayerProfile(w, r, playerID)
+		m.writePlayerProfile(w, r, playerID)
 	}
 }
 
-func writePlayerProfile(w http.ResponseWriter, r *http.Request, playerID int64) {
+func (m *Mux) writePlayerProfile(w http.ResponseWriter, r *http.Request, playerID int64) {
 	start, rows, err := parsePaginationOptions(r, 1000)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
@@ -614,7 +613,7 @@ func writePlayerProfile(w http.ResponseWriter, r *http.Request, playerID int64) 
 		to = parsed.In(time.UTC)
 	}
 
-	profile, err := model.GetPlayerProfile(r.Context(), playerID, from, to, start, rows)
+	profile, err := m.repos.Players.GetPlayerProfile(r.Context(), playerID, from, to, start, rows)
 	if err != nil {
 		writeMaybeNotFoundError(w, err)
 		return

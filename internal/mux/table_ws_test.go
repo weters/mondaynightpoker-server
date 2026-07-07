@@ -2,7 +2,6 @@ package mux
 
 import (
 	"net/http"
-	"os"
 	"testing"
 
 	"mondaynightpoker-server/internal/config"
@@ -12,13 +11,10 @@ import (
 )
 
 func Test_checkOrigin(t *testing.T) {
-	// restore the config singleton after the test (runs after t.Setenv restores the env)
-	t.Cleanup(func() {
-		_ = config.Load()
-	})
-
-	t.Setenv("MNP_ALLOWED_ORIGINS", "https://example.com,http://localhost:8080")
-	require.NoError(t, config.Load())
+	m := &Mux{cfg: config.Config{
+		Host:           "https://mondaynight.bid",
+		AllowedOrigins: []string{"https://example.com", "http://localhost:8080"},
+	}}
 
 	testCases := []struct {
 		name    string
@@ -43,32 +39,21 @@ func Test_checkOrigin(t *testing.T) {
 				r.Header.Set("Origin", tc.origin)
 			}
 
-			assert.Equal(t, tc.allowed, checkOrigin(r))
+			assert.Equal(t, tc.allowed, m.checkOrigin(r))
 		})
 	}
 }
 
 func Test_checkOrigin_fallsBackToHost(t *testing.T) {
-	t.Cleanup(func() {
-		_ = config.Load()
-	})
-
-	if orig, ok := os.LookupEnv("MNP_ALLOWED_ORIGINS"); ok {
-		_ = os.Unsetenv("MNP_ALLOWED_ORIGINS")
-		t.Cleanup(func() {
-			_ = os.Setenv("MNP_ALLOWED_ORIGINS", orig)
-		})
-	}
-
-	t.Setenv("MNP_HOST", "https://mondaynight.bid")
-	require.NoError(t, config.Load())
+	// with no AllowedOrigins configured, only Host is allowed
+	m := &Mux{cfg: config.Config{Host: "https://mondaynight.bid"}}
 
 	r, err := http.NewRequest(http.MethodGet, "/table/uuid/ws", nil)
 	require.NoError(t, err)
 
 	r.Header.Set("Origin", "https://mondaynight.bid")
-	assert.True(t, checkOrigin(r))
+	assert.True(t, m.checkOrigin(r))
 
 	r.Header.Set("Origin", "https://other.example.com")
-	assert.False(t, checkOrigin(r))
+	assert.False(t, m.checkOrigin(r))
 }

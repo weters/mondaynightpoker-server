@@ -11,7 +11,7 @@ import (
 // dealer (which legitimately happens when the dealer was already retired) does not
 // terminate the pit boss run loop.
 func TestPitBoss_survivesUnknownDisconnect(t *testing.T) {
-	pb := NewPitBoss()
+	pb := NewPitBoss(testStore, PitBossOptions{StartGameDelay: time.Second})
 	pb.StartShift()
 
 	orphan := NewClient(nil, &model.Player{ID: 1}, &model.Table{UUID: "unknown-table"})

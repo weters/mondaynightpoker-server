@@ -7,35 +7,35 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/model"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMux_getAdminTable(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
 	p1, j1 := player()
 
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	assertGet(t, ts, "/admin/table", nil, http.StatusForbidden, j1)
 
 	p1.IsSiteAdmin = true
-	a.NoError(p1.Save(cbg))
+	a.NoError(testRepos.Players.Save(cbg, p1))
 
 	var err errorResponse
 	assertGet(t, ts, "/admin/table?rows=0", &err, http.StatusBadRequest, j1)
 	a.Equal("rows must be greater than zero", err.Message)
 
 	for i := 0; i < 5; i++ {
-		tbl, err := p1.CreateTable(cbg, fmt.Sprintf("Table %d", i))
+		tbl, err := testRepos.Tables.CreateTable(cbg, p1, fmt.Sprintf("Table %d", i))
 		a.NoError(err)
 
 		if i == 4 {
 			tbl.Deleted = true
-			a.NoError(tbl.Save(cbg))
+			a.NoError(testRepos.Tables.Save(cbg, tbl))
 		}
 	}
 
@@ -51,16 +51,15 @@ func TestMux_getAdminTable(t *testing.T) {
 func TestMux_adminPostTableUUID(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
 	player, jwt := player()
 
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	player.IsSiteAdmin = true
-	a.NoError(player.Save(cbg))
+	a.NoError(testRepos.Players.Save(cbg, player))
 
-	table, err := player.CreateTable(cbg, "Test Table")
+	table, err := testRepos.Tables.CreateTable(cbg, player, "Test Table")
 	a.NoError(err)
 	a.False(table.Deleted)
 
@@ -68,7 +67,7 @@ func TestMux_adminPostTableUUID(t *testing.T) {
 	assertPost(t, ts, fmt.Sprintf("/admin/table/%s", table.UUID), postAdminTableUUIDPayload{true}, &resp, http.StatusOK, jwt)
 	a.True(resp.Deleted)
 
-	table2, err := model.GetTableByUUID(cbg, table.UUID)
+	table2, err := testRepos.Tables.GetTableByUUID(cbg, table.UUID)
 	a.True(table2.Deleted)
 	a.NoError(err)
 

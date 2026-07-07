@@ -4,15 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"mondaynightpoker-server/internal/config"
-	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
-	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/mnptoken"
 	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -37,12 +33,10 @@ func (m *mockRecaptcha) Verify(token string) error {
 }
 
 func Test_postPlayer(t *testing.T) {
-	unset := util.SetEnv("MNP_PLAYER_CREATE_DELAY", "-1")
-	defer unset()
+	deps := testDeps()
+	deps.Config.PlayerCreateDelay = 0
 
-	assert.NoError(t, config.Load())
-
-	m := NewMux("")
+	m := NewMux(deps)
 	mr := newMockRecaptcha(false)
 	m.recaptcha = mr
 
@@ -117,13 +111,17 @@ func Test_postPlayer(t *testing.T) {
 	assert.Equal(t, email, pObj.Email)
 	assert.Equal(t, "Tommy", pObj.DisplayName)
 
-	unset2 := util.SetEnv("MNP_PLAYER_CREATE_DELAY", "3600")
-	defer unset2()
+	// a second server with a long create delay must reject the request because a
+	// player was just created above from the same remote address
+	delayDeps := testDeps()
+	delayDeps.Config.PlayerCreateDelay = 3600
+	delayDeps.Recaptcha = newMockRecaptcha(true)
 
-	assert.NoError(t, config.Load())
+	ts2 := httptest.NewServer(NewMux(delayDeps))
+	defer ts2.Close()
 
 	obj = errorResponse{}
-	assertPost(t, ts, "/player", postPlayerPayload{
+	assertPost(t, ts2, "/player", postPlayerPayload{
 		Email:    util.RandomEmail(),
 		Password: "123456",
 	}, &obj, 400)
@@ -131,13 +129,12 @@ func Test_postPlayer(t *testing.T) {
 }
 
 func Test_postPlayerID(t *testing.T) {
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	player, j := player()
 	player.Status = model.PlayerStatusVerified
-	assert.NoError(t, player.Save(cbg))
+	assert.NoError(t, testRepos.Players.Save(cbg, player))
 
 	// playerID must match
 	var errResp errorResponse
@@ -153,7 +150,7 @@ func Test_postPlayerID(t *testing.T) {
 	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), payload, &resp, http.StatusOK, j)
 	assert.Equal(t, "OK", resp["status"])
 
-	p, _ := model.GetPlayerByID(context.Background(), player.ID)
+	p, _ := testRepos.Players.GetPlayerByID(context.Background(), player.ID)
 	assert.Equal(t, "TEST", p.DisplayName)
 	assert.Equal(t, newEmail, p.Email)
 
@@ -180,37 +177,33 @@ func Test_postPlayerID(t *testing.T) {
 	assert.Equal(t, "old password does not match", errResp.Message)
 
 	assertPost(t, ts, fmt.Sprintf("/player/%d", player.ID), postPlayerIDPayload{NewPassword: "good-password", OldPassword: "password"}, nil, http.StatusOK, j)
-	newPlayer, err := model.GetPlayerByEmailAndPassword(context.Background(), newEmail, "good-password")
+	newPlayer, err := testRepos.Players.GetPlayerByEmailAndPassword(context.Background(), newEmail, "good-password")
 	assert.NoError(t, err)
 	assert.NotNil(t, newPlayer)
 }
 
 func Test_postPlayerAuth(t *testing.T) {
-	os.Setenv("MNP_JWT_PUBLIC_KEY", "testdata/public.pem")
-	os.Setenv("MNP_JWT_PRIVATE_KEY", "testdata/private.key")
-	jwt.LoadKeys()
-
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	email := util.RandomEmail()
 	pw := "my-password"
 
-	player, err := model.CreatePlayer(context.Background(), email, email, pw, "")
+	player, err := testRepos.Players.CreatePlayer(context.Background(), email, email, pw, "")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	player.Status = model.PlayerStatusVerified
-	_ = player.Save(cbg)
+	_ = testRepos.Players.Save(cbg, player)
 
 	var resp postPlayerAuthResponse
 	assertPost(t, ts, "/player/auth", postPlayerPayload{
 		Email:    email,
 		Password: pw,
 	}, &resp, 200)
-	id, err := jwt.ValidUserID(resp.JWT)
+	id, err := testSigner.ValidUserID(resp.JWT)
 	assert.NoError(t, err)
 	assert.Equal(t, player.ID, id)
 	assert.Equal(t, email, player.Email)
@@ -221,11 +214,7 @@ func Test_postPlayerAuth(t *testing.T) {
 }
 
 func Test_getPlayerAuthJWT_BadRequests(t *testing.T) {
-	os.Setenv("JWT_PUBLIC_KEY", "testdata/public.pem")
-	os.Setenv("JWT_PRIVATE_KEY", "testdata/private.key")
-	jwt.LoadKeys()
-
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	var errObj errorResponse
@@ -233,17 +222,17 @@ func Test_getPlayerAuthJWT_BadRequests(t *testing.T) {
 	assert.Equal(t, "token is malformed: token contains an invalid number of segments", errObj.Message)
 
 	// this should only happen if user is deleted from database
-	signedToken, _ := jwt.Sign(-1)
+	signedToken, _ := testSigner.Sign(-1)
 	errObj = errorResponse{}
 	assertGet(t, ts, fmt.Sprintf("/player/auth/%s", signedToken), &errObj, 404)
 	assert.Equal(t, "player does not exist", errObj.Message)
 }
 
 func Test_postPlayerAuth_BadCreds(t *testing.T) {
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 
 	email := util.RandomEmail()
-	_, err := model.CreatePlayer(context.Background(), email, email, "my-password", "")
+	_, err := testRepos.Players.CreatePlayer(context.Background(), email, email, "my-password", "")
 	if err != nil {
 		t.Error(err)
 		return
@@ -258,12 +247,11 @@ func Test_postPlayerAuth_BadCreds(t *testing.T) {
 }
 
 func Test_getPlayers(t *testing.T) {
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p1, j1 := player()
-	_ = p1.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), p1, true)
 
 	_, j2 := player()
 	_, _ = player()
@@ -291,26 +279,25 @@ func Test_getPlayers(t *testing.T) {
 func TestMux_getPlayerProfile(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p, _ := player()
-	_ = p.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), p, true)
 
 	for i := 1; i <= 3; i++ {
-		tbl, _ := p.CreateTable(context.Background(), fmt.Sprintf("Profile Test %d", i))
+		tbl, _ := testRepos.Tables.CreateTable(context.Background(), p, fmt.Sprintf("Profile Test %d", i))
 
-		game, _ := tbl.CreateGame(context.Background(), "Bourré")
-		_ = game.EndGame(context.Background(), nil, map[int64]int{
+		game, _ := testRepos.Games.CreateGame(context.Background(), tbl, "Bourré")
+		_ = testRepos.Games.EndGame(context.Background(), game, nil, map[int64]int{
 			p.ID: i * 100,
 		})
 	}
 
 	// remove site admin so we test as a regular user
-	_ = p.SetIsSiteAdmin(context.Background(), false)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), p, false)
 
-	j, _ := jwt.Sign(p.ID)
+	j, _ := testSigner.Sign(p.ID)
 
 	// player can view own profile
 	var profile model.PlayerProfile
@@ -343,28 +330,27 @@ func TestMux_getPlayerProfile(t *testing.T) {
 func TestMux_getPlayerIDProfile(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p, _ := player()
 	p2, _ := player()
 
-	_ = p.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), p, true)
 
 	for i := 1; i <= 3; i++ {
-		tbl, _ := p.CreateTable(context.Background(), fmt.Sprintf("Profile Test %d", i))
-		_, _ = p2.Join(context.Background(), tbl)
+		tbl, _ := testRepos.Tables.CreateTable(context.Background(), p, fmt.Sprintf("Profile Test %d", i))
+		_, _ = testRepos.Tables.Join(context.Background(), p2, tbl)
 
-		game, _ := tbl.CreateGame(context.Background(), "Bourré")
-		_ = game.EndGame(context.Background(), nil, map[int64]int{
+		game, _ := testRepos.Games.CreateGame(context.Background(), tbl, "Bourré")
+		_ = testRepos.Games.EndGame(context.Background(), game, nil, map[int64]int{
 			p.ID:  i * 100,
 			p2.ID: -1 * i * 100,
 		})
 	}
 
-	j, _ := jwt.Sign(p.ID)
-	j2, _ := jwt.Sign(p2.ID)
+	j, _ := testSigner.Sign(p.ID)
+	j2, _ := testSigner.Sign(p2.ID)
 
 	// admin can view any profile
 	path := fmt.Sprintf("/player/%d/profile", p.ID)
@@ -412,12 +398,11 @@ func TestMux_getPlayerIDProfile(t *testing.T) {
 func TestMux_postAdminTestPlayer(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	admin, adminJWT := player()
-	_ = admin.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), admin, true)
 
 	_, nonAdminJWT := player()
 
@@ -453,7 +438,7 @@ func TestMux_postAdminTestPlayer(t *testing.T) {
 	a.Equal(email, resp.Email)
 
 	// verify the player is actually verified (can log in)
-	p, err := model.GetPlayerByEmailAndPassword(context.Background(), email, "123456")
+	p, err := testRepos.Players.GetPlayerByEmailAndPassword(context.Background(), email, "123456")
 	a.NoError(err)
 	a.NotNil(p)
 	a.Equal(model.PlayerStatusVerified, p.Status)
@@ -468,7 +453,7 @@ func TestMux_postAdminTestPlayer(t *testing.T) {
 	}, &resp2, http.StatusCreated, adminJWT)
 	a.Greater(resp2.PlayerID, int64(0))
 
-	p2, err := model.GetPlayerByID(context.Background(), resp2.PlayerID)
+	p2, err := testRepos.Players.GetPlayerByID(context.Background(), resp2.PlayerID)
 	a.NoError(err)
 	a.NotEmpty(p2.DisplayName)
 
@@ -484,19 +469,18 @@ func TestMux_postAdminTestPlayer(t *testing.T) {
 func TestMux_postAdminPlayerID(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p1, j1 := player()
 	p2, j2 := player()
 
 	p1.Status = model.PlayerStatusVerified
-	a.NoError(p1.Save(cbg))
+	a.NoError(testRepos.Players.Save(cbg, p1))
 
-	_ = p1.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), p1, true)
 
-	_, err := model.GetPlayerByEmailAndPassword(cbg, p1.Email, "new-pw")
+	_, err := testRepos.Players.GetPlayerByEmailAndPassword(cbg, p1.Email, "new-pw")
 	a.EqualError(err, "invalid email address and/or password")
 
 	var respObj map[string]string
@@ -507,7 +491,7 @@ func TestMux_postAdminPlayerID(t *testing.T) {
 	a.Equal("OK", respObj["status"])
 
 	// verify password is changed
-	_, err = model.GetPlayerByEmailAndPassword(cbg, p1.Email, "new-pw")
+	_, err = testRepos.Players.GetPlayerByEmailAndPassword(cbg, p1.Email, "new-pw")
 	a.NoError(err)
 
 	respObj = map[string]string{}
@@ -533,8 +517,7 @@ func TestMux_postAdminPlayerID(t *testing.T) {
 func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 	a := assert.New(t)
 
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	var er errorResponse
@@ -545,9 +528,9 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 	assertPost(t, ts, "/player/reset-password-request", postPlayerResetPasswordRequestPayload{Email: p.Email}, nil, http.StatusOK)
 
 	p.Status = model.PlayerStatusVerified
-	_ = p.Save(cbg)
+	_ = testRepos.Players.Save(cbg, p)
 
-	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
+	row := testDB.QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 ORDER BY created DESC LIMIT 1", p.ID)
 	var resetToken string
 	a.NoError(row.Scan(&resetToken))
 
@@ -599,10 +582,9 @@ func TestMux_postPlayerResetPasswordRequest(t *testing.T) {
 func TestMux_accountVerification(t *testing.T) {
 	a := assert.New(t)
 
-	m := NewMux("")
+	m := NewMux(testDeps())
 	m.recaptcha = newMockRecaptcha(true)
 
-	setupJWT()
 	ts := httptest.NewServer(m)
 	defer ts.Close()
 
@@ -621,10 +603,10 @@ func TestMux_accountVerification(t *testing.T) {
 	}, &er, http.StatusUnauthorized)
 	a.Equal("account not verified", er.Message)
 
-	player, err := model.GetPlayerByEmail(context.Background(), email)
+	player, err := testRepos.Players.GetPlayerByEmail(context.Background(), email)
 	a.NoError(err)
 
-	row := db.Instance().QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 AND type = 'account_verification'", player.ID)
+	row := testDB.QueryRow("SELECT token FROM player_tokens WHERE player_id = $1 AND type = 'account_verification'", player.ID)
 	var verifyToken string
 	a.NoError(row.Scan(&verifyToken))
 
@@ -642,18 +624,16 @@ func TestMux_accountVerification(t *testing.T) {
 }
 
 func TestMux_deletePlayerID(t *testing.T) {
-	setupJWT()
-
 	p1, j1 := player()
 	_, j2 := player()
 
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	assertDelete(t, ts, fmt.Sprintf("/player/%d", p1.ID), nil, http.StatusForbidden, j2)
 	assertDelete(t, ts, fmt.Sprintf("/player/%d", p1.ID), nil, http.StatusOK, j1)
 
-	p, err := model.GetPlayerByID(cbg, p1.ID)
+	p, err := testRepos.Players.GetPlayerByID(cbg, p1.ID)
 	a := assert.New(t)
 	a.NoError(err)
 	a.NotEqual(p1.Email, p.Email)

@@ -2,14 +2,18 @@ package main
 
 import (
 	"flag"
-	"mondaynightpoker-server/internal/config"
-	"mondaynightpoker-server/internal/jwt"
-	"mondaynightpoker-server/internal/mux"
-	"mondaynightpoker-server/pkg/db"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"mondaynightpoker-server/internal/config"
+	"mondaynightpoker-server/internal/email"
+	"mondaynightpoker-server/internal/jwt"
+	"mondaynightpoker-server/internal/mux"
+	"mondaynightpoker-server/pkg/db"
+	"mondaynightpoker-server/pkg/model"
+	"mondaynightpoker-server/pkg/room"
 
 	"github.com/gorilla/handlers"
 	"github.com/rs/cors"
@@ -19,6 +23,9 @@ import (
 const readTimeout = time.Second * 5
 const writeTimeout = time.Second * 10
 
+// tokenTTL is how long issued player JWTs remain valid
+const tokenTTL = 0 // no expiry yet; enabled with the refresh endpoint
+
 // Version is the server version
 var Version = "v0.0.0-dev"
 
@@ -26,17 +33,58 @@ var addr = flag.String("addr", ":5080", "the listen address")
 
 func main() {
 	flag.Parse()
-	setupLogger()
 
-	// fail fast
-	jwt.LoadKeys()
+	cfg, err := config.Load()
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load configuration")
+	}
 
-	if config.Instance().RecaptchaSecret == "" {
+	setupLogger(cfg)
+
+	if cfg.RecaptchaSecret == "" {
 		logrus.Fatal("missing recaptcha secret in configuration")
 	}
 
-	// run the db migrations
-	db.Migrate()
+	signer, err := jwt.NewSigner(cfg.JWT, tokenTTL)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load JWT keys")
+	}
+
+	database, err := db.Connect(cfg.Database.DSN)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not connect to the database")
+	}
+
+	if err := db.Migrate(database, cfg.Database.MigrationsPath); err != nil {
+		logrus.WithError(err).Fatal("could not run migrations")
+	}
+
+	repos := model.NewRepositories(database)
+
+	pitBoss := room.NewPitBoss(repos, room.PitBossOptions{
+		StartGameDelay: time.Duration(cfg.StartGameDelay) * time.Second,
+	})
+	pitBoss.StartShift()
+
+	emailClient, err := email.NewClient(cfg.Email.From, cfg.Email.Sender, cfg.Email.Username, cfg.Email.Password, cfg.Email.Host)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not create email client")
+	}
+
+	emailTemplates, err := email.NewTemplate(cfg.Email.TemplatesDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load email templates")
+	}
+
+	m := mux.NewMux(mux.Deps{
+		Version:        Version,
+		Config:         cfg,
+		Repos:          repos,
+		PitBoss:        pitBoss,
+		Tokens:         signer,
+		Email:          emailClient,
+		EmailTemplates: emailTemplates,
+	})
 
 	c := cors.New(cors.Options{
 		AllowedHeaders: []string{"Origin", "Accept", "Content-Type", "X-Requested-With", "Authorization"},
@@ -45,7 +93,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         *addr,
-		Handler:      loggingHandler(c.Handler(mux.NewMux(Version))),
+		Handler:      loggingHandler(cfg, c.Handler(m)),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}
@@ -54,16 +102,16 @@ func main() {
 	logrus.Fatal(srv.ListenAndServe())
 }
 
-func loggingHandler(next http.Handler) http.Handler {
-	if config.Instance().Log.DisableAccessLogs {
+func loggingHandler(cfg config.Config, next http.Handler) http.Handler {
+	if cfg.Log.DisableAccessLogs {
 		return next
 	}
 
 	return handlers.CombinedLoggingHandler(os.Stdout, next)
 }
 
-func setupLogger() {
-	if lvl := config.Instance().Log.Level; lvl != "" {
+func setupLogger(cfg config.Config) {
+	if lvl := cfg.Log.Level; lvl != "" {
 		level, err := logrus.ParseLevel(lvl)
 		if err != nil {
 			logrus.WithError(err).Fatal("could not parse level")

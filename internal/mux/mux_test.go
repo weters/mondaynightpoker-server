@@ -2,9 +2,7 @@ package mux
 
 import (
 	"context"
-	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
-	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,8 +13,7 @@ import (
 )
 
 func Test_authRouter(t *testing.T) {
-	setupJWT()
-	m := NewMux("")
+	m := NewMux(testDeps())
 
 	m.authRouter.Path("/test").HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, "OK")
@@ -30,7 +27,7 @@ func Test_authRouter(t *testing.T) {
 	assert.Equal(t, "Unauthorized", errObj.Message)
 
 	// test bad user ID
-	token, _ := jwt.Sign(0)
+	token, _ := testSigner.Sign(0)
 	errObj = errorResponse{}
 	assertGet(t, ts, "/test", &errObj, 401, token)
 	assert.Equal(t, "Unauthorized", errObj.Message)
@@ -41,8 +38,8 @@ func Test_authRouter(t *testing.T) {
 	assert.Equal(t, "Unauthorized", errObj.Message)
 
 	// test using auth header
-	player, _ := model.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
-	token, _ = jwt.Sign(player.ID)
+	player, _ := testRepos.Players.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
+	token, _ = testSigner.Sign(player.ID)
 	var str string
 	resp := assertGetWithResp(t, ts, "/test", &str, 200, token)
 	assert.Equal(t, "OK", str)
@@ -57,8 +54,7 @@ func Test_authRouter(t *testing.T) {
 }
 
 func Test_adminRouter(t *testing.T) {
-	setupJWT()
-	m := NewMux("")
+	m := NewMux(testDeps())
 
 	m.adminRouter.Path("/test").HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, "OK")
@@ -67,14 +63,14 @@ func Test_adminRouter(t *testing.T) {
 	ts := httptest.NewServer(m)
 	defer ts.Close()
 
-	player, _ := model.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
-	token, _ := jwt.Sign(player.ID)
+	player, _ := testRepos.Players.CreatePlayer(context.Background(), util.RandomEmail(), "x", "", "")
+	token, _ := testSigner.Sign(player.ID)
 
 	var errObj errorResponse
 	assertGet(t, ts, "/test", &errObj, 403, token)
 	assert.Equal(t, "Forbidden", errObj.Message)
 
-	_ = player.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), player, true)
 
 	var str string
 	assertGet(t, ts, "/test", &str, 200, token)

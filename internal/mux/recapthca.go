@@ -1,10 +1,10 @@
 package mux
 
 import (
+	"time"
+
 	grecaptcha "github.com/ezzarghili/recaptcha-go"
 	"github.com/sirupsen/logrus"
-	"mondaynightpoker-server/internal/config"
-	"time"
 )
 
 type recaptcha interface {
@@ -12,8 +12,8 @@ type recaptcha interface {
 	Verify(token string) error
 }
 
-func newRecaptcha() recaptcha {
-	captcha, err := grecaptcha.NewReCAPTCHA(config.Instance().RecaptchaSecret, grecaptcha.V3, 10*time.Second)
+func newRecaptcha(secret string) recaptcha {
+	captcha, err := grecaptcha.NewReCAPTCHA(secret, grecaptcha.V3, 10*time.Second)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not load recaptcha")
 	}

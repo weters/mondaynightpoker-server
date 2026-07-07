@@ -1,16 +1,17 @@
 package mux
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/internal/config"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHealthHandler(t *testing.T) {
-	logrus.Warn(config.Instance().Email.TemplatesDir)
-	ts := httptest.NewServer(NewMux("v1.2.3"))
+	deps := testDeps()
+	deps.Version = "v1.2.3"
+
+	ts := httptest.NewServer(NewMux(deps))
 	defer ts.Close()
 
 	var expects healthResponse

@@ -91,31 +91,11 @@ VALUES ($1, $2, true)`
 	}, nil
 }
 
-// CreateTable creates a new table
-//
-// Deprecated: use Repositories.Tables.CreateTable instead.
-func (p *Player) CreateTable(ctx context.Context, name string) (*Table, error) {
-	return deprecatedRepos().Tables.CreateTable(ctx, p, name)
-}
-
-// CloneTable creates a new table from an existing one. The caller must be a site admin
-// or a table admin at the source table. All players from the source are added to the new
-// table in randomized order with their balances zeroed and active set to false (sit-out).
-// Table stake and admin/permission flags are carried over from the source.
+// CloneTable creates a new table from an existing one. Authorization is the
+// caller's responsibility. All players from the source are added to the new
+// table in randomized order with their balances zeroed and active set to false
+// (sit-out). Table stake and admin/permission flags are carried over.
 func (r *TableRepo) CloneTable(ctx context.Context, p *Player, source *Table, name string) (*Table, error) {
-	if !p.IsSiteAdmin {
-		pt, err := r.GetPlayerTable(ctx, p, source)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotAtTable) {
-				return nil, UserError("only a table admin can clone a table")
-			}
-			return nil, err
-		}
-		if !pt.IsTableAdmin {
-			return nil, UserError("only a table admin can clone a table")
-		}
-	}
-
 	if err := r.canCreateTable(ctx, p); err != nil {
 		return nil, err
 	}
@@ -174,16 +154,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)`
 		Modified: modified,
 		Deleted:  deleted,
 	}, nil
-}
-
-// CloneTable creates a new table from an existing one. The caller must be a site admin
-// or a table admin at the source table. All players from the source are added to the new
-// table in randomized order with their balances zeroed and active set to false (sit-out).
-// Table stake and admin/permission flags are carried over from the source.
-//
-// Deprecated: use Repositories.Tables.CloneTable instead.
-func (p *Player) CloneTable(ctx context.Context, source *Table, name string) (*Table, error) {
-	return deprecatedRepos().Tables.CloneTable(ctx, p, source, name)
 }
 
 // canCreateTable will see if the user is allowed to create a table
@@ -246,13 +216,6 @@ WHERE uuid = $1`
 	return getTableByRow(row)
 }
 
-// GetTableByUUID returns a table by its UUID
-//
-// Deprecated: use Repositories.Tables.GetTableByUUID instead.
-func GetTableByUUID(ctx context.Context, uuid string) (*Table, error) {
-	return deprecatedRepos().Tables.GetTableByUUID(ctx, uuid)
-}
-
 // GetTables returns a list of tables
 func (r *TableRepo) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
 	const query = `
@@ -288,13 +251,6 @@ LIMIT $2`
 	return tables, nil
 }
 
-// GetTables returns a list of tables
-//
-// Deprecated: use Repositories.Tables.GetTables instead.
-func GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
-	return deprecatedRepos().Tables.GetTables(ctx, offset, limit)
-}
-
 // GetActivePlayersShifted returns all the active players at the table with the players shifted by the number of games
 func (r *TableRepo) GetActivePlayersShifted(ctx context.Context, t *Table) ([]*PlayerTable, error) {
 	players, err := r.GetPlayers(ctx, t)
@@ -328,13 +284,6 @@ func (r *TableRepo) GetActivePlayersShifted(ctx context.Context, t *Table) ([]*P
 	return append(tail, head...), nil
 }
 
-// GetActivePlayersShifted returns all the active players at the table with the players shifted by the number of games
-//
-// Deprecated: use Repositories.Tables.GetActivePlayersShifted instead.
-func (t *Table) GetActivePlayersShifted(ctx context.Context) ([]*PlayerTable, error) {
-	return deprecatedRepos().Tables.GetActivePlayersShifted(ctx, t)
-}
-
 // GetPlayers returns all players at the table
 func (r *TableRepo) GetPlayers(ctx context.Context, t *Table) ([]*PlayerTable, error) {
 	const query = `
@@ -363,20 +312,6 @@ ORDER BY players_tables.id`
 	return records, nil
 }
 
-// GetPlayers returns all players at the table
-//
-// Deprecated: use Repositories.Tables.GetPlayers instead.
-func (t *Table) GetPlayers(ctx context.Context) ([]*PlayerTable, error) {
-	return deprecatedRepos().Tables.GetPlayers(ctx, t)
-}
-
-// CreateGame will create a new game for the table
-//
-// Deprecated: use Repositories.Games.CreateGame instead.
-func (t *Table) CreateGame(ctx context.Context, gameType string) (*Game, error) {
-	return deprecatedRepos().Games.CreateGame(ctx, t, gameType)
-}
-
 // GetGamesCount returns the number of games played by the table
 func (r *TableRepo) GetGamesCount(ctx context.Context, t *Table) (int64, error) {
 	const query = `
@@ -392,13 +327,6 @@ WHERE table_uuid = $1`
 	return count, nil
 }
 
-// GetGamesCount returns the number of games played by the table
-//
-// Deprecated: use Repositories.Tables.GetGamesCount instead.
-func (t *Table) GetGamesCount(ctx context.Context) (int64, error) {
-	return deprecatedRepos().Tables.GetGamesCount(ctx, t)
-}
-
 // Save saves any changes
 func (r *TableRepo) Save(ctx context.Context, t *Table) error {
 	const query = `
@@ -410,13 +338,6 @@ WHERE uuid = $3`
 
 	_, err := r.db.ExecContext(ctx, query, t.Name, t.Deleted, t.UUID)
 	return err
-}
-
-// Save saves any changes
-//
-// Deprecated: use Repositories.Tables.Save instead.
-func (t *Table) Save(ctx context.Context) error {
-	return deprecatedRepos().Tables.Save(ctx, t)
 }
 
 func rollback(tx *sql.Tx) {

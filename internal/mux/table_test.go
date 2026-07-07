@@ -3,28 +3,28 @@ package mux
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/model"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_getTable(t *testing.T) {
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p, j := player()
 
 	p.IsSiteAdmin = true // so we can rapidly create tables
-	tbl1, _ := p.CreateTable(cbg, "Table 1")
-	tbl2, _ := p.CreateTable(cbg, "Table 2")
-	tbl3, _ := p.CreateTable(cbg, "Table 3")
+	tbl1, _ := testRepos.Tables.CreateTable(cbg, p, "Table 1")
+	tbl2, _ := testRepos.Tables.CreateTable(cbg, p, "Table 2")
+	tbl3, _ := testRepos.Tables.CreateTable(cbg, p, "Table 3")
 
 	p2, j2 := player()
-	tbl4, _ := p2.CreateTable(cbg, "Table 4")
-	_, _ = p2.Join(cbg, tbl2)
+	tbl4, _ := testRepos.Tables.CreateTable(cbg, p2, "Table 4")
+	_, _ = testRepos.Tables.Join(cbg, p2, tbl2)
 
 	var tables []*model.Table
 	assertGet(t, ts, "/table", &tables, 200, j)
@@ -49,17 +49,16 @@ func Test_getTable(t *testing.T) {
 }
 
 func Test_postTable(t *testing.T) {
-	setupJWT()
 	p, j := player()
 
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	// verify it requires admin access
 	assertPost(t, ts, "/table", postTablePayload{Name: "Test"}, nil, 401)
 
 	// actually test it
-	_ = p.SetIsSiteAdmin(context.Background(), true)
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), p, true)
 	var tbl *model.Table
 	assertPost(t, ts, "/table", postTablePayload{Name: "Test"}, &tbl, 201, j)
 	assert.Equal(t, "Test", tbl.Name)
@@ -77,12 +76,11 @@ func Test_postTable(t *testing.T) {
 }
 
 func Test_postTableUUIDJoin(t *testing.T) {
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p, j := player()
-	tbl, _ := p.CreateTable(context.Background(), "My Table")
+	tbl, _ := testRepos.Tables.CreateTable(context.Background(), p, "My Table")
 
 	path := fmt.Sprintf("/table/%s/seat", tbl.UUID)
 	var errObj errorResponse
@@ -97,16 +95,15 @@ func Test_postTableUUIDJoin(t *testing.T) {
 }
 
 func Test_postTableUUIDClone(t *testing.T) {
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	admin, jAdmin := player()
-	_ = admin.SetIsSiteAdmin(context.Background(), true) // bypass cooldown
-	tbl, _ := admin.CreateTable(context.Background(), "Original")
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), admin, true) // bypass cooldown
+	tbl, _ := testRepos.Tables.CreateTable(context.Background(), admin, "Original")
 
 	p2, j2 := player()
-	_, _ = p2.Join(context.Background(), tbl)
+	_, _ = testRepos.Tables.Join(context.Background(), p2, tbl)
 
 	path := fmt.Sprintf("/table/%s/clone", tbl.UUID)
 
@@ -127,9 +124,9 @@ func Test_postTableUUIDClone(t *testing.T) {
 	assert.NotEqual(t, tbl.UUID, newTbl.UUID)
 	assert.Equal(t, admin.ID, newTbl.PlayerID)
 
-	clonedTbl, err := model.GetTableByUUID(context.Background(), newTbl.UUID)
+	clonedTbl, err := testRepos.Tables.GetTableByUUID(context.Background(), newTbl.UUID)
 	assert.NoError(t, err)
-	clonedPlayers, err := clonedTbl.GetPlayers(context.Background())
+	clonedPlayers, err := testRepos.Tables.GetPlayers(context.Background(), clonedTbl)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(clonedPlayers))
 	for _, cp := range clonedPlayers {
@@ -139,15 +136,14 @@ func Test_postTableUUIDClone(t *testing.T) {
 }
 
 func Test_getTableUUID(t *testing.T) {
-	setupJWT()
-	ts := httptest.NewServer(NewMux(""))
+	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()
 
 	p1, j := player()
 	p2, _ := player()
 
-	tbl, _ := p1.CreateTable(context.Background(), "My Table")
-	_, _ = p2.Join(context.Background(), tbl)
+	tbl, _ := testRepos.Tables.CreateTable(context.Background(), p1, "My Table")
+	_, _ = testRepos.Tables.Join(context.Background(), p2, tbl)
 
 	path := fmt.Sprintf("/table/%s", tbl.UUID)
 	var respObj getTableUUIDResponse

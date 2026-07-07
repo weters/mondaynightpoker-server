@@ -19,7 +19,7 @@ func (m *Mux) getTable() http.HandlerFunc {
 		}
 
 		player := r.Context().Value(ctxPlayerKey).(*model.Player)
-		tables, err := player.GetTables(r.Context(), offset, limit)
+		tables, err := m.repos.Players.GetTables(r.Context(), player, offset, limit)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -47,7 +47,7 @@ func (m *Mux) postTable() http.HandlerFunc {
 		}
 
 		player := r.Context().Value(ctxPlayerKey).(*model.Player)
-		tbl, err := player.CreateTable(r.Context(), pp.Name)
+		tbl, err := m.repos.Tables.CreateTable(r.Context(), player, pp.Name)
 		if err != nil {
 			var ue model.UserError
 			if errors.As(err, &ue) {
@@ -70,7 +70,7 @@ type getTableUUIDResponse struct {
 func (m *Mux) getTableUUID() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tbl := r.Context().Value(ctxTableKey).(*model.Table)
-		players, err := tbl.GetPlayers(r.Context())
+		players, err := m.repos.Tables.GetPlayers(r.Context(), tbl)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -88,7 +88,7 @@ func (m *Mux) postTableUUIDSeat() http.Handler {
 		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		tbl := r.Context().Value(ctxTableKey).(*model.Table)
 
-		playerTable, err := player.Join(r.Context(), tbl)
+		playerTable, err := m.repos.Tables.Join(r.Context(), player, tbl)
 		if err != nil {
 			if err == model.ErrDuplicateKey {
 				writeJSONError(w, http.StatusBadRequest, errors.New("player is already at the table"))
@@ -119,7 +119,20 @@ func (m *Mux) postTableUUIDClone() http.Handler {
 		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		tbl := r.Context().Value(ctxTableKey).(*model.Table)
 
-		newTable, err := player.CloneTable(r.Context(), tbl, pp.Name)
+		if !player.IsSiteAdmin {
+			pt, err := m.repos.Tables.GetPlayerTable(r.Context(), player, tbl)
+			if err != nil && !errors.Is(err, model.ErrPlayerNotAtTable) {
+				writeJSONError(w, http.StatusInternalServerError, err)
+				return
+			}
+
+			if pt == nil || !pt.IsTableAdmin {
+				writeJSONError(w, http.StatusBadRequest, model.UserError("only a table admin can clone a table"))
+				return
+			}
+		}
+
+		newTable, err := m.repos.Tables.CloneTable(r.Context(), player, tbl, pp.Name)
 		if err != nil {
 			var ue model.UserError
 			if errors.As(err, &ue) {
@@ -137,7 +150,7 @@ func (m *Mux) postTableUUIDClone() http.Handler {
 func (m *Mux) tableMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uuid := mux.Vars(r)["uuid"]
-		tbl, err := model.GetTableByUUID(r.Context(), uuid)
+		tbl, err := m.repos.Tables.GetTableByUUID(r.Context(), uuid)
 		if err != nil {
 			writeMaybeNotFoundError(w, err)
 			return

@@ -35,8 +35,10 @@ const (
 
 // Dealer is responsible for controller the game
 type Dealer struct {
-	pitBoss *PitBoss
-	table   *model.Table
+	pitBoss        *PitBoss
+	store          TableStore
+	startGameDelay time.Duration
+	table          *model.Table
 	// note: clients must only be accessed within the run loop
 	clients map[*Client]bool
 	game    playable.Playable
@@ -57,13 +59,15 @@ type Dealer struct {
 // This is called from a blocking state, so it needs to return quickly
 func NewDealer(pitBoss *PitBoss, table *model.Table) *Dealer {
 	d := &Dealer{
-		pitBoss:       pitBoss,
-		table:         table,
-		clients:       make(map[*Client]bool),
-		execInRunLoop: make(chan func(), 256),
-		stateChanged:  make(chan state, 256),
-		close:         make(chan bool),
-		game:          nil,
+		pitBoss:        pitBoss,
+		store:          pitBoss.store,
+		startGameDelay: pitBoss.startGameDelay,
+		table:          table,
+		clients:        make(map[*Client]bool),
+		execInRunLoop:  make(chan func(), 256),
+		stateChanged:   make(chan state, 256),
+		close:          make(chan bool),
+		game:           nil,
 	}
 
 	return d
@@ -281,7 +285,7 @@ func (d *Dealer) sendLogMessages(messages []*playable.LogMessage) {
 }
 
 func (d *Dealer) sendPlayerData() {
-	players, err := d.table.GetPlayers(context.Background())
+	players, err := d.store.GetPlayers(context.Background(), d.table)
 	if err != nil {
 		logrus.WithField("uuid", d.table.UUID).WithError(err).Error("could not get players")
 		return
@@ -333,12 +337,12 @@ func (d *Dealer) sendPlayerData() {
 
 // canAdminOrSendError will send an error message to the client if they are not a table admin or site admin
 // If they are an appropriate admin, true is returned, otherwise false is returned
-func canPerformActionOnTable(ctx string, c *Client, action action) bool {
+func (d *Dealer) canPerformActionOnTable(ctx string, c *Client, action action) bool {
 	if c.player.IsSiteAdmin {
 		return true
 	}
 
-	playerTable, err := c.player.GetPlayerTable(context.Background(), c.table)
+	playerTable, err := d.store.GetPlayerTable(context.Background(), c.player, c.table)
 	if err != nil {
 		c.Send(newErrorResponse(ctx, err))
 		return false
@@ -381,7 +385,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 	switch msg.Action {
 	case "cancelGame":
-		if !canPerformActionOnTable(msg.Context, c, actionStart) {
+		if !d.canPerformActionOnTable(msg.Context, c, actionStart) {
 			return
 		}
 
@@ -400,11 +404,11 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		}
 	case "createGame":
 		if d.game != nil {
-			if !canPerformActionOnTable(msg.Context, c, actionRestart) {
+			if !d.canPerformActionOnTable(msg.Context, c, actionRestart) {
 				return
 			}
 		} else {
-			if !canPerformActionOnTable(msg.Context, c, actionStart) {
+			if !d.canPerformActionOnTable(msg.Context, c, actionStart) {
 				return
 			}
 		}
@@ -418,7 +422,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			c.Send(playable.OK(msg.Context))
 		}
 	case "terminateGame":
-		if !canPerformActionOnTable(msg.Context, c, actionTerminate) {
+		if !d.canPerformActionOnTable(msg.Context, c, actionTerminate) {
 			return
 		}
 
@@ -439,7 +443,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		c.Send(playable.OK(msg.Context))
 	case "tableAdmin":
 		d.execInRunLoop <- func() {
-			if !canPerformActionOnTable(msg.Context, c, actionAdmin) {
+			if !d.canPerformActionOnTable(msg.Context, c, actionAdmin) {
 				return
 			}
 
@@ -449,13 +453,13 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				return
 			}
 
-			player, err := model.GetPlayerByID(context.Background(), int64(playerID))
+			player, err := d.store.GetPlayerByID(context.Background(), int64(playerID))
 			if err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
-			playerTable, err := player.GetPlayerTable(context.Background(), c.table)
+			playerTable, err := d.store.GetPlayerTable(context.Background(), player, c.table)
 			if err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
@@ -485,7 +489,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				playerTable.IsBlocked = isBlocked
 			}
 
-			if err := playerTable.Save(context.Background()); err != nil {
+			if err := d.store.SavePlayerTable(context.Background(), playerTable); err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
@@ -495,7 +499,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 		}
 	case "tableStake":
 		d.execInRunLoop <- func() {
-			pt, err := c.player.GetPlayerTable(context.Background(), c.table)
+			pt, err := d.store.GetPlayerTable(context.Background(), c.player, c.table)
 			if err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
@@ -516,7 +520,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			}
 
 			pt.TableStake = int(tableStake)
-			if err := pt.Save(context.Background()); err != nil {
+			if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
 				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
 				return
 			}
@@ -532,21 +536,21 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			// set status for other player, requires table admin
 			playerID, ok := msg.AdditionalData["playerId"].(float64)
 			if ok {
-				if !canPerformActionOnTable(msg.Context, c, actionAdmin) {
+				if !d.canPerformActionOnTable(msg.Context, c, actionAdmin) {
 					return
 				}
 
 				var player *model.Player
-				player, err = model.GetPlayerByID(context.Background(), int64(playerID))
+				player, err = d.store.GetPlayerByID(context.Background(), int64(playerID))
 				if err != nil {
 					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
 
-				pt, err = player.GetPlayerTable(context.Background(), c.table)
+				pt, err = d.store.GetPlayerTable(context.Background(), player, c.table)
 			} else {
 				// set status for self
-				pt, err = c.player.GetPlayerTable(context.Background(), c.table)
+				pt, err = d.store.GetPlayerTable(context.Background(), c.player, c.table)
 			}
 
 			if err != nil {
@@ -567,7 +571,7 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 			pt.Active = isActive
 
-			if err := pt.Save(context.Background()); err != nil {
+			if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
 				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
 				return
 			}
@@ -610,12 +614,12 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 }
 
 func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetails) error {
-	record, err := d.table.CreateGame(context.Background(), game.Name())
+	record, err := d.store.CreateGame(context.Background(), d.table, game.Name())
 	if err != nil {
 		return fmt.Errorf("could not create game: %w", err)
 	}
 
-	if err := record.EndGame(context.Background(), details.Log, details.BalanceAdjustments); err != nil {
+	if err := d.store.EndGame(context.Background(), record, details.Log, details.BalanceAdjustments); err != nil {
 		return fmt.Errorf("could not save game: %w", err)
 	}
 
@@ -633,7 +637,7 @@ func (d *Dealer) getPickerLogMessage() []*playable.LogMessage {
 		return nil
 	}
 
-	players, err := d.table.GetPlayers(context.Background())
+	players, err := d.store.GetPlayers(context.Background(), d.table)
 	if err != nil {
 		logrus.WithError(err).Error("could not get players for picker log message")
 		return nil
@@ -697,7 +701,7 @@ func getLastAndNextPicker(players []*model.PlayerTable, lastPickerID int64) (*mo
 }
 
 func (d *Dealer) getNextPlayersForGame() ([]*model.PlayerTable, error) {
-	players, err := d.table.GetActivePlayersShifted(context.Background())
+	players, err := d.store.GetActivePlayersShifted(context.Background(), d.table)
 	if err != nil {
 		return nil, err
 	}
@@ -717,7 +721,7 @@ func (d *Dealer) scheduleGame(c *Client, msg *playable.PayloadIn) error {
 		return errors.New("a game is already scheduled to start")
 	}
 
-	pendingGame, err := newPendingGame(c, msg)
+	pendingGame, err := newPendingGame(c, msg, d.startGameDelay)
 	if err != nil {
 		return err
 	}

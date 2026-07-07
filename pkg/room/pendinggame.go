@@ -1,13 +1,11 @@
 package room
 
 import (
-	"mondaynightpoker-server/internal/config"
+	"time"
+
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room/gamefactory"
-	"time"
 )
-
-var secondsUntilStart = getSecondsUntilStart()
 
 type pendingGame struct {
 	Name     string    `json:"name"`
@@ -19,7 +17,7 @@ type pendingGame struct {
 	timer    *time.Timer
 }
 
-func newPendingGame(c *Client, msg *playable.PayloadIn) (*pendingGame, error) {
+func newPendingGame(c *Client, msg *playable.PayloadIn, delay time.Duration) (*pendingGame, error) {
 	factory, err := gamefactory.Get(msg.Subject)
 	if err != nil {
 		return nil, err
@@ -30,7 +28,7 @@ func newPendingGame(c *Client, msg *playable.PayloadIn) (*pendingGame, error) {
 		return nil, err
 	}
 
-	start := time.Now().Add(secondsUntilStart)
+	start := time.Now().Add(delay)
 	timer := time.NewTimer(time.Until(start))
 
 	return &pendingGame{
@@ -42,8 +40,4 @@ func newPendingGame(c *Client, msg *playable.PayloadIn) (*pendingGame, error) {
 		PlayerID: c.player.ID,
 		timer:    timer,
 	}, nil
-}
-
-func getSecondsUntilStart() time.Duration {
-	return time.Duration(config.Instance().StartGameDelay) * time.Second
 }

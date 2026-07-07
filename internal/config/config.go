@@ -2,15 +2,13 @@ package config
 
 import (
 	"os"
-	"sync"
 
 	"github.com/kelseyhightower/envconfig"
 	"gopkg.in/yaml.v2"
 )
 
 var defaultConfig = Config{
-	loaded: false,
-	Host:   "https://mondaynight.bid",
+	Host: "https://mondaynight.bid",
 	Log: Log{
 		DisableAccessLogs: false,
 		Level:             "info",
@@ -38,8 +36,7 @@ var defaultConfig = Config{
 
 // Config provides configuration for Monday Night Poker
 type Config struct {
-	loaded bool
-	Host   string
+	Host string
 	// AllowedOrigins is the list of origins allowed to open a WebSocket connection.
 	// If empty, only Host is allowed.
 	AllowedOrigins    []string `yaml:"allowedOrigins" envconfig:"allowed_origins"`
@@ -87,57 +84,23 @@ type Email struct {
 	Disable bool
 }
 
-var (
-	config   Config
-	configMu sync.RWMutex
-)
-
-// Instance returns a singleton instance
-// If the config hasn't been loaded, it will be loaded
-func Instance() Config {
-	configMu.RLock()
-	if config.loaded {
-		defer configMu.RUnlock()
-		return config
-	}
-	configMu.RUnlock()
-
-	configMu.Lock()
-	defer configMu.Unlock()
-	if !config.loaded {
-		if err := loadInternal(); err != nil {
-			panic(err)
-		}
-	}
-	return config
-}
-
-// Load will load the configuration
-func Load() error {
-	configMu.Lock()
-	defer configMu.Unlock()
-	return loadInternal()
-}
-
-// loadInternal loads the configuration without acquiring a lock.
-// Caller must hold configMu.
-func loadInternal() error {
-	config = defaultConfig
+// Load loads and returns the configuration
+func Load() (Config, error) {
+	config := defaultConfig
 
 	if cfgFile, ok := getConfigFile(); ok {
 		defer cfgFile.Close()
 
 		if err := yaml.NewDecoder(cfgFile).Decode(&config); err != nil {
-			return err
+			return Config{}, err
 		}
 	}
 
 	if err := envconfig.Process("mnp", &config); err != nil {
-		return err
+		return Config{}, err
 	}
 
-	config.loaded = true
-	return nil
+	return config, nil
 }
 
 // DefaultConfig returns the default configuration

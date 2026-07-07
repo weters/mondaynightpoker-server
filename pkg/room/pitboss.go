@@ -1,22 +1,34 @@
 package room
 
 import (
+	"time"
+
 	"github.com/sirupsen/logrus"
 )
 
 // PitBoss is responsible for dispatching players to games
 type PitBoss struct {
-	dealers    map[string]*Dealer
-	connect    chan *Client
-	disconnect chan *Client
+	store          TableStore
+	startGameDelay time.Duration
+	dealers        map[string]*Dealer
+	connect        chan *Client
+	disconnect     chan *Client
+}
+
+// PitBossOptions configures a PitBoss
+type PitBossOptions struct {
+	// StartGameDelay is how long a scheduled game waits before starting
+	StartGameDelay time.Duration
 }
 
 // NewPitBoss returns a new dispatch object
-func NewPitBoss() *PitBoss {
+func NewPitBoss(store TableStore, opts PitBossOptions) *PitBoss {
 	return &PitBoss{
-		dealers:    make(map[string]*Dealer),
-		connect:    make(chan *Client, 256),
-		disconnect: make(chan *Client, 256),
+		store:          store,
+		startGameDelay: opts.StartGameDelay,
+		dealers:        make(map[string]*Dealer),
+		connect:        make(chan *Client, 256),
+		disconnect:     make(chan *Client, 256),
 	}
 }
 

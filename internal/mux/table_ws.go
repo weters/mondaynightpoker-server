@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room"
@@ -23,7 +22,7 @@ const pingPeriod = pongWait * 9 / 10
 // checkOrigin reports whether the request may open a WebSocket connection.
 // Requests without an Origin header (non-browser clients) are allowed; browsers
 // must match one of the configured origins.
-func checkOrigin(r *http.Request) bool {
+func (m *Mux) checkOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return true
@@ -35,7 +34,7 @@ func checkOrigin(r *http.Request) bool {
 		return false
 	}
 
-	for _, allowed := range config.Instance().WebSocketOrigins() {
+	for _, allowed := range m.cfg.WebSocketOrigins() {
 		allowedURL, err := url.Parse(allowed)
 		if err != nil {
 			continue
@@ -52,7 +51,7 @@ func checkOrigin(r *http.Request) bool {
 
 func (m *Mux) getTableUUIDWS() http.HandlerFunc {
 	upgrader := &websocket.Upgrader{
-		CheckOrigin: checkOrigin,
+		CheckOrigin: m.checkOrigin,
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -128,10 +128,3 @@ RETURNING ended`
 	g.Ended = ended
 	return nil
 }
-
-// EndGame will end the game and set the data
-//
-// Deprecated: use Repositories.Games.EndGame instead.
-func (g *Game) EndGame(ctx context.Context, data interface{}, balanceAdjustments map[int64]int) error {
-	return deprecatedRepos().Games.EndGame(ctx, g, data, balanceAdjustments)
-}

@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"mondaynightpoker-server/internal/config"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -11,65 +10,54 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var instance *sql.DB
-
-// Instance returns a database instance
-func Instance() *sql.DB {
-	if instance == nil {
-		LoadInstance()
-	}
-
-	return instance
-}
-
-// LoadInstance will load the database instance
-func LoadInstance() {
-	db, err := sql.Open("postgres", config.Instance().Database.DSN)
+// Connect opens and pings a database connection
+func Connect(dsn string) (*sql.DB, error) {
+	database, err := sql.Open("postgres", dsn)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("could not open database: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
-		panic(err)
+	if err := database.Ping(); err != nil {
+		return nil, fmt.Errorf("could not ping database: %w", err)
 	}
 
-	instance = db
+	return database, nil
 }
 
-// Migrate runs the migrations
-func Migrate() {
-	m := getMigrate()
-	if err := m.Up(); err != nil {
-		if err != migrate.ErrNoChange {
-			panic(err)
-		}
+// Migrate runs all pending migrations
+func Migrate(database *sql.DB, migrationsPath string) error {
+	m, err := getMigrate(database, migrationsPath)
+	if err != nil {
+		return err
 	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return err
+	}
+
+	return nil
 }
 
 // MigrateTo migrates to the specified version
-func MigrateTo(version uint) {
-	m := getMigrate()
-	if err := m.Migrate(version); err != nil {
-		panic(err)
+func MigrateTo(database *sql.DB, migrationsPath string, version uint) error {
+	m, err := getMigrate(database, migrationsPath)
+	if err != nil {
+		return err
 	}
+
+	return m.Migrate(version)
 }
 
-func getMigrate() *migrate.Migrate {
-	migrationsPath := fmt.Sprintf("file://%s", config.Instance().Database.MigrationsPath)
-	db := Instance()
+func getMigrate(database *sql.DB, migrationsPath string) (*migrate.Migrate, error) {
+	sourceURL := fmt.Sprintf("file://%s", migrationsPath)
+	logrus.WithField("migrationsPath", sourceURL).Info("running migrations")
 
-	logrus.WithField("migrationsPath", migrationsPath).Info("running migrations")
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	driver, err := postgres.WithInstance(database, &postgres.Config{})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(migrationsPath, "postgres", driver)
-	if err != nil {
-		panic(err)
-	}
-
-	return m
+	return migrate.NewWithDatabaseInstance(sourceURL, "postgres", driver)
 }
 
 // Scanner is an interface that sql should've provided

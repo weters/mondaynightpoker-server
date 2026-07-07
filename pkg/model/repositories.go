@@ -2,8 +2,6 @@ package model
 
 import (
 	"database/sql"
-	"mondaynightpoker-server/pkg/db"
-	"sync"
 )
 
 // Repositories bundles the data-access repositories sharing one database handle
@@ -26,15 +24,3 @@ type TableRepo struct{ db *sql.DB }
 
 // GameRepo provides data access for games
 type GameRepo struct{ db *sql.DB }
-
-var (
-	defaultRepos     *Repositories
-	defaultReposOnce sync.Once
-)
-
-// deprecatedRepos backs the deprecated package-level functions and entity methods
-// until all callers are migrated to injected Repositories. It will be deleted.
-func deprecatedRepos() *Repositories {
-	defaultReposOnce.Do(func() { defaultRepos = NewRepositories(db.Instance()) })
-	return defaultRepos
-}

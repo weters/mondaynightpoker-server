@@ -1,34 +1,40 @@
 package config
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestInstance(t *testing.T) {
+func TestLoad(t *testing.T) {
 	clear1 := setEnv("MNP_CONFIG_FILE", "testdata/config.yaml")
 	defer clear1()
 	clear2 := setEnv("MNP_JWT_PRIVATE_KEY", "private2.key")
 	defer clear2()
 
 	a := assert.New(t)
-	cfg := Instance()
+	cfg, err := Load()
+	a.NoError(err)
 	a.Equal("user@mondaynight.bid", cfg.Email.Username)
 	a.Equal("public.pem", cfg.JWT.PublicKey)
 	a.Equal("private2.key", cfg.JWT.PrivateKey)
 
-	// ensure that it's only loaded once
-	_ = os.Setenv("MNP_JWT_PRIVATE_KEY", "private3.key")
-	// ensure we aren't using a pointer
-	cfg.JWT.PrivateKey = "bad"
-	cfg = Instance()
+	// environment changes only apply on the next Load
+	clear3 := setEnv("MNP_JWT_PRIVATE_KEY", "private3.key")
+	defer clear3()
+
+	cfg2, err := Load()
+	a.NoError(err)
+	a.Equal("private3.key", cfg2.JWT.PrivateKey)
+
+	// ensure the previously returned config is a copy
 	a.Equal("private2.key", cfg.JWT.PrivateKey)
 }
 
 func TestDefaults(t *testing.T) {
-	assert.NoError(t, Load())
-	cfg := Instance()
+	cfg, err := Load()
+	assert.NoError(t, err)
 	assert.Equal(t, "no-reply@mondaynight.bid", cfg.Email.Sender)
 }
 

@@ -8,6 +8,8 @@ import (
 	"github.com/badoux/checkmail"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
+	"mondaynightpoker-server/internal/config"
+	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/model"
 	"os"
 	"strings"
@@ -17,6 +19,18 @@ var command = flag.String("c", "user", "specifies the command (user)")
 
 func main() {
 	flag.Parse()
+
+	cfg, err := config.Load()
+	if err != nil {
+		logrus.WithError(err).Fatal("could not load configuration")
+	}
+
+	database, err := db.Connect(cfg.Database.DSN)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not connect to the database")
+	}
+
+	repos := model.NewRepositories(database)
 
 	switch *command {
 	case "user":
@@ -30,7 +44,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		player, err := model.CreatePlayer(context.Background(), email, "Admin", password, "127.0.0.1")
+		player, err := repos.Players.CreatePlayer(context.Background(), email, "Admin", password, "127.0.0.1")
 		if err != nil {
 			logrus.WithError(err).Fatal("could not create player")
 		}
@@ -43,7 +57,7 @@ func main() {
 		}
 		player.DisplayName = name
 		player.Status = model.PlayerStatusVerified
-		if err := player.Save(context.Background()); err != nil {
+		if err := repos.Players.Save(context.Background(), player); err != nil {
 			logrus.WithError(err).Fatal("could not save player")
 		}
 
@@ -53,7 +67,7 @@ func main() {
 		}
 
 		if promote == "" || strings.ToLower(promote)[0] == 'y' {
-			if err := player.SetIsSiteAdmin(context.Background(), true); err != nil {
+			if err := repos.Players.SetIsSiteAdmin(context.Background(), player, true); err != nil {
 				logrus.WithError(err).Fatal("could not promote user to admin")
 			}
 

@@ -2,15 +2,18 @@ package mux
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/jwt"
 	"mondaynightpoker-server/internal/util"
+	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/model"
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var cbg = context.Background()
@@ -66,18 +69,48 @@ func Test_parsePaginationOptions(t *testing.T) {
 	assert.Equal(t, 0, rows)
 }
 
-func player() (*model.Player, string) {
-	player, _ := model.CreatePlayer(context.Background(), util.RandomEmail(), "Player", "password", "")
-	j, _ := jwt.Sign(player.ID)
-	return player, j
-}
+var (
+	testCfg    config.Config
+	testDB     *sql.DB
+	testRepos  *model.Repositories
+	testSigner *jwt.Signer
+)
 
-func setupJWT() {
+func TestMain(m *testing.M) {
 	os.Setenv("MNP_JWT_PUBLIC_KEY", "testdata/public.pem")
 	os.Setenv("MNP_JWT_PRIVATE_KEY", "testdata/private.key")
-	if err := config.Load(); err != nil {
+
+	var err error
+	if testCfg, err = config.Load(); err != nil {
 		panic(err)
 	}
 
-	jwt.LoadKeys()
+	testDB, err = db.Connect(testCfg.Database.DSN)
+	if err != nil {
+		panic(err)
+	}
+
+	testRepos = model.NewRepositories(testDB)
+
+	if testSigner, err = jwt.NewSigner(testCfg.JWT, 0); err != nil {
+		panic(err)
+	}
+
+	os.Exit(m.Run())
+}
+
+// testDeps returns Deps wired to the shared test database and signer
+func testDeps() Deps {
+	return Deps{
+		Version: "",
+		Config:  testCfg,
+		Repos:   testRepos,
+		Tokens:  testSigner,
+	}
+}
+
+func player() (*model.Player, string) {
+	player, _ := testRepos.Players.CreatePlayer(context.Background(), util.RandomEmail(), "Player", "password", "")
+	j, _ := testSigner.Sign(player.ID)
+	return player, j
 }

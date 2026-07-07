@@ -4,10 +4,11 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"mondaynightpoker-server/internal/config"
 	"os"
 	"strconv"
 	"time"
+
+	"mondaynightpoker-server/internal/config"
 
 	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -20,46 +21,65 @@ const Issuer = "us.taproom.mondaynightpoker"
 // Audience is the intended JWT audience
 const Audience = "mondaynightpoker.taproom.us"
 
-var publicKey *rsa.PublicKey
-var privateKey *rsa.PrivateKey
+// Signer signs and validates player JWTs
+type Signer struct {
+	privateKey *rsa.PrivateKey
+	publicKey  *rsa.PublicKey
 
-// LoadKeys will load the public and private keys
-// this method should only be called once.
-func LoadKeys() {
-	cfg := config.Instance().JWT
-	privateKey = loadPrivateKey(cfg.PrivateKey)
-	publicKey = loadPublicKey(cfg.PublicKey)
+	// ttl is how long issued tokens are valid; zero issues tokens without expiry
+	ttl time.Duration
+}
+
+// NewSigner loads the configured key pair and returns a Signer whose tokens
+// expire after ttl (zero means no expiry claim)
+func NewSigner(cfg config.JWT, ttl time.Duration) (*Signer, error) {
+	privateKey, err := loadPrivateKey(cfg.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	publicKey, err := loadPublicKey(cfg.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Signer{
+		privateKey: privateKey,
+		publicKey:  publicKey,
+		ttl:        ttl,
+	}, nil
 }
 
 // Sign will sign a JWT for the user ID
-func Sign(userID int64) (string, error) {
-	if privateKey == nil {
-		panic("LoadKeys() not called")
-	}
-
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, jwtgo.RegisteredClaims{
+func (s *Signer) Sign(userID int64) (string, error) {
+	now := time.Now()
+	claims := jwtgo.RegisteredClaims{
 		Audience: jwtgo.ClaimStrings{Audience},
 		ID:       uuid.New().String(),
-		IssuedAt: jwtgo.NewNumericDate(time.Now()),
+		IssuedAt: jwtgo.NewNumericDate(now),
 		Issuer:   Issuer,
 		Subject:  strconv.FormatInt(userID, 10),
-	})
+	}
 
-	return token.SignedString(privateKey)
+	if s.ttl > 0 {
+		claims.ExpiresAt = jwtgo.NewNumericDate(now.Add(s.ttl))
+	}
+
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodRS256, claims)
+	return token.SignedString(s.privateKey)
 }
 
 // ValidUserID will validate a signed JWT
-func ValidUserID(signedString string) (int64, error) {
-	if publicKey == nil {
-		panic("LoadKeys() not called")
-	}
-
+// Tokens without an expiry claim remain valid: tokens issued before expiry was
+// introduced rotate onto expiring ones when the client next refreshes. Once
+// legacy tokens have aged out, enforce jwtgo.WithExpirationRequired() here.
+func (s *Signer) ValidUserID(signedString string) (int64, error) {
 	token, err := jwtgo.ParseWithClaims(signedString, &jwtgo.RegisteredClaims{}, func(token *jwtgo.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodRSA); !ok {
 			return nil, errors.New("expected RS256 signing method")
 		}
 
-		return publicKey, nil
+		return s.publicKey, nil
 	})
 
 	if err != nil {
@@ -86,32 +106,32 @@ func ValidUserID(signedString string) (int64, error) {
 	return 0, errors.New("claims were not valid")
 }
 
-func loadPublicKey(path string) *rsa.PublicKey {
+func loadPublicKey(path string) (*rsa.PublicKey, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		logrus.WithError(err).Fatal("could not read file")
+		return nil, fmt.Errorf("could not read public key: %w", err)
 	}
 
 	pem, err := jwtgo.ParseRSAPublicKeyFromPEM(b)
 	if err != nil {
-		logrus.WithError(err).Fatal("could not parse RSA private key")
+		return nil, fmt.Errorf("could not parse RSA public key: %w", err)
 	}
 
-	return pem
+	return pem, nil
 }
 
-func loadPrivateKey(path string) *rsa.PrivateKey {
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		logrus.WithError(err).Fatal("could not read file")
+		return nil, fmt.Errorf("could not read private key: %w", err)
 	}
 
 	pem, err := jwtgo.ParseRSAPrivateKeyFromPEM(b)
 	if err != nil {
-		logrus.WithError(err).Fatal("could not parse RSA private key")
+		return nil, fmt.Errorf("could not parse RSA private key: %w", err)
 	}
 
-	return pem
+	return pem, nil
 }
 
 func containsAudience(audiences jwtgo.ClaimStrings, target string) bool {

@@ -2,15 +2,16 @@ package mux
 
 import (
 	"context"
-	gmux "github.com/gorilla/mux"
-	"mondaynightpoker-server/internal/config"
-	"mondaynightpoker-server/internal/email"
-	"mondaynightpoker-server/internal/jwt"
-	"mondaynightpoker-server/pkg/model"
-	"mondaynightpoker-server/pkg/room"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"mondaynightpoker-server/internal/config"
+	"mondaynightpoker-server/internal/email"
+	"mondaynightpoker-server/pkg/model"
+	"mondaynightpoker-server/pkg/room"
+
+	gmux "github.com/gorilla/mux"
 )
 
 type ctxKey int
@@ -20,14 +21,34 @@ const (
 	ctxTableKey
 )
 
+// TokenService signs and validates player JWTs
+type TokenService interface {
+	Sign(userID int64) (string, error)
+	ValidUserID(signedString string) (int64, error)
+}
+
+// Deps are the dependencies a Mux requires
+type Deps struct {
+	Version        string
+	Config         config.Config
+	Repos          *model.Repositories
+	PitBoss        *room.PitBoss
+	Tokens         TokenService
+	Email          *email.Client
+	EmailTemplates *email.Template
+	// Recaptcha is optional; when nil, a verifier is built from Config
+	Recaptcha recaptcha
+}
+
 // Mux handles HTTP requests
 type Mux struct {
 	*gmux.Router
-	version   string
-	recaptcha recaptcha
-	pitBoss   *room.PitBoss
-
-	// XXX: refactor this?
+	version        string
+	cfg            config.Config
+	repos          *model.Repositories
+	tokens         TokenService
+	recaptcha      recaptcha
+	pitBoss        *room.PitBoss
 	email          *email.Client
 	emailTemplates *email.Template
 
@@ -37,27 +58,22 @@ type Mux struct {
 }
 
 // NewMux returns a new HTTP mux
-func NewMux(version string) *Mux {
-	pitBoss := room.NewPitBoss()
-	pitBoss.StartShift()
-
-	e, err := emailClient()
-	if err != nil {
-		panic(err)
-	}
-
-	tpl, err := email.NewTemplate(config.Instance().Email.TemplatesDir)
-	if err != nil {
-		panic(err)
+func NewMux(deps Deps) *Mux {
+	captcha := deps.Recaptcha
+	if captcha == nil {
+		captcha = newRecaptcha(deps.Config.RecaptchaSecret)
 	}
 
 	this := &Mux{
 		Router:         gmux.NewRouter(),
-		version:        version,
-		pitBoss:        pitBoss,
-		email:          e,
-		emailTemplates: tpl,
-		recaptcha:      newRecaptcha(),
+		version:        deps.Version,
+		cfg:            deps.Config,
+		repos:          deps.Repos,
+		tokens:         deps.Tokens,
+		pitBoss:        deps.PitBoss,
+		email:          deps.Email,
+		emailTemplates: deps.EmailTemplates,
+		recaptcha:      captcha,
 	}
 
 	this.authRouter = this.Router.NewRoute().Subrouter()
@@ -127,13 +143,13 @@ func (m *Mux) authMiddleware(next http.Handler) http.Handler {
 			token = authHeader[1]
 		}
 
-		id, err := jwt.ValidUserID(token)
+		id, err := m.tokens.ValidUserID(token)
 		if err != nil {
 			writeJSONError(w, http.StatusUnauthorized, nil)
 			return
 		}
 
-		player, err := model.GetPlayerByID(r.Context(), id)
+		player, err := m.repos.Players.GetPlayerByID(r.Context(), id)
 		if err != nil {
 			writeJSONError(w, http.StatusUnauthorized, nil)
 			return
@@ -156,9 +172,4 @@ func (m *Mux) adminMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func emailClient() (*email.Client, error) {
-	cfg := config.Instance().Email
-	return email.NewClient(cfg.From, cfg.Sender, cfg.Username, cfg.Password, cfg.Host)
 }

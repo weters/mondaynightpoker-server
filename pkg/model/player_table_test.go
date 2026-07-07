@@ -8,13 +8,13 @@ import (
 
 func TestPlayerTable_Save(t *testing.T) {
 	p1, tbl := playerAndTable()
-	pt1, err := p1.GetPlayerTable(cbg, tbl)
+	pt1, err := testRepos.Tables.GetPlayerTable(cbg, p1, tbl)
 	assert.NoError(t, err)
 	assert.True(t, pt1.IsTableAdmin)
 	assert.Equal(t, 2000, pt1.TableStake)
 
 	p2 := player()
-	pt2, err := p2.Join(cbg, tbl)
+	pt2, err := testRepos.Tables.Join(cbg, p2, tbl)
 	assert.NoError(t, err)
 	assert.True(t, pt2.Active)
 	assert.Equal(t, 2000, pt2.TableStake)
@@ -31,9 +31,9 @@ func TestPlayerTable_Save(t *testing.T) {
 	pt2.CanRestart = true
 	pt2.CanTerminate = true
 	pt2.IsBlocked = true
-	assert.NoError(t, pt2.Save(cbg))
+	assert.NoError(t, testRepos.Tables.SavePlayerTable(cbg, pt2))
 
-	pt2, err = p2.GetPlayerTable(cbg, tbl)
+	pt2, err = testRepos.Tables.GetPlayerTable(cbg, p2, tbl)
 	assert.NoError(t, err)
 	assert.False(t, pt2.Active)
 	assert.Equal(t, 3000, pt2.TableStake)

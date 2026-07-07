@@ -3,9 +3,9 @@ package mux
 import (
 	"database/sql"
 	"errors"
-	"github.com/gorilla/mux"
-	"mondaynightpoker-server/pkg/model"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 func (m *Mux) getAdminTable() http.HandlerFunc {
@@ -16,7 +16,7 @@ func (m *Mux) getAdminTable() http.HandlerFunc {
 			return
 		}
 
-		tables, err := model.GetTables(r.Context(), start, rows)
+		tables, err := m.repos.Tables.GetTables(r.Context(), start, rows)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
@@ -33,7 +33,7 @@ type postAdminTableUUIDPayload struct {
 func (m *Mux) postAdminTableUUID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uuid := mux.Vars(r)["uuid"]
-		table, err := model.GetTableByUUID(r.Context(), uuid)
+		table, err := m.repos.Tables.GetTableByUUID(r.Context(), uuid)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				writeJSONError(w, http.StatusNotFound, nil)
@@ -54,7 +54,7 @@ func (m *Mux) postAdminTableUUID() http.HandlerFunc {
 		}
 
 		table.Deleted = payload.Deleted
-		if err := table.Save(r.Context()); err != nil {
+		if err := m.repos.Tables.Save(r.Context(), table); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err)
 			return
 		}

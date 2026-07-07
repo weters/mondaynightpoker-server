@@ -72,13 +72,6 @@ WHERE id = $8`
 	return err
 }
 
-// Save will save non-balance values
-//
-// Deprecated: use Repositories.Tables.SavePlayerTable instead.
-func (p *PlayerTable) Save(ctx context.Context) error {
-	return deprecatedRepos().Tables.SavePlayerTable(ctx, p)
-}
-
 // IsPlaying returns true if the player should be dealt in the next hand
 // This will return false if player is marked as not active, or they are blocked (by table admin)
 func (p *PlayerTable) IsPlaying() bool {
