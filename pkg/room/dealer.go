@@ -48,26 +48,48 @@ type Dealer struct {
 	stateChanged  chan state
 	close         chan bool
 
-	// note: this must only be manipulated within the run loop
+	// persist serializes database writes on a dedicated goroutine so the run
+	// loop never blocks on the database
+	persist chan func()
+	// persistRetryDelays are the waits between persistGameResult attempts
+	persistRetryDelays []time.Duration
+
+	// note: everything below must only be manipulated within the run loop
 	logMessages []*playable.LogMessage
+
+	// rosterGen tags roster fetches so stale results are dropped
+	rosterGen uint64
+	// persistingGame is true while a finished game's results are being saved;
+	// starting the next game waits on it so balances are read post-adjustment
+	persistingGame bool
+	deferredStart  *deferredGameStart
 
 	pendingGame       *pendingGame
 	lastGameStartedBy *model.Player
+}
+
+// deferredGameStart holds a game start that arrived while the previous game's
+// results were still persisting
+type deferredGameStart struct {
+	client  *Client
+	message *playable.PayloadIn
 }
 
 // NewDealer creates a new dealer object
 // This is called from a blocking state, so it needs to return quickly
 func NewDealer(pitBoss *PitBoss, table *model.Table) *Dealer {
 	d := &Dealer{
-		pitBoss:        pitBoss,
-		store:          pitBoss.store,
-		startGameDelay: pitBoss.startGameDelay,
-		table:          table,
-		clients:        make(map[*Client]bool),
-		execInRunLoop:  make(chan func(), 256),
-		stateChanged:   make(chan state, 256),
-		close:          make(chan bool),
-		game:           nil,
+		pitBoss:            pitBoss,
+		store:              pitBoss.store,
+		startGameDelay:     pitBoss.startGameDelay,
+		table:              table,
+		clients:            make(map[*Client]bool),
+		execInRunLoop:      make(chan func(), 256),
+		stateChanged:       make(chan state, 256),
+		close:              make(chan bool),
+		persist:            make(chan func(), 64),
+		persistRetryDelays: []time.Duration{time.Second, 5 * time.Second},
+		game:               nil,
 	}
 
 	return d
@@ -76,6 +98,39 @@ func NewDealer(pitBoss *PitBoss, table *model.Table) *Dealer {
 // StartShift starts the run loop
 func (d *Dealer) StartShift() {
 	go d.runLoop()
+	go d.persistLoop()
+}
+
+// persistLoop executes queued database writes in order. It exits after the run
+// loop closes the persist channel and the queue fully drains, so no accepted
+// write is ever lost.
+func (d *Dealer) persistLoop() {
+	for fn := range d.persist {
+		fn()
+	}
+}
+
+// enqueuePersist queues a database write. If the queue is unexpectedly full the
+// write runs inline (blocking the run loop) rather than being dropped.
+// NOTE: must only be called from the run loop
+func (d *Dealer) enqueuePersist(fn func()) {
+	select {
+	case d.persist <- fn:
+	default:
+		logrus.WithField("uuid", d.table.UUID).Error("persist queue full; writing inline")
+		fn()
+	}
+}
+
+// tryExecInRunLoop re-enters the run loop from a background goroutine without
+// ever blocking; if the dealer has been retired or the queue is full, the
+// callback is dropped with a log line.
+func (d *Dealer) tryExecInRunLoop(fn func()) {
+	select {
+	case d.execInRunLoop <- fn:
+	default:
+		logrus.WithField("uuid", d.table.UUID).Warn("dealer run loop unavailable; dropping callback")
+	}
 }
 
 func (d *Dealer) runLoop() {
@@ -113,31 +168,30 @@ func (d *Dealer) runLoop() {
 				}
 
 				if details, gameIsOver := d.game.GetEndOfGameDetails(); gameIsOver {
-					if err := d.endGame(d.game, details); err != nil {
-						logrus.WithError(err).Error("could end game")
-					}
+					d.endGame(d.game, details)
 				}
 			}
 		case <-pendingGameTimer:
-			if err := d.createGame(d.pendingGame.client, d.pendingGame.message); err != nil {
-				d.pendingGame.client.Send(playable.Response{
-					Key:   "error",
-					Value: err.Error(),
-				})
-			}
-
+			pg := d.pendingGame
 			d.pendingGame = nil
+
+			if d.persistingGame {
+				// the previous game's balances are still being saved; start once done
+				d.deferredStart = &deferredGameStart{client: pg.client, message: pg.message}
+			} else {
+				d.startGame(pg.client, pg.message)
+			}
 		case messages := <-logChan:
 			d.sendLogMessages(messages)
 		case s := <-d.stateChanged:
 			switch s {
 			case stateClientEvent:
-				d.sendPlayerData()
+				d.requestPlayerData()
 			case stateGameEvent:
 				d.sendGameData()
 			case stateGameEnded:
 				d.sendGameEnded()
-				d.sendPlayerData()
+				d.requestPlayerData()
 			case stateGameScheduled:
 				d.sendGameScheduled()
 			}
@@ -145,6 +199,7 @@ func (d *Dealer) runLoop() {
 			fn()
 		case <-d.close:
 			log.WithField("uuid", d.table.UUID).Debug("terminating dealer run loop")
+			close(d.persist)
 			return
 		}
 	}
@@ -157,9 +212,7 @@ func (d *Dealer) AddClient(client *Client) {
 
 	d.execInRunLoop <- func() {
 		d.clients[client] = true
-
-		// send clientState before allLogs so the client can resolve player names in log messages
-		d.sendPlayerData()
+		d.requestPlayerData()
 
 		client.Send(playable.Response{
 			Key:   "allLogs",
@@ -199,7 +252,7 @@ func (d *Dealer) RemoveClient(client *Client) (lastClient bool) {
 	d.execInRunLoop <- func() {
 		delete(d.clients, client)
 		if len(d.clients) > 0 {
-			d.sendPlayerData()
+			d.requestPlayerData()
 			res <- false
 			return
 		}
@@ -284,13 +337,34 @@ func (d *Dealer) sendLogMessages(messages []*playable.LogMessage) {
 	}
 }
 
-func (d *Dealer) sendPlayerData() {
-	players, err := d.store.GetPlayers(context.Background(), d.table)
-	if err != nil {
-		logrus.WithField("uuid", d.table.UUID).WithError(err).Error("could not get players")
-		return
-	}
+// requestPlayerData fetches the roster on a background goroutine and re-enters
+// the run loop to send it. Stale fetches (an older one finishing after a newer
+// one started) are dropped via the generation counter.
+// NOTE: must only be called from the run loop
+func (d *Dealer) requestPlayerData() {
+	d.rosterGen++
+	gen := d.rosterGen
 
+	go func() {
+		players, err := d.store.GetPlayers(context.Background(), d.table)
+		if err != nil {
+			logrus.WithField("uuid", d.table.UUID).WithError(err).Error("could not get players")
+			return
+		}
+
+		d.tryExecInRunLoop(func() {
+			if gen != d.rosterGen {
+				return // a newer roster fetch superseded this one
+			}
+
+			d.sendPlayerData(players)
+		})
+	}()
+}
+
+// sendPlayerData sends the client state built from a fetched roster
+// NOTE: must only be called from the run loop
+func (d *Dealer) sendPlayerData(players []*model.PlayerTable) {
 	connectedClients := make(map[int64]*model.Player)
 	for client := range d.clients {
 		connectedClients[client.player.ID] = client.player
@@ -335,16 +409,26 @@ func (d *Dealer) sendPlayerData() {
 	}
 }
 
-// canAdminOrSendError will send an error message to the client if they are not a table admin or site admin
-// If they are an appropriate admin, true is returned, otherwise false is returned
-func (d *Dealer) canPerformActionOnTable(ctx string, c *Client, action action) bool {
+// fetchPlayerTable loads the caller's player-table record for permission
+// checks. It runs on the caller's goroutine (the WebSocket read loop) so the
+// run loop never blocks on the database; site admins skip the lookup.
+func (d *Dealer) fetchPlayerTable(c *Client) (*model.PlayerTable, error) {
+	if c.player.IsSiteAdmin {
+		return nil, nil
+	}
+
+	return d.store.GetPlayerTable(context.Background(), c.player, c.table)
+}
+
+// canPerformAction is the pure permission check over a prefetched player-table
+// record. It sends an error response to the client when permission is denied.
+func canPerformAction(ctx string, c *Client, playerTable *model.PlayerTable, fetchErr error, action action) bool {
 	if c.player.IsSiteAdmin {
 		return true
 	}
 
-	playerTable, err := d.store.GetPlayerTable(context.Background(), c.player, c.table)
-	if err != nil {
-		c.Send(newErrorResponse(ctx, err))
+	if fetchErr != nil {
+		c.Send(newErrorResponse(ctx, fetchErr))
 		return false
 	}
 
@@ -385,7 +469,8 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 	switch msg.Action {
 	case "cancelGame":
-		if !d.canPerformActionOnTable(msg.Context, c, actionStart) {
+		pt, fetchErr := d.fetchPlayerTable(c)
+		if !canPerformAction(msg.Context, c, pt, fetchErr, actionStart) {
 			return
 		}
 
@@ -403,17 +488,20 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			c.Send(playable.OK(msg.Context))
 		}
 	case "createGame":
-		if d.game != nil {
-			if !d.canPerformActionOnTable(msg.Context, c, actionRestart) {
-				return
-			}
-		} else {
-			if !d.canPerformActionOnTable(msg.Context, c, actionStart) {
-				return
-			}
-		}
+		pt, fetchErr := d.fetchPlayerTable(c)
 
 		d.execInRunLoop <- func() {
+			// restarting over a running game needs a different permission, and
+			// d.game may only be read inside the run loop
+			required := actionStart
+			if d.game != nil {
+				required = actionRestart
+			}
+
+			if !canPerformAction(msg.Context, c, pt, fetchErr, required) {
+				return
+			}
+
 			if err := d.scheduleGame(c, msg); err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
@@ -422,7 +510,8 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			c.Send(playable.OK(msg.Context))
 		}
 	case "terminateGame":
-		if !d.canPerformActionOnTable(msg.Context, c, actionTerminate) {
+		pt, fetchErr := d.fetchPlayerTable(c)
+		if !canPerformAction(msg.Context, c, pt, fetchErr, actionTerminate) {
 			return
 		}
 
@@ -442,29 +531,30 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 
 		c.Send(playable.OK(msg.Context))
 	case "tableAdmin":
+		ownPT, fetchErr := d.fetchPlayerTable(c)
+		if !canPerformAction(msg.Context, c, ownPT, fetchErr, actionAdmin) {
+			return
+		}
+
+		playerID, ok := msg.AdditionalData["playerId"].(float64)
+		if !ok {
+			c.Send(newErrorResponse(msg.Context, errors.New("could not obtain playerId")))
+			return
+		}
+
+		player, err := d.store.GetPlayerByID(context.Background(), int64(playerID))
+		if err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
+		}
+
+		playerTable, err := d.store.GetPlayerTable(context.Background(), player, c.table)
+		if err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
+		}
+
 		d.execInRunLoop <- func() {
-			if !d.canPerformActionOnTable(msg.Context, c, actionAdmin) {
-				return
-			}
-
-			playerID, ok := msg.AdditionalData["playerId"].(float64)
-			if !ok {
-				c.Send(newErrorResponse(msg.Context, errors.New("could not obtain playerId")))
-				return
-			}
-
-			player, err := d.store.GetPlayerByID(context.Background(), int64(playerID))
-			if err != nil {
-				c.Send(newErrorResponse(msg.Context, err))
-				return
-			}
-
-			playerTable, err := d.store.GetPlayerTable(context.Background(), player, c.table)
-			if err != nil {
-				c.Send(newErrorResponse(msg.Context, err))
-				return
-			}
-
 			if isTableAdmin, ok := msg.AdditionalData["isTableAdmin"].(bool); ok {
 				playerTable.IsTableAdmin = isTableAdmin
 			}
@@ -489,95 +579,103 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 				playerTable.IsBlocked = isBlocked
 			}
 
-			if err := d.store.SavePlayerTable(context.Background(), playerTable); err != nil {
-				c.Send(newErrorResponse(msg.Context, err))
-				return
-			}
-
-			c.Send(playable.OK(msg.Context))
-			d.stateChanged <- stateClientEvent
-		}
-	case "tableStake":
-		d.execInRunLoop <- func() {
-			pt, err := d.store.GetPlayerTable(context.Background(), c.player, c.table)
-			if err != nil {
-				c.Send(newErrorResponse(msg.Context, err))
-				return
-			}
-
-			tableStake, ok := msg.AdditionalData["tableStake"].(float64)
-			if !ok {
-				c.Send(newErrorResponse(msg.Context, errors.New("tableStake not passed in")))
-				return
-			}
-
-			const minTableStake = 500
-			const maxTableStake = 10_000
-
-			if tableStake < minTableStake || tableStake > maxTableStake {
-				c.Send(newErrorResponse(msg.Context, fmt.Errorf("tableStake must be >= ${%d} and <= ${%d}", minTableStake, maxTableStake)))
-				return
-			}
-
-			pt.TableStake = int(tableStake)
-			if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
-				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
-				return
-			}
-
-			c.Send(playable.OK(msg.Context))
-			d.stateChanged <- stateClientEvent
-		}
-	case "playerStatus":
-		d.execInRunLoop <- func() {
-			var pt *model.PlayerTable
-			var err error
-
-			// set status for other player, requires table admin
-			playerID, ok := msg.AdditionalData["playerId"].(float64)
-			if ok {
-				if !d.canPerformActionOnTable(msg.Context, c, actionAdmin) {
-					return
-				}
-
-				var player *model.Player
-				player, err = d.store.GetPlayerByID(context.Background(), int64(playerID))
-				if err != nil {
+			d.enqueuePersist(func() {
+				if err := d.store.SavePlayerTable(context.Background(), playerTable); err != nil {
 					c.Send(newErrorResponse(msg.Context, err))
 					return
 				}
 
-				pt, err = d.store.GetPlayerTable(context.Background(), player, c.table)
-			} else {
-				// set status for self
-				pt, err = d.store.GetPlayerTable(context.Background(), c.player, c.table)
+				c.Send(playable.OK(msg.Context))
+				d.tryExecInRunLoop(d.requestPlayerData)
+			})
+		}
+	case "tableStake":
+		pt, err := d.store.GetPlayerTable(context.Background(), c.player, c.table)
+		if err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
+		}
+
+		tableStake, ok := msg.AdditionalData["tableStake"].(float64)
+		if !ok {
+			c.Send(newErrorResponse(msg.Context, errors.New("tableStake not passed in")))
+			return
+		}
+
+		const minTableStake = 500
+		const maxTableStake = 10_000
+
+		if tableStake < minTableStake || tableStake > maxTableStake {
+			c.Send(newErrorResponse(msg.Context, fmt.Errorf("tableStake must be >= ${%d} and <= ${%d}", minTableStake, maxTableStake)))
+			return
+		}
+
+		d.execInRunLoop <- func() {
+			pt.TableStake = int(tableStake)
+
+			d.enqueuePersist(func() {
+				if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
+					c.Send(newErrorResponse(msg.Context, err))
+					return
+				}
+
+				c.Send(playable.OK(msg.Context))
+				d.tryExecInRunLoop(d.requestPlayerData)
+			})
+		}
+	case "playerStatus":
+		var pt *model.PlayerTable
+		var err error
+
+		// set status for other player, requires table admin
+		playerID, ok := msg.AdditionalData["playerId"].(float64)
+		if ok {
+			ownPT, fetchErr := d.fetchPlayerTable(c)
+			if !canPerformAction(msg.Context, c, ownPT, fetchErr, actionAdmin) {
+				return
 			}
 
+			var player *model.Player
+			player, err = d.store.GetPlayerByID(context.Background(), int64(playerID))
 			if err != nil {
 				c.Send(newErrorResponse(msg.Context, err))
 				return
 			}
 
-			isActive, ok := msg.AdditionalData["active"].(bool)
-			if !ok {
-				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
-				return
-			}
+			pt, err = d.store.GetPlayerTable(context.Background(), player, c.table)
+		} else {
+			// set status for self
+			pt, err = d.store.GetPlayerTable(context.Background(), c.player, c.table)
+		}
 
-			if pt.IsBlocked && isActive {
-				c.Send(newErrorResponse(msg.Context, errors.New("player is currently blocked from participating")))
-				return
-			}
+		if err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
+		}
 
+		isActive, ok := msg.AdditionalData["active"].(bool)
+		if !ok {
+			c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
+			return
+		}
+
+		if pt.IsBlocked && isActive {
+			c.Send(newErrorResponse(msg.Context, errors.New("player is currently blocked from participating")))
+			return
+		}
+
+		d.execInRunLoop <- func() {
 			pt.Active = isActive
 
-			if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
-				c.Send(newErrorResponse(msg.Context, errors.New("active is not boolean")))
-				return
-			}
+			d.enqueuePersist(func() {
+				if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
+					c.Send(newErrorResponse(msg.Context, err))
+					return
+				}
 
-			c.Send(playable.OK(msg.Context))
-			d.stateChanged <- stateClientEvent
+				c.Send(playable.OK(msg.Context))
+				d.tryExecInRunLoop(d.requestPlayerData)
+			})
 		}
 	default:
 		d.execInRunLoop <- func() {
@@ -604,46 +702,90 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			}
 
 			if details, isOver := game.GetEndOfGameDetails(); isOver {
-				if err := d.endGame(game, details); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
+				d.endGame(game, details)
 			}
 		}
 	}
 }
 
-func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetails) error {
-	record, err := d.store.CreateGame(context.Background(), d.table, game.Name())
-	if err != nil {
-		return fmt.Errorf("could not create game: %w", err)
-	}
+// endGame tears the game down immediately and persists the results in the
+// background. The next game cannot start until persistence completes so it
+// reads post-adjustment balances.
+// NOTE: must only be called from the run loop
+func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetails) {
+	gameName := game.Name()
 
-	if err := d.store.EndGame(context.Background(), record, details.Log, details.BalanceAdjustments); err != nil {
-		return fmt.Errorf("could not save game: %w", err)
-	}
-
-	if msgs := d.getPickerLogMessage(); len(msgs) > 0 {
-		d.sendLogMessages(msgs)
+	var lastPickerID int64
+	if d.lastGameStartedBy != nil {
+		lastPickerID = d.lastGameStartedBy.ID
 	}
 
 	d.unsetGame()
 	d.stateChanged <- stateGameEnded
-	return nil
+	d.persistingGame = true
+
+	d.enqueuePersist(func() {
+		persistErr := d.persistGameResult(gameName, details)
+		if persistErr != nil {
+			logrus.WithField("uuid", d.table.UUID).WithError(persistErr).Error("could not persist game result")
+		}
+
+		var pickerMsgs []*playable.LogMessage
+		if lastPickerID > 0 {
+			if players, err := d.store.GetPlayers(context.Background(), d.table); err == nil {
+				pickerMsgs = buildPickerLogMessage(players, lastPickerID)
+			}
+		}
+
+		d.tryExecInRunLoop(func() {
+			d.persistingGame = false
+
+			if persistErr != nil {
+				d.sendLogMessages([]*playable.LogMessage{{
+					UUID:    uuid.New().String(),
+					Message: "the game results could not be saved; balances may be out of date",
+					Time:    time.Now(),
+				}})
+			}
+
+			if len(pickerMsgs) > 0 {
+				d.sendLogMessages(pickerMsgs)
+			}
+
+			if ds := d.deferredStart; ds != nil {
+				d.deferredStart = nil
+				d.startGame(ds.client, ds.message)
+			}
+
+			d.requestPlayerData()
+		})
+	})
 }
 
-func (d *Dealer) getPickerLogMessage() []*playable.LogMessage {
-	if d.lastGameStartedBy == nil {
+// persistGameResult saves the game record and balance adjustments, retrying on
+// failure. Runs on the persist goroutine.
+func (d *Dealer) persistGameResult(gameName string, details *playable.GameOverDetails) error {
+	var lastErr error
+	for attempt := 0; attempt <= len(d.persistRetryDelays); attempt++ {
+		if attempt > 0 {
+			time.Sleep(d.persistRetryDelays[attempt-1])
+		}
+
+		record, err := d.store.CreateGame(context.Background(), d.table, gameName)
+		if err != nil {
+			lastErr = fmt.Errorf("could not create game: %w", err)
+			continue
+		}
+
+		if err := d.store.EndGame(context.Background(), record, details.Log, details.BalanceAdjustments); err != nil {
+			lastErr = fmt.Errorf("could not save game: %w", err)
+			continue
+		}
+
 		return nil
 	}
 
-	players, err := d.store.GetPlayers(context.Background(), d.table)
-	if err != nil {
-		logrus.WithError(err).Error("could not get players for picker log message")
-		return nil
-	}
-
-	return buildPickerLogMessage(players, d.lastGameStartedBy.ID)
+	return lastErr
 }
 
 func buildPickerLogMessage(players []*model.PlayerTable, pickerID int64) []*playable.LogMessage {
@@ -731,18 +873,41 @@ func (d *Dealer) scheduleGame(c *Client, msg *playable.PayloadIn) error {
 	return nil
 }
 
-func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
+// startGame fetches the seating order in the background, then constructs the
+// game back on the run loop
+// NOTE: must only be called from the run loop
+func (d *Dealer) startGame(client *Client, msg *playable.PayloadIn) {
+	go func() {
+		players, err := d.getNextPlayersForGame()
+
+		d.tryExecInRunLoop(func() {
+			if d.game != nil {
+				return // a game started while the roster was being fetched
+			}
+
+			if err == nil {
+				err = d.createGame(client, msg, players)
+			}
+
+			if err != nil {
+				client.Send(playable.Response{
+					Key:   "error",
+					Value: err.Error(),
+				})
+			}
+		})
+	}()
+}
+
+// createGame constructs the game from a prefetched roster
+// NOTE: must only be called from the run loop
+func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn, players []*model.PlayerTable) error {
 	factory, err := gamefactory.Get(msg.Subject)
 	if err != nil {
 		return fmt.Errorf("game not found: %s", msg.Subject)
 	}
 
 	details, _, err := factory.Details(msg.AdditionalData)
-	if err != nil {
-		return err
-	}
-
-	players, err := d.getNextPlayersForGame()
 	if err != nil {
 		return err
 	}
