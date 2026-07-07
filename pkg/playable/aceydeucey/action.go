@@ -3,7 +3,6 @@ package aceydeucey
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 )
 
 // Action is an action a participant can take when it's their turn
@@ -12,10 +11,10 @@ type Action int
 // MarshalJSON encodes the JSON
 func (a Action) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		ID   int    `json:"id"`
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	}{
-		ID:   int(a),
+		ID:   a.ID(),
 		Name: a.String(),
 	})
 }
@@ -49,18 +48,35 @@ func (a Action) String() string {
 	panic(fmt.Sprintf("invalid action: %d", a))
 }
 
-// ActionFromString returns an action from a string integer
-func ActionFromString(action string) (Action, error) {
-	actionInt, err := strconv.Atoi(action)
-	if err != nil {
-		return 0, err
+// ID returns the client-facing string identifier of the Action
+func (a Action) ID() string {
+	switch a {
+	case ActionPending:
+		return "pending"
+	case ActionPickAceLow:
+		return "pick-ace-low"
+	case ActionPickAceHigh:
+		return "pick-ace-high"
+	case ActionBet:
+		return "bet"
+	case ActionBetTheGap:
+		return "bet-the-gap"
+	case ActionPass:
+		return "pass"
 	}
 
-	if actionInt >= 0 && actionInt <= int(ActionPass) {
-		return Action(actionInt), nil
+	panic(fmt.Sprintf("invalid action: %d", a))
+}
+
+// ActionFromID returns an action from its string identifier
+func ActionFromID(id string) (Action, error) {
+	for action := ActionPending; action <= ActionPass; action++ {
+		if action.ID() == id {
+			return action, nil
+		}
 	}
 
-	return -1, fmt.Errorf("invalid action: %s", action)
+	return -1, fmt.Errorf("invalid action: %s", id)
 }
 
 func (g *Game) getActionsForParticipant(playerID int64) []Action {

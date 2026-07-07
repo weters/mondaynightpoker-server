@@ -112,7 +112,7 @@ func (g *Game) Key() string {
 // If updateState is true, it will trigger a state update for all connected clients
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
 	actions := g.getActionsForParticipant(playerID)
-	action, err := ActionFromString(message.Subject)
+	action, err := ActionFromID(message.Action)
 	if err != nil {
 		return nil, false, err
 	}

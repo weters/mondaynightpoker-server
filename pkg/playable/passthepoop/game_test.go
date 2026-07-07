@@ -95,7 +95,8 @@ func TestGame_ExecuteTurnForPlayer_AllTrades(t *testing.T) {
 
 	execError(2, ActionTrade, "you are not up")
 	execError(99, ActionTrade, "99 is not in this game")
-	execError(1, GameAction(99), "not a valid game action")
+	// an out-of-range action can no longer come through Game.Action(), so exercise it directly
+	assert.EqualError(t, game.ExecuteTurnForPlayer(1, GameAction(99)), "not a valid game action")
 	execOK(1, ActionTrade)
 	// swap did not happen yet
 	assert.Equal(t, card("2c"), participants[0].card)
@@ -330,15 +331,19 @@ func createExecFunctions(t *testing.T, game *Game) (func(playerID int64, action 
 	execOK := func(playerID int64, action GameAction) {
 		t.Helper()
 
-		err := game.ExecuteTurnForPlayer(playerID, action)
+		resp, updateState, err := game.Action(playerID, &playable.PayloadIn{Action: action.ID()})
 		assert.NoError(t, err)
+		assert.Equal(t, playable.OK(), resp)
+		assert.True(t, updateState)
 	}
 
 	execError := func(playerID int64, action GameAction, expectedError string) {
 		t.Helper()
 
-		err := game.ExecuteTurnForPlayer(playerID, action)
+		resp, updateState, err := game.Action(playerID, &playable.PayloadIn{Action: action.ID()})
 		assert.EqualError(t, err, expectedError)
+		assert.Nil(t, resp)
+		assert.False(t, updateState)
 	}
 
 	return execOK, execError
@@ -463,4 +468,13 @@ func TestGame_getActionsForParticipantWithBlocks(t *testing.T) {
 	game.idToParticipant[2].hasBlock = false
 	actions = game.getActionsForParticipant(game.idToParticipant[2])
 	a.Equal([]GameAction{ActionAccept}, actions)
+}
+
+func TestGame_Action_unknownAction(t *testing.T) {
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
+
+	resp, updateState, err := game.Action(1, &playable.PayloadIn{Action: "not-a-real-action"})
+	assert.EqualError(t, err, "unsupported action: not-a-real-action")
+	assert.Nil(t, resp)
+	assert.False(t, updateState)
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -533,26 +532,16 @@ func (g *Game) Name() string {
 // Action is called when a client performs an action
 // Part of the Playable interface
 func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerResponse *playable.Response, updateState bool, err error) {
-	switch message.Action {
-	case "execute":
-		raw, err := strconv.Atoi(message.Subject)
-		if err != nil {
-			return nil, false, err
-		}
-
-		action, err := GameActionFromInt(raw)
-		if err != nil {
-			return nil, false, err
-		}
-
-		if err := g.ExecuteTurnForPlayer(playerID, action); err != nil {
-			return nil, false, err
-		}
-
-		return playable.OK(), true, nil
-	default:
+	action, err := GameActionFromID(message.Action)
+	if err != nil {
 		return nil, false, fmt.Errorf("unsupported action: %s", message.Action)
 	}
+
+	if err := g.ExecuteTurnForPlayer(playerID, action); err != nil {
+		return nil, false, err
+	}
+
+	return playable.OK(), true, nil
 }
 
 // GetPlayerState returns the player state in the game

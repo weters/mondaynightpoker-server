@@ -517,7 +517,7 @@ func gutsTradeDecision(hand []CardInfo) []CardInfo {
 	return []CardInfo{lowest}
 }
 
-// passThePoopAutoPilot sends Action="execute" with Subject=actionID.
+// passThePoopAutoPilot sends the action ID as Action.
 // Decisions based on card rank: high cards stay, low cards trade.
 func passThePoopAutoPilot(gs *GameState) *outgoingMessage {
 	if len(gs.ValidActions) == 0 {
@@ -530,19 +530,18 @@ func passThePoopAutoPilot(gs *GameState) *outgoingMessage {
 		actionIDs[a.Action] = true
 	}
 
-	// Forced/mandatory actions: Accept (2), FlipKing (3), BlockTrade (4)
-	for _, forced := range []string{"2", "3", "4"} {
+	// Forced/mandatory actions
+	for _, forced := range []string{"accept-trade", "flip-king", "block-trade"} {
 		if actionIDs[forced] {
 			return &outgoingMessage{
-				Action:  "execute",
-				Subject: forced,
+				Action: forced,
 			}
 		}
 	}
 
-	// Stay (0) vs Trade (1) / GoToDeck (5)
-	hasStay := actionIDs["0"]
-	hasTrade := actionIDs["1"] || actionIDs["5"]
+	// Stay vs Trade / GoToDeck
+	hasStay := actionIDs["stay"]
+	hasTrade := actionIDs["trade"] || actionIDs["go-to-deck"]
 
 	if hasStay && hasTrade && len(gs.Hand) > 0 {
 		rank := gs.Hand[0].Rank
@@ -563,23 +562,22 @@ func passThePoopAutoPilot(gs *GameState) *outgoingMessage {
 		}
 
 		if roll < stayProb {
-			return &outgoingMessage{Action: "execute", Subject: "0"}
+			return &outgoingMessage{Action: "stay"}
 		}
 		// Trade or GoToDeck
-		if actionIDs["1"] {
-			return &outgoingMessage{Action: "execute", Subject: "1"}
+		if actionIDs["trade"] {
+			return &outgoingMessage{Action: "trade"}
 		}
-		return &outgoingMessage{Action: "execute", Subject: "5"}
+		return &outgoingMessage{Action: "go-to-deck"}
 	}
 
 	// Fallback: pick first available action
 	return &outgoingMessage{
-		Action:  "execute",
-		Subject: gs.ValidActions[0].Action,
+		Action: gs.ValidActions[0].Action,
 	}
 }
 
-// aceyDeuceyAutoPilot sends Subject=actionID (the server reads from Subject).
+// aceyDeuceyAutoPilot sends the action ID as Action.
 // Ace decisions always pick low. Bets are proportional to the gap between cards.
 func aceyDeuceyAutoPilot(gs *GameState) *outgoingMessage {
 	if len(gs.ValidActions) == 0 {
@@ -591,9 +589,9 @@ func aceyDeuceyAutoPilot(gs *GameState) *outgoingMessage {
 		actionIDs[a.Action] = true
 	}
 
-	// Ace decision: always pick low (1=PickAceLow) for widest spread
-	if actionIDs["1"] {
-		return &outgoingMessage{Subject: "1"}
+	// Ace decision: always pick low for widest spread
+	if actionIDs["pick-ace-low"] {
+		return &outgoingMessage{Action: "pick-ace-low"}
 	}
 
 	// If we have both cards, make a gap-based bet decision
@@ -602,7 +600,7 @@ func aceyDeuceyAutoPilot(gs *GameState) *outgoingMessage {
 	}
 
 	// Fallback: pick first available
-	return &outgoingMessage{Subject: gs.ValidActions[0].Action}
+	return &outgoingMessage{Action: gs.ValidActions[0].Action}
 }
 
 // aceyDeuceyBetDecision makes a betting decision based on the gap between the two cards.
@@ -629,8 +627,8 @@ func aceyDeuceyBetDecision(gs *GameState, actionIDs map[string]bool) *outgoingMe
 
 	// Small gap: prefer pass
 	if gap <= 1 {
-		if actionIDs["5"] { // ActionPass
-			return &outgoingMessage{Subject: "5"}
+		if actionIDs["pass"] {
+			return &outgoingMessage{Action: "pass"}
 		}
 		// If can't pass, min bet
 		return aceyDeuceyMakeBet(gs, 0.0)
@@ -649,12 +647,11 @@ func aceyDeuceyBetDecision(gs *GameState, actionIDs map[string]bool) *outgoingMe
 		fraction = 0.75 + cryptoFloat64()*0.25 // 75-100%
 	}
 
-	// ActionBet=3, ActionBetTheGap=4
-	if actionIDs["3"] {
+	if actionIDs["bet"] {
 		return aceyDeuceyMakeBet(gs, fraction)
 	}
 
-	return &outgoingMessage{Subject: gs.ValidActions[0].Action}
+	return &outgoingMessage{Action: gs.ValidActions[0].Action}
 }
 
 // aceyDeuceyMakeBet creates a bet message with amount based on fraction of max bet.
@@ -670,7 +667,7 @@ func aceyDeuceyMakeBet(gs *GameState, fraction float64) *outgoingMessage {
 		}
 	}
 	return &outgoingMessage{
-		Subject: "3", // ActionBet
+		Action: "bet",
 		AdditionalData: map[string]interface{}{
 			"amount": amount,
 		},
@@ -695,19 +692,6 @@ func genericAutoPilot(gs *GameState) *outgoingMessage {
 // This is used by the REPL for manual play.
 func BuildMessage(gs *GameState, action ValidAction, ad map[string]interface{}) outgoingMessage {
 	switch gs.GameName {
-	case gamePassThePoop:
-		return outgoingMessage{
-			Action:  "execute",
-			Subject: action.Action,
-		}
-	case gameAceyDeucey:
-		msg := outgoingMessage{
-			Subject: action.Action,
-		}
-		if ad != nil {
-			msg.AdditionalData = ad
-		}
-		return msg
 	case gameBourre:
 		msg := outgoingMessage{
 			Action: action.Action,

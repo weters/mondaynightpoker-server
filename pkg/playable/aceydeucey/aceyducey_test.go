@@ -5,7 +5,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -98,7 +97,7 @@ func TestGame_basicFlow(t *testing.T) {
 
 	// player 2 is not on the clock
 	response, updateState, err := game.Action(2, &playable.PayloadIn{
-		Subject: strconv.Itoa(int(ActionPickAceHigh)),
+		Action: ActionPickAceHigh.ID(),
 	})
 	a.Nil(response)
 	a.False(updateState)
@@ -133,7 +132,7 @@ func TestGame_basicFlow(t *testing.T) {
 	assertTick(t, game)
 
 	response, updateState, err = game.Action(3, &playable.PayloadIn{
-		Subject: strconv.Itoa(int(ActionBet)),
+		Action: ActionBet.ID(),
 		AdditionalData: playable.AdditionalData{
 			"amount": float64(375),
 		},
@@ -235,7 +234,7 @@ func TestGame_allowPass(t *testing.T) {
 
 func assertFailedAction(t *testing.T, game *Game, id int64, action Action, payload map[string]interface{}, expectedErr string) {
 	resp, didUpdate, err := game.Action(id, &playable.PayloadIn{
-		Subject:        strconv.Itoa(int(action)),
+		Action:         action.ID(),
 		AdditionalData: payload,
 	})
 
@@ -247,7 +246,7 @@ func assertFailedAction(t *testing.T, game *Game, id int64, action Action, paylo
 
 func assertSuccessfulAction(t *testing.T, game *Game, id int64, action Action, payload map[string]interface{}) {
 	resp, didUpdate, err := game.Action(id, &playable.PayloadIn{
-		Subject:        strconv.Itoa(int(action)),
+		Action:         action.ID(),
 		AdditionalData: payload,
 	})
 

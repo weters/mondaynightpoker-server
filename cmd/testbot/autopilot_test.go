@@ -313,15 +313,15 @@ func TestPassThePoopAutoPilot_KingAlwaysStays(t *testing.T) {
 	gs := &GameState{
 		GameName: gamePassThePoop,
 		ValidActions: []ValidAction{
-			{Action: "0", Name: "Stay"},
-			{Action: "1", Name: "Trade"},
+			{Action: "stay", Name: "Stay"},
+			{Action: "trade", Name: "Trade"},
 		},
 		Hand: []CardInfo{{Rank: 13, Suit: "hearts"}},
 	}
 
 	for range 100 {
 		msg := passThePoopAutoPilot(gs)
-		assert.Equal(t, "0", msg.Subject, "king should always stay")
+		assert.Equal(t, "stay", msg.Action, "king should always stay")
 	}
 }
 
@@ -329,8 +329,8 @@ func TestPassThePoopAutoPilot_LowCardTradesOften(t *testing.T) {
 	gs := &GameState{
 		GameName: gamePassThePoop,
 		ValidActions: []ValidAction{
-			{Action: "0", Name: "Stay"},
-			{Action: "1", Name: "Trade"},
+			{Action: "stay", Name: "Stay"},
+			{Action: "trade", Name: "Trade"},
 		},
 		Hand: []CardInfo{{Rank: 2, Suit: "hearts"}},
 	}
@@ -338,7 +338,7 @@ func TestPassThePoopAutoPilot_LowCardTradesOften(t *testing.T) {
 	tradeCount := 0
 	for range 200 {
 		msg := passThePoopAutoPilot(gs)
-		if msg.Subject == "1" {
+		if msg.Action == "trade" {
 			tradeCount++
 		}
 	}
@@ -346,31 +346,31 @@ func TestPassThePoopAutoPilot_LowCardTradesOften(t *testing.T) {
 }
 
 func TestPassThePoopAutoPilot_ForcedActions(t *testing.T) {
-	// Accept (2) should be picked when available
+	// Accept Trade should be picked when available
 	gs := &GameState{
 		GameName: gamePassThePoop,
 		ValidActions: []ValidAction{
-			{Action: "2", Name: "Accept"},
+			{Action: "accept-trade", Name: "Accept Trade"},
 		},
 		Hand: []CardInfo{{Rank: 5, Suit: "hearts"}},
 	}
 
 	msg := passThePoopAutoPilot(gs)
-	assert.Equal(t, "2", msg.Subject)
+	assert.Equal(t, "accept-trade", msg.Action)
 }
 
 func TestAceyDeuceyAutoPilot_AcePicksLow(t *testing.T) {
 	gs := &GameState{
 		GameName: gameAceyDeucey,
 		ValidActions: []ValidAction{
-			{Action: "1", Name: "Pick Low Ace"},
-			{Action: "2", Name: "Pick High Ace"},
+			{Action: "pick-ace-low", Name: "Pick Low Ace"},
+			{Action: "pick-ace-high", Name: "Pick High Ace"},
 		},
 	}
 
 	for range 100 {
 		msg := aceyDeuceyAutoPilot(gs)
-		assert.Equal(t, "1", msg.Subject, "should always pick ace low")
+		assert.Equal(t, "pick-ace-low", msg.Action, "should always pick ace low")
 	}
 }
 
@@ -378,8 +378,8 @@ func TestAceyDeuceyAutoPilot_LargeGapBetsMore(t *testing.T) {
 	largeGapGS := &GameState{
 		GameName: gameAceyDeucey,
 		ValidActions: []ValidAction{
-			{Action: "3", Name: "Bet", NeedsAmount: true},
-			{Action: "5", Name: "Pass"},
+			{Action: "bet", Name: "Bet", NeedsAmount: true},
+			{Action: "pass", Name: "Pass"},
 		},
 		AceyCards: []CardInfo{
 			{Rank: 2, Suit: "hearts"},
@@ -392,8 +392,8 @@ func TestAceyDeuceyAutoPilot_LargeGapBetsMore(t *testing.T) {
 	smallGapGS := &GameState{
 		GameName: gameAceyDeucey,
 		ValidActions: []ValidAction{
-			{Action: "3", Name: "Bet", NeedsAmount: true},
-			{Action: "5", Name: "Pass"},
+			{Action: "bet", Name: "Bet", NeedsAmount: true},
+			{Action: "pass", Name: "Pass"},
 		},
 		AceyCards: []CardInfo{
 			{Rank: 7, Suit: "hearts"},

@@ -311,11 +311,8 @@ func parsePassThePoop(data json.RawMessage) (*GameState, error) {
 			CurrentTurn int64 `json:"currentTurn"`
 			Pot         int   `json:"pot"`
 		} `json:"gameState"`
-		Card             *rawCard `json:"card"`
-		AvailableActions []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		} `json:"availableActions"`
+		Card             *rawCard      `json:"card"`
+		AvailableActions []pokerAction `json:"availableActions"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -331,14 +328,14 @@ func parsePassThePoop(data json.RawMessage) (*GameState, error) {
 	}
 	for _, a := range raw.AvailableActions {
 		gs.ValidActions = append(gs.ValidActions, ValidAction{
-			Action: fmt.Sprintf("%d", a.ID),
+			Action: a.ID,
 			Name:   a.Name,
 		})
 	}
 	return gs, nil
 }
 
-const aceyDeuceyActionBet = 3 // ActionBet in acey deucey
+const aceyDeuceyActionBet = "bet" // ActionBet in acey deucey
 
 func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 	var raw struct {
@@ -353,10 +350,7 @@ func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 				ActiveGameIndex int `json:"activeGameIndex"`
 			} `json:"round"`
 		} `json:"gameState"`
-		Actions []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		} `json:"actions"`
+		Actions []pokerAction `json:"actions"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -383,7 +377,7 @@ func parseAceyDeucey(data json.RawMessage) (*GameState, error) {
 	}
 	for _, a := range raw.Actions {
 		gs.ValidActions = append(gs.ValidActions, ValidAction{
-			Action:      fmt.Sprintf("%d", a.ID),
+			Action:      a.ID,
 			Name:        a.Name,
 			NeedsAmount: a.ID == aceyDeuceyActionBet,
 		})

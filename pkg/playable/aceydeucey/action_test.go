@@ -2,11 +2,9 @@ package aceydeucey
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/deck"
-	"strconv"
 	"testing"
 )
 
@@ -24,30 +22,38 @@ func TestAction_String(t *testing.T) {
 	})
 }
 
-func TestActionFromString(t *testing.T) {
+func TestAction_ID(t *testing.T) {
+	a := assert.New(t)
+	a.Equal("pending", ActionPending.ID())
+	a.Equal("pick-ace-low", ActionPickAceLow.ID())
+	a.Equal("pick-ace-high", ActionPickAceHigh.ID())
+	a.Equal("bet", ActionBet.ID())
+	a.Equal("bet-the-gap", ActionBetTheGap.ID())
+	a.Equal("pass", ActionPass.ID())
+
+	a.PanicsWithValue("invalid action: -1", func() {
+		_ = Action(-1).ID()
+	})
+}
+
+func TestActionFromID(t *testing.T) {
 	a := assert.New(t)
 
-	action, err := ActionFromString("0")
-	a.Equal(ActionPending, action)
-	a.NoError(err)
+	for expected := ActionPending; expected <= ActionPass; expected++ {
+		action, err := ActionFromID(expected.ID())
+		a.Equal(expected, action)
+		a.NoError(err)
+	}
 
-	action, err = ActionFromString("-1")
+	action, err := ActionFromID("abc")
 	a.Equal(-1, int(action))
-	a.EqualError(err, "invalid action: -1")
-
-	action, err = ActionFromString(strconv.Itoa(int(ActionPass) + 1))
-	a.Equal(-1, int(action))
-	a.EqualError(err, fmt.Sprintf("invalid action: %d", int(ActionPass)+1))
-
-	action, err = ActionFromString("abc")
-	a.Equal(ActionPending, action)
-	a.EqualError(err, "strconv.Atoi: parsing \"abc\": invalid syntax")
+	a.EqualError(err, "invalid action: abc")
 }
 
 func TestAction_MarshalJSON(t *testing.T) {
 	b, err := json.Marshal(ActionBetTheGap)
 	assert.NoError(t, err)
-	assert.Equal(t, `{"id":4,"name":"Bet the Gap"}`, string(b))
+	assert.Equal(t, `{"id":"bet-the-gap","name":"Bet the Gap"}`, string(b))
 }
 
 func TestAceyDeucey_getActionsForParticipant(t *testing.T) {

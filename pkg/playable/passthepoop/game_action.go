@@ -11,10 +11,10 @@ type GameAction int
 // MarshalJSON encodes a GameAction into a JSON object
 func (g GameAction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		ID   int    `json:"id"`
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	}{
-		ID:   int(g),
+		ID:   g.ID(),
 		Name: g.String(),
 	})
 }
@@ -36,13 +36,37 @@ const (
 	ActionDrawFromDeck
 )
 
-// GameActionFromInt returns a GameAction object from an integer
-func GameActionFromInt(i int) (GameAction, error) {
-	if i >= 0 && i <= int(ActionDrawFromDeck) {
-		return GameAction(i), nil
+// GameActionFromID returns a GameAction object from its string identifier
+func GameActionFromID(id string) (GameAction, error) {
+	for action := ActionStay; action <= ActionDrawFromDeck; action++ {
+		if action.ID() == id {
+			return action, nil
+		}
 	}
 
-	return 0, fmt.Errorf("no action with identifier %v", i)
+	return 0, fmt.Errorf("no action with identifier %v", id)
+}
+
+// ID returns the client-facing string identifier of the GameAction
+func (g GameAction) ID() string {
+	switch g {
+	case ActionStay:
+		return "stay"
+	case ActionTrade:
+		return "trade"
+	case ActionAccept:
+		return "accept-trade"
+	case ActionFlipKing:
+		return "flip-king"
+	case ActionBlockTrade:
+		return "block-trade"
+	case ActionGoToDeck:
+		return "go-to-deck"
+	case ActionDrawFromDeck:
+		return "draw-from-deck"
+	}
+
+	panic(fmt.Sprintf("invalid action %d", g))
 }
 
 func (g GameAction) String() string {
