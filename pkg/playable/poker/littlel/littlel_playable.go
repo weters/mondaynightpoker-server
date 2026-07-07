@@ -36,7 +36,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} traded %d card(s)", len(message.Cards)))
 		}
 
-		g.logChan <- logs
+		g.SendLogMessages(logs)
 		return playable.OK(), true, nil
 	case action.Check:
 		if err := g.ParticipantChecks(p); err != nil {
@@ -86,7 +86,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 
 	g.recordAction(currentAction, p.PlayerID, amount, nil, allIn)
 
-	g.logChan <- logs
+	g.SendLogMessages(logs)
 	return playable.OK(), true, nil
 }
 
@@ -200,9 +200,4 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 func (g *Game) Name() string {
 	name, _ := NameFromOptions(g.options)
 	return name
-}
-
-// LogChan returns a channel that can receive log messages
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
 }

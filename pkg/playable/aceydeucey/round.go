@@ -28,7 +28,7 @@ type Round struct {
 	Pot      int
 	// HalfPotMax will limit the bet to half-pot if true
 	HalfPotMax bool
-	logChan    chan []*playable.LogMessage
+	core       *playable.Core
 
 	activeGameIndex int
 	deck            *deck.Deck
@@ -481,26 +481,23 @@ func (r *Round) checkWaiting() {
 }
 
 func (r *Round) sendLogMessage(message string, card *deck.Card, playerID int64) {
-	if r.logChan != nil {
-		var playerIDs []int64
-		if playerID > 0 {
-			playerIDs = []int64{playerID}
-		}
-
-		var cards []*deck.Card
-		if card != nil {
-			cards = []*deck.Card{card}
-		}
-
-		r.logChan <- []*playable.LogMessage{
-			{
-				UUID:      uuid.New().String(),
-				PlayerIDs: playerIDs,
-				Cards:     cards,
-				Message:   message,
-			},
-		}
+	var playerIDs []int64
+	if playerID > 0 {
+		playerIDs = []int64{playerID}
 	}
+
+	var cards []*deck.Card
+	if card != nil {
+		cards = []*deck.Card{card}
+	}
+
+	r.core.SendLogMessage(&playable.LogMessage{
+		UUID:      uuid.New().String(),
+		PlayerIDs: playerIDs,
+		Cards:     cards,
+		Message:   message,
+		Time:      time.Now(),
+	})
 }
 
 func (r *Round) getMaxBet() int {

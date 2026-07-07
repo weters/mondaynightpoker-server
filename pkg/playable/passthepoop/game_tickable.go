@@ -16,11 +16,6 @@ type pendingTickableAction struct {
 	After  time.Time
 }
 
-// Interval specifies how often to call Tick()
-func (g *Game) Interval() time.Duration {
-	return time.Second
-}
-
 // Tick will try to move the game forward
 func (g *Game) Tick() (bool, error) {
 	if g.pendingTickableAction != nil {

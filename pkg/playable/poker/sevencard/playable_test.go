@@ -18,7 +18,7 @@ func TestGame_Name(t *testing.T) {
 func TestGame_LogChan(t *testing.T) {
 	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, DefaultOptions())
 	lc := game.LogChan()
-	game.logChan <- playable.SimpleLogMessageSlice(0, "test msg")
+	game.SendLogMessages(playable.SimpleLogMessageSlice(0, "test msg"))
 
 	msg := <-lc
 	assert.Equal(t, "test msg", msg[0].Message)

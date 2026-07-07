@@ -187,7 +187,7 @@ func TestGame_happyPath(t *testing.T) {
 	a.NoError(game.participantChecks(p(1)))
 	a.NoError(game.participantChecks(p(2)))
 
-	<-game.logChan
+	<-game.LogChan()
 
 	a.Equal(revealWinner, game.round)
 	a.EqualError(game.participantChecks(p(1)), "it is not your turn")

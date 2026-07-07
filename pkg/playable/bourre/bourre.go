@@ -39,9 +39,9 @@ type Game struct {
 	winningCardPlayed     *playedCard
 	roundWinnerCalculated bool
 
-	logger  logrus.FieldLogger
-	logChan chan []*playable.LogMessage
-	log     *gameLog
+	logger logrus.FieldLogger
+	*playable.Core
+	log *gameLog
 
 	pendingDealerAction *pendingDealerAction
 
@@ -50,11 +50,6 @@ type Game struct {
 
 	// done will be set after the game is over and the user's have stated they want to proceed
 	done bool
-}
-
-// Interval determines how often Tick() should be called
-func (g *Game) Interval() time.Duration {
-	return time.Second
 }
 
 // Tick will check the state of the game and possibly move the state along
@@ -115,11 +110,6 @@ func (g *Game) Tick() (bool, error) {
 // Name returns "bourre"
 func (g *Game) Name() string {
 	return "bourre"
-}
-
-// LogChan returns a channel for sending log messages
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
 }
 
 // Action performs an action
@@ -334,7 +324,7 @@ func newGame(logger logrus.FieldLogger, players []*Player, foldedPlayers []*Play
 		playerOrder:    playerOrder,
 		foldedPlayers:  foldedPlayersMap,
 		playerDiscards: make(map[*Player][]*deck.Card),
-		logChan:        make(chan []*playable.LogMessage, 256),
+		Core:           playable.NewCore(),
 		logger:         logger,
 		log: &gameLog{
 			Options:    opts,
@@ -608,7 +598,7 @@ func (g *Game) buildResults() error {
 		OldPot:        g.pot,
 		NewPot:        newPot,
 		logger:        g.logger,
-		logChan:       g.logChan,
+		core:          g.Core,
 		playerOrder:   g.playerOrder,
 		idToPlayer:    g.idToPlayer,
 	}
@@ -843,9 +833,7 @@ func (g *Game) isPlayersTurn(p *Player) bool {
 }
 
 func (g *Game) sendLogMessages(msg ...*playable.LogMessage) {
-	if g.logChan != nil {
-		g.logChan <- msg
-	}
+	g.SendLogMessages(msg)
 }
 
 func newLogMessage(playerID int64, card *deck.Card, format string, a ...interface{}) *playable.LogMessage {

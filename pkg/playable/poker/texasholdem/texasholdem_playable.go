@@ -97,7 +97,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		logs = append(logs, playable.SimpleLogMessage(p.PlayerID, "{} is all-in"))
 	}
 
-	g.logChan <- logs
+	g.SendLogMessages(logs)
 	return playable.OK(), true, nil
 }
 
@@ -159,11 +159,6 @@ func NameFromOptions(opts Options) string {
 	}
 
 	return fmt.Sprintf("%s (${%d}/${%d})", name, opts.SmallBlind, opts.BigBlind)
-}
-
-// LogChan returns a channel log messages must be sent on
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
 }
 
 // Key returns the key
@@ -228,7 +223,7 @@ func (g *Game) endGame() error {
 		logs = append(logs, &msg)
 	}
 
-	g.logChan <- logs
+	g.SendLogMessages(logs)
 	g.setPendingDealerState(DealerStateEnd, time.Second*5)
 	return nil
 }
@@ -305,9 +300,7 @@ func (g *Game) discardCardForParticipant(p *Participant, cards deck.Hand) error 
 
 	g.recordAction(action.Discard, p.PlayerID, 0, []*deck.Card{discarded}, false)
 
-	g.logChan <- []*playable.LogMessage{
-		playable.SimpleLogMessage(p.PlayerID, "{} discarded a hole card"),
-	}
+	g.SendLogMessage(playable.SimpleLogMessage(p.PlayerID, "{} discarded a hole card"))
 
 	return nil
 }

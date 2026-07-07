@@ -10,6 +10,9 @@ type Options struct {
 	Edition Edition
 	// AllowBlocks will give the player one block to use
 	AllowBlocks bool
+	// Seed is a deterministic shuffle seed for tests; -1 (the default) uses
+	// a crypto-secure shuffle. Never populated from client input.
+	Seed int64
 }
 
 // DefaultOptions returns the default options
@@ -19,5 +22,6 @@ func DefaultOptions() Options {
 		Lives:       3,
 		Edition:     &StandardEdition{},
 		AllowBlocks: false,
+		Seed:        -1,
 	}
 }

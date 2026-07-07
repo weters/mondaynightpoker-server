@@ -74,15 +74,10 @@ type Game struct {
 	done bool
 	log  *gameLog
 
-	logger  logrus.FieldLogger
-	logChan chan []*playable.LogMessage
+	logger logrus.FieldLogger
+	*playable.Core
 
 	pendingDealerAction *pendingDealerAction
-}
-
-// Interval determines how often Tick() should be called
-func (g *Game) Interval() time.Duration {
-	return time.Second
 }
 
 // Tick will check the state of the game and possibly move the state along
@@ -129,11 +124,6 @@ func (g *Game) Tick() (bool, error) {
 // Name returns "guts"
 func (g *Game) Name() string {
 	return "guts"
-}
-
-// LogChan returns a channel for sending log messages
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
 }
 
 // Action performs an action
@@ -241,7 +231,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game,
 		pendingDecisions: make(map[int64]bool),
 		decisions:        make(map[int64]bool),
 		logger:           logger,
-		logChan:          make(chan []*playable.LogMessage, 256),
+		Core:             playable.NewCore(),
 		log: &gameLog{
 			Options:    opts,
 			InitialPot: pot,
@@ -702,9 +692,7 @@ func (g *Game) nextRound() error {
 }
 
 func (g *Game) sendLogMessages(msg ...*playable.LogMessage) {
-	if g.logChan != nil {
-		g.logChan <- msg
-	}
+	g.SendLogMessages(msg)
 }
 
 func newLogMessage(playerID int64, format string, a ...interface{}) *playable.LogMessage {

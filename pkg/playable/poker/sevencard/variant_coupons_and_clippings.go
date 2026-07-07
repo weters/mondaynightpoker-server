@@ -94,9 +94,9 @@ func (c *CouponsAndClippings) handleNailClipping(game *Game, p *participant) {
 		game.pot -= ante
 		p.balance += ante
 		c.nailClippingPlayerIDs = append(c.nailClippingPlayerIDs, p.PlayerID)
-		game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} found a nail clipping! Ante refunded.")
+		game.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} found a nail clipping! Ante refunded."))
 	} else {
-		game.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} found a nail clipping but the pot is too small for a refund.")
+		game.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} found a nail clipping but the pot is too small for a refund."))
 	}
 }
 
@@ -121,7 +121,7 @@ func (c *CouponsAndClippings) triggerBogo(game *Game, rank int, p *participant) 
 		}
 	}
 
-	game.logChan <- playable.SimpleLogMessageSlice(0, "BOGO! All %ss are now wild!", rankName(rank))
+	game.SendLogMessages(playable.SimpleLogMessageSlice(0, "BOGO! All %ss are now wild!", rankName(rank)))
 }
 
 // GetVariantActions returns additional actions for the player (CouponsAndClippings has none)

@@ -27,7 +27,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		if handled {
 			g.recordAction(variantAction, p.PlayerID, 0, nil, false)
 			if len(g.pendingLogs) > 0 {
-				g.logChan <- g.pendingLogs
+				g.SendLogMessages(g.pendingLogs)
 				g.pendingLogs = make([]*playable.LogMessage, 0)
 			}
 			return playable.OK(), true, nil
@@ -47,7 +47,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 			return nil, false, err
 		}
 
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} checks")
+		g.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} checks"))
 	case ActionBet:
 		if amount <= 0 {
 			return nil, false, errors.New("invalid amount")
@@ -58,7 +58,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		canGoAllIn = true
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount)
+		g.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} bets ${%d}", amount))
 	case ActionRaise:
 		if amount <= 0 {
 			return nil, false, errors.New("invalid amount")
@@ -69,25 +69,25 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 		}
 
 		canGoAllIn = true
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} raises to ${%d}", amount)
+		g.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} raises to ${%d}", amount))
 	case ActionCall:
 		if err := g.participantCalls(p); err != nil {
 			return nil, false, err
 		}
 
 		canGoAllIn = true
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} calls")
+		g.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} calls"))
 	case ActionFold:
 		if err := g.participantFolds(p); err != nil {
 			return nil, false, err
 		}
 
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} folds")
+		g.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} folds"))
 	}
 
 	allIn := canGoAllIn && p.isAllIn()
 	if allIn {
-		g.logChan <- playable.SimpleLogMessageSlice(p.PlayerID, "{} is all-in")
+		g.SendLogMessages(playable.SimpleLogMessageSlice(p.PlayerID, "{} is all-in"))
 	}
 
 	g.recordAction(action, p.PlayerID, amount, nil, allIn)
@@ -99,7 +99,7 @@ func (g *Game) Action(playerID int64, message *playable.PayloadIn) (playerRespon
 	}
 
 	if len(g.pendingLogs) > 0 {
-		g.logChan <- g.pendingLogs
+		g.SendLogMessages(g.pendingLogs)
 		g.pendingLogs = make([]*playable.LogMessage, 0)
 	}
 
@@ -130,9 +130,4 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 		BalanceAdjustments: balanceAdjustments,
 		Log:                g.finalGameLog(),
 	}, true
-}
-
-// LogChan returns a channel where another goroutine can listen for log messages
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
 }

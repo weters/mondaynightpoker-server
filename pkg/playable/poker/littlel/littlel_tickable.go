@@ -4,11 +4,6 @@ import (
 	"time"
 )
 
-// Interval specifies how frequently a Tick() should happen
-func (g *Game) Interval() time.Duration {
-	return time.Second
-}
-
 // Tick is called every Delay() seconds to progress the state of the game
 // Currently, this just checks if the round can be ended or if the game can be ended
 func (g *Game) Tick() (bool, error) {

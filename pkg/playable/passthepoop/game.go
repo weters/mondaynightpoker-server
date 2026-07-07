@@ -12,9 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// seed must be -1 to ensure crypto-secure randomness
-var seed int64 = -1
-
 // Game is an individual game of pass the poop
 type Game struct {
 	options         Options
@@ -23,8 +20,8 @@ type Game struct {
 	participants    []*Participant
 	idToParticipant map[int64]*Participant
 
-	logger  logrus.FieldLogger
-	logChan chan []*playable.LogMessage
+	logger logrus.FieldLogger
+	*playable.Core
 
 	decisionIndex int
 	pendingTrade  bool // was the decision to swap the card
@@ -74,7 +71,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 	}
 
 	d := deck.New()
-	d.SetSeed(seed)
+	d.SetSeed(options.Seed)
 	d.Shuffle()
 
 	idToParticipants := make(map[int64]*Participant)
@@ -108,7 +105,7 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		participants:    participants,
 		idToParticipant: idToParticipants,
 		decisionIndex:   0,
-		logChan:         make(chan []*playable.LogMessage, 256),
+		Core:            playable.NewCore(),
 		logger:          logger,
 		gameLog:         gameLog,
 	}
@@ -339,8 +336,7 @@ func (g *Game) EndRound() error {
 			messages = append(messages, newLogMessage(loser.PlayerID, fmt.Sprintf("{} lost the round (-%d)", loser.LivesLost), loser.Card))
 		}
 	}
-	g.logChan <- messages
-
+	g.SendLogMessages(messages)
 	g.gameLog.SetLoserGroups(loserGroups)
 	g.gameLog.EndRound()
 
@@ -647,14 +643,8 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 	}, true
 }
 
-// LogChan returns a channel where log messages will be sent
-// Part of the Playable interface
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
-}
-
 func (g *Game) sendLogMessage(playerID int64, msg string, card ...*deck.Card) {
-	g.logChan <- []*playable.LogMessage{newLogMessage(playerID, msg, card...)}
+	g.SendLogMessages([]*playable.LogMessage{newLogMessage(playerID, msg, card...)})
 }
 
 func newLogMessage(playerID int64, msg string, card ...*deck.Card) *playable.LogMessage {

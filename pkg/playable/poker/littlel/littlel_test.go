@@ -539,7 +539,7 @@ func TestGame_sendEndOfGameLogMessages(t *testing.T) {
 ForLoop:
 	for {
 		select {
-		case <-game.logChan:
+		case <-game.LogChan():
 		default:
 			break ForLoop
 		}
@@ -548,7 +548,7 @@ ForLoop:
 	assert.NoError(t, game.NextRound())
 	assert.True(t, game.IsGameOver())
 
-	msg := <-game.logChan
+	msg := <-game.LogChan()
 	assert.Equal(t, 3, len(msg))
 	assert.Equal(t, []int64{2}, msg[0].PlayerIDs)
 	assert.Equal(t, "{} reveals Royal flush and won ${75} (${50})", msg[0].Message)

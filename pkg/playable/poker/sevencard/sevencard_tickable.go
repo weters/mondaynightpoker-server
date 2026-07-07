@@ -2,11 +2,6 @@ package sevencard
 
 import "time"
 
-// Interval defines how frequently Tick() will be called
-func (g *Game) Interval() time.Duration {
-	return time.Second
-}
-
 // Tick will try to progress the game
 func (g *Game) Tick() (bool, error) {
 	if !g.setDoneAt.IsZero() {

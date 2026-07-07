@@ -238,8 +238,7 @@ func TestGame_flipAllCards(t *testing.T) {
 func TestGame_CompleteGame(t *testing.T) {
 	opts := DefaultOptions()
 	opts.Lives = 1
-
-	seed = 1
+	opts.Seed = 1
 
 	game, err := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
 	assert.NoError(t, err)

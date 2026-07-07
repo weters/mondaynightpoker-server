@@ -26,23 +26,19 @@ const (
 	roundRevealWinner
 )
 
-// seed of -1 means truly crypto-random shuffle
-// setting to a global so we can override in a test
-var seed int64 = -1
-
 // Game represents an individual game of Little L
 type Game struct {
 	playerIDs       []int64
 	idToParticipant map[int64]*Participant
 	options         Options
 	logger          logrus.FieldLogger
-	logChan         chan []*playable.LogMessage
-	tradeIns        *TradeIns
-	deck            *deck.Deck
-	potManager      *potmanager.PotManager
-	round           round
-	community       []*deck.Card
-	discards        []*deck.Card
+	*playable.Core
+	tradeIns   *TradeIns
+	deck       *deck.Deck
+	potManager *potmanager.PotManager
+	round      round
+	community  []*deck.Card
+	discards   []*deck.Card
 
 	done    bool
 	winners map[*Participant]int
@@ -70,7 +66,7 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 	}
 
 	d := deck.New()
-	d.SetSeed(seed)
+	d.SetSeed(options.Seed)
 	d.Shuffle()
 
 	pm := potmanager.New(options.Ante)
@@ -100,7 +96,7 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 		deck:            d,
 		potManager:      pm,
 		discards:        []*deck.Card{},
-		logChan:         make(chan []*playable.LogMessage, 256),
+		Core:            playable.NewCore(),
 		logger:          logger,
 		tradeIns:        tradeIns,
 		log: &gameLog{
@@ -111,8 +107,7 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 		},
 	}
 
-	g.logChan <- playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String())
-
+	g.SendLogMessages(playable.SimpleLogMessageSlice(0, "New game of Little L started (ante: ${%d}; trades: %s)", g.options.Ante, g.GetAllowedTradeIns().String()))
 	// decision round allows all-in participants to participate with trade-ins
 	g.potManager.StartDecisionRound()
 
@@ -478,7 +473,7 @@ func (g *Game) sendEndOfGameLogMessages() {
 		}
 	}
 
-	g.logChan <- lms
+	g.SendLogMessages(lms)
 }
 
 // NameFromOptions return names for the given options

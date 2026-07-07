@@ -1,16 +1,10 @@
 package texasholdem
 
 import (
-	"github.com/google/uuid"
 	"mondaynightpoker-server/pkg/deck"
 	"mondaynightpoker-server/pkg/playable"
 	"time"
 )
-
-// Interval returns how often Tick() should be called
-func (g *Game) Interval() time.Duration {
-	return time.Second
-}
 
 // Tick tries to advance the game
 func (g *Game) Tick() (bool, error) {
@@ -52,13 +46,7 @@ func (g *Game) Tick() (bool, error) {
 		}
 
 		g.recordStreet("flop", flop...)
-		g.logChan <- []*playable.LogMessage{{
-			UUID:      uuid.New().String(),
-			PlayerIDs: nil,
-			Cards:     flop,
-			Message:   "dealer dealt the flop",
-			Time:      time.Now(),
-		}}
+		g.SendLogMessage(playable.SimpleLogMessageWithCards(0, flop, "dealer dealt the flop"))
 		g.dealerState = DealerStateFlopBettingRound
 		return true, nil
 	case DealerStateDealTurn:
@@ -68,7 +56,7 @@ func (g *Game) Tick() (bool, error) {
 		}
 
 		g.recordStreet("turn", card)
-		g.logChan <- []*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the turn")}
+		g.SendLogMessages([]*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the turn")})
 		g.dealerState = DealerStateTurnBettingRound
 		return true, nil
 	case DealerStateDealRiver:
@@ -78,7 +66,7 @@ func (g *Game) Tick() (bool, error) {
 		}
 
 		g.recordStreet("river", card)
-		g.logChan <- []*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the river")}
+		g.SendLogMessages([]*playable.LogMessage{playable.SimpleLogMessageWithCard(0, card, "dealer dealt the river")})
 		g.dealerState = DealerStateFinalBettingRound
 		return true, nil
 	case DealerStateRevealWinner:

@@ -34,8 +34,8 @@ type Game struct {
 	potManager         *potmanager.PotManager
 	lastAction         *lastAction
 	community          deck.Hand
-	logChan            chan []*playable.LogMessage
-	log                *gameLog
+	*playable.Core
+	log *gameLog
 
 	// if true, GetEndOfGameDetails() returns
 	finished bool
@@ -92,8 +92,8 @@ func NewGame(_ logrus.FieldLogger, players []playable.Player, opts Options) (*Ga
 	}
 	mgr.FinishSeatingParticipants()
 
-	lc := make(chan []*playable.LogMessage, 256)
-	lc <- logs
+	core := playable.NewCore()
+	core.SendLogMessages(logs)
 
 	return &Game{
 		options:            opts,
@@ -103,7 +103,7 @@ func NewGame(_ logrus.FieldLogger, players []playable.Player, opts Options) (*Ga
 		dealerState:        DealerStateStart,
 		pendingDealerState: nil,
 		community:          make(deck.Hand, 0, 5),
-		logChan:            lc,
+		Core:               core,
 		log: &gameLog{
 			Variant:    opts.Variant,
 			Ante:       opts.Ante,
@@ -123,7 +123,7 @@ func (g *Game) payBlinds() {
 	logs[0] = playable.SimpleLogMessage(sb.ID(), "{} paid the small blind of ${%d}", g.options.SmallBlind)
 	logs[1] = playable.SimpleLogMessage(bb.ID(), "{} paid the big blind of ${%d}", g.options.BigBlind)
 
-	g.logChan <- logs
+	g.SendLogMessages(logs)
 }
 
 func (g *Game) dealStartingCardsToEachParticipant() error {
@@ -241,6 +241,6 @@ func (g *Game) newRoundSetup() {
 		for i := potCountBefore; i < len(pots); i++ {
 			logs = append(logs, playable.SimpleLogMessage(0, "Side pot #%d created with ${%d}", i, pots[i].Amount))
 		}
-		g.logChan <- logs
+		g.SendLogMessages(logs)
 	}
 }

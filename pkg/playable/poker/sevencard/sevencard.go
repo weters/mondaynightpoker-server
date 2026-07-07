@@ -43,9 +43,9 @@ type Game struct {
 	winners    map[*participant]int
 
 	pendingLogs []*playable.LogMessage
-	logChan     chan []*playable.LogMessage
-	logger      logrus.FieldLogger
-	log         *gameLog
+	*playable.Core
+	logger logrus.FieldLogger
+	log    *gameLog
 
 	setDoneAt time.Time // set done to true after this time
 
@@ -106,7 +106,7 @@ func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Opt
 		dealerIndex:     len(players) - 1, // dealer is last player
 		pot:             options.Ante * len(players),
 		pendingLogs:     make([]*playable.LogMessage, 0),
-		logChan:         make(chan []*playable.LogMessage, 256),
+		Core:            playable.NewCore(),
 		logger:          logger,
 		log: &gameLog{
 			Variant: options.Variant.Name(),
@@ -139,7 +139,7 @@ func (g *Game) Start() error {
 	// all but one player) may have ended the game during dealing. In that case
 	// endGame() already set round=revealWinner, so skip advancing rounds.
 	if g.isGameOver() {
-		g.logChan <- g.pendingLogs
+		g.SendLogMessages(g.pendingLogs)
 		g.pendingLogs = make([]*playable.LogMessage, 0)
 		return nil
 	}
@@ -147,7 +147,7 @@ func (g *Game) Start() error {
 	g.determineFirstToAct()
 	g.round++
 
-	g.logChan <- g.pendingLogs
+	g.SendLogMessages(g.pendingLogs)
 	g.pendingLogs = make([]*playable.LogMessage, 0)
 
 	// If all remaining players are all-in, auto-advance through rounds

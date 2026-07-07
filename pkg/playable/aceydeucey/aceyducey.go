@@ -20,17 +20,12 @@ type Game struct {
 	orderedParticipants []*Participant
 	participants        map[int64]*Participant
 	deck                *deck.Deck
-	logChan             chan []*playable.LogMessage
-	turnIndex           int
-	logger              logrus.FieldLogger
+	*playable.Core
+	turnIndex int
+	logger    logrus.FieldLogger
 
 	pot    int
 	rounds []*Round
-}
-
-// Interval is how long we should wait before updating the game state
-func (g *Game) Interval() time.Duration {
-	return time.Second
 }
 
 // NewGameV2 returns a new game from playable.Player implementations
@@ -68,15 +63,13 @@ func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Ga
 		orderedParticipants: orderedParticipants,
 		participants:        idToParticipant,
 		deck:                d,
-		logChan:             make(chan []*playable.LogMessage, 256),
+		Core:                playable.NewCore(),
 		turnIndex:           0,
 		pot:                 len(playerIDs) * options.Ante,
 		logger:              logger,
 	}
 
-	a.logChan <- []*playable.LogMessage{
-		playable.SimpleLogMessage(0, "New game of %s started — %d players ante ${%d} each (pot ${%d})", a.Name(), len(playerIDs), options.Ante, a.pot),
-	}
+	a.SendLogMessage(playable.SimpleLogMessage(0, "New game of %s started — %d players ante ${%d} each (pot ${%d})", a.Name(), len(playerIDs), options.Ante, a.pot))
 
 	a.newRound()
 	return a, nil
@@ -203,11 +196,6 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 	}, true
 }
 
-// LogChan should return a channel that a game will send log messages to
-func (g *Game) LogChan() <-chan []*playable.LogMessage {
-	return g.logChan
-}
-
 func (g *Game) getCurrentTurn() *Participant {
 	id := g.orderedParticipants[g.turnIndex].PlayerID
 	participant, ok := g.participants[id]
@@ -237,7 +225,7 @@ func (g *Game) newRound() {
 
 	turn := g.getCurrentTurn()
 	r := NewRound(g.options, turn.PlayerID, g.deck, g.pot)
-	r.logChan = g.logChan
+	r.core = g.Core
 	g.rounds = append(g.rounds, r)
 
 	// limit the bet to half the pot if not all participants went yet

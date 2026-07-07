@@ -21,7 +21,7 @@ type Result struct {
 	NewPot        int
 
 	logger      logrus.FieldLogger
-	logChan     chan []*playable.LogMessage
+	core        *playable.Core
 	playerOrder map[*Player]int
 	idToPlayer  map[int64]*Player
 }
@@ -79,7 +79,8 @@ func (r *Result) NewGame() (*Game, error) {
 	g.idToPlayer = r.idToPlayer
 	g.parentResult = r
 	g.logger = r.logger
-	g.logChan = r.logChan
+	// carry the log channel into the next hand so the dealer keeps receiving messages
+	g.Core = r.core
 
 	return g, nil
 }

@@ -14,7 +14,7 @@ import (
 func drainLogChannel(game *Game) {
 	go func() {
 		//nolint:revive // intentionally empty to drain channel
-		for range game.logChan {
+		for range game.LogChan() {
 		}
 	}()
 }
