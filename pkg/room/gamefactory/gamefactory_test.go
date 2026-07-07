@@ -3,12 +3,28 @@ package gamefactory
 import (
 	"testing"
 
+	"mondaynightpoker-server/pkg/model"
+	"mondaynightpoker-server/pkg/playable"
+
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"mondaynightpoker-server/pkg/model"
-	"mondaynightpoker-server/pkg/playable"
 )
+
+// testPlayerTables builds PlayerTable fixtures for factory tests
+func testPlayerTables(ids ...int64) []*model.PlayerTable {
+	players := make([]*model.PlayerTable, len(ids))
+	for i, id := range ids {
+		players[i] = &model.PlayerTable{
+			Player:     &model.Player{ID: id},
+			PlayerID:   id,
+			TableStake: 10000,
+			Active:     true,
+		}
+	}
+
+	return players
+}
 
 // Test_factorySlugsMatchPlayerState ensures the slug each game reports in its player
 // state matches the key it is registered under. The frontend starts a game by sending
@@ -35,24 +51,7 @@ func Test_factorySlugsMatchPlayerState(t *testing.T) {
 			args, ok := createArgs[slug]
 			require.True(t, ok, "add createGame args for new game %q", slug)
 
-			players := make([]*model.PlayerTable, len(args.playerIDs))
-			for i, id := range args.playerIDs {
-				players[i] = &model.PlayerTable{
-					Player:     &model.Player{ID: id},
-					PlayerID:   id,
-					TableStake: 10000,
-					Active:     true,
-				}
-			}
-
-			// prefer V2 when implemented, mirroring the dealer's dispatch
-			var game playable.Playable
-			var err error
-			if v2, isV2 := factory.(V2); isV2 {
-				game, err = v2.CreateGameV2(logrus.StandardLogger(), players, args.data)
-			} else {
-				game, err = factory.CreateGame(logrus.StandardLogger(), args.playerIDs, args.data)
-			}
+			game, err := factory.CreateGame(logrus.StandardLogger(), testPlayerTables(args.playerIDs...), args.data)
 			require.NoError(t, err)
 
 			state, err := game.GetPlayerState(args.playerIDs[0])

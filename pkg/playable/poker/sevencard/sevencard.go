@@ -56,22 +56,8 @@ type Game struct {
 // NewGame returns a new seven-card poker Game
 // Deprecated: Use NewGameV2 instead for proper table stake support
 func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
-	// Create players with 0 table stake for backwards compatibility
-	players := make([]playable.Player, len(playerIDs))
-	for i, id := range playerIDs {
-		players[i] = &simplePlayer{id: id, tableStake: 0}
-	}
-	return NewGameV2(logger, players, options)
+	return NewGameV2(logger, playable.SimplePlayers(playerIDs), options)
 }
-
-// simplePlayer implements playable.Player for backwards compatibility
-type simplePlayer struct {
-	id         int64
-	tableStake int
-}
-
-func (s *simplePlayer) GetPlayerID() int64 { return s.id }
-func (s *simplePlayer) GetTableStake() int { return s.tableStake }
 
 // NewGameV2 returns a new seven-card poker Game with table stake support
 func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Options) (*Game, error) {

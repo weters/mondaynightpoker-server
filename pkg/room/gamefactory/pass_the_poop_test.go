@@ -1,9 +1,10 @@
 package gamefactory
 
 import (
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/playable"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_passThePoopFactory_Name(t *testing.T) {

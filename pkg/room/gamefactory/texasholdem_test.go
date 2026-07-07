@@ -1,24 +1,19 @@
 package gamefactory
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/texasholdem"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_texasHoldEmFactory_CreateGame(t *testing.T) {
-	assert.PanicsWithValue(t, "use CreateGameV2", func() {
-		_, _ = factories["texas-hold-em"].CreateGame(logrus.StandardLogger(), []int64{1, 2, 3}, playable.AdditionalData{})
-	})
-}
-
-func Test_texasHoldEmFactory_CreateGameV2(t *testing.T) {
 	a := assert.New(t)
 
-	game, err := factories["texas-hold-em"].(V2).CreateGameV2(logrus.StandardLogger(), []*model.PlayerTable{
+	game, err := factories["texas-hold-em"].CreateGame(logrus.StandardLogger(), []*model.PlayerTable{
 		{PlayerID: 1, TableStake: 100},
 		{PlayerID: 2, TableStake: 100},
 	}, playable.AdditionalData{})

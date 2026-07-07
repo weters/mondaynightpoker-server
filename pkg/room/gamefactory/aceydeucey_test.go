@@ -1,16 +1,17 @@
 package gamefactory
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/aceydeucey"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_aceyDeuceyFactory_CreateGame(t *testing.T) {
 	a := assert.New(t)
-	game, err := aceyDeuceyFactory{}.CreateGame(logrus.StandardLogger(), []int64{1, 2}, playable.AdditionalData{})
+	game, err := aceyDeuceyFactory{}.CreateGame(logrus.StandardLogger(), testPlayerTables(1, 2), playable.AdditionalData{})
 	a.IsType(&aceydeucey.Game{}, game)
 	a.NoError(err)
 }

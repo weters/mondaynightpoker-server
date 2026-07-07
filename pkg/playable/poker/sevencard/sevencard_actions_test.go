@@ -140,7 +140,7 @@ func createTestGameWithTableStakes(stakes []int) (*Game, func(id int64) *partici
 
 	players := make([]playable.Player, len(stakes))
 	for i, stake := range stakes {
-		players[i] = &simplePlayer{id: int64(i + 1), tableStake: stake}
+		players[i] = &playable.SimplePlayer{ID: int64(i + 1), TableStake: stake}
 	}
 
 	game, err := NewGameV2(logrus.StandardLogger(), players, opts)
@@ -265,9 +265,9 @@ func TestGame_allPlayersAllIn_autoAdvancesToEnd(t *testing.T) {
 	}
 
 	players := []playable.Player{
-		&simplePlayer{id: 1, tableStake: 25},
-		&simplePlayer{id: 2, tableStake: 25},
-		&simplePlayer{id: 3, tableStake: 25},
+		&playable.SimplePlayer{ID: 1, TableStake: 25},
+		&playable.SimplePlayer{ID: 2, TableStake: 25},
+		&playable.SimplePlayer{ID: 3, TableStake: 25},
 	}
 
 	game, err := NewGameV2(logrus.StandardLogger(), players, opts)

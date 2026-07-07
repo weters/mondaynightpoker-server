@@ -2,10 +2,11 @@ package gamefactory
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/sevencard"
+
+	"github.com/sirupsen/logrus"
 )
 
 type sevenCardFactory struct{}
@@ -19,27 +20,8 @@ func (s sevenCardFactory) Details(additionalData playable.AdditionalData) (name 
 	return opts.Variant.Name(), opts.Ante, nil
 }
 
-// CreateGame is deprecated, use CreateGameV2 instead
-func (s sevenCardFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	opts, err := s.getOptions(additionalData)
-	if err != nil {
-		return nil, err
-	}
-
-	game, err := sevencard.NewGame(logger, playerIDs, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := game.Start(); err != nil {
-		return nil, err
-	}
-
-	return game, nil
-}
-
-// CreateGameV2 creates a new seven-card game with table stake support
-func (s sevenCardFactory) CreateGameV2(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
+// CreateGame creates a new seven-card game with table stake support
+func (s sevenCardFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	opts, err := s.getOptions(additionalData)
 	if err != nil {
 		return nil, err

@@ -3,9 +3,11 @@ package gamefactory
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
+
+	"github.com/sirupsen/logrus"
 )
 
 type passThePoopFactory struct{}
@@ -25,13 +27,13 @@ func (p passThePoopFactory) Details(additionalData playable.AdditionalData) (str
 	return name, opts.Ante, nil
 }
 
-func (p passThePoopFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (p passThePoopFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	opts, err := p.getOptions(additionalData)
 	if err != nil {
 		return nil, err
 	}
 
-	game, err := passthepoop.NewGame(logger, playerIDs, opts)
+	game, err := passthepoop.NewGameV2(logger, getPlayersFromPlayerTableList(players), opts)
 	if err != nil {
 		return nil, err
 	}

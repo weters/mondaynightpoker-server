@@ -755,13 +755,7 @@ func (d *Dealer) createGame(client *Client, msg *playable.PayloadIn) error {
 		"playerIDs": playerIDs,
 	})
 
-	var game playable.Playable
-	if v2, ok := factory.(gamefactory.V2); ok {
-		game, err = v2.CreateGameV2(logger, players, msg.AdditionalData)
-	} else {
-		game, err = factory.CreateGame(logger, playerIDs, msg.AdditionalData)
-	}
-
+	game, err := factory.CreateGame(logger, players, msg.AdditionalData)
 	if err != nil {
 		return err
 	}

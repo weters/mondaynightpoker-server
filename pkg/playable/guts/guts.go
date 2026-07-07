@@ -194,6 +194,11 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 	}, true
 }
 
+// NewGameV2 returns a new guts game from playable.Player implementations
+func NewGameV2(logger logrus.FieldLogger, players []playable.Player, opts Options) (*Game, error) {
+	return NewGame(logger, playable.PlayerIDs(players), opts)
+}
+
 // NewGame returns a new guts game
 func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game, error) {
 	if len(playerIDs) < 2 || len(playerIDs) > 10 {

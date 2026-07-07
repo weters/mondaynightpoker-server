@@ -33,6 +33,11 @@ func (g *Game) Interval() time.Duration {
 	return time.Second
 }
 
+// NewGameV2 returns a new game from playable.Player implementations
+func NewGameV2(logger logrus.FieldLogger, players []playable.Player, options Options) (*Game, error) {
+	return NewGame(logger, playable.PlayerIDs(players), options)
+}
+
 // NewGame returns a new game
 func NewGame(logger logrus.FieldLogger, playerIDs []int64, options Options) (*Game, error) {
 	if len(playerIDs) < 2 {

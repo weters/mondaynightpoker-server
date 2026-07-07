@@ -257,6 +257,12 @@ func (g *Game) GetEndOfGameDetails() (gameOverDetails *playable.GameOverDetails,
 	}, true
 }
 
+// NewGameV2 returns a new bourré game from playable.Player implementations
+// players should be in the correct order. i.e., any rotation must happen beforehand
+func NewGameV2(logger logrus.FieldLogger, players []playable.Player, opts Options) (*Game, error) {
+	return NewGame(logger, playable.PlayerIDs(players), opts)
+}
+
 // NewGame returns a new bourré game
 // players should be in the correct order. i.e., any rotation must happen beforehand
 func NewGame(logger logrus.FieldLogger, playerIDs []int64, opts Options) (*Game, error) {

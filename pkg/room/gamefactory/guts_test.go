@@ -3,9 +3,10 @@ package gamefactory
 import (
 	"testing"
 
+	"mondaynightpoker-server/pkg/playable"
+
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"mondaynightpoker-server/pkg/playable"
 )
 
 func Test_gutsFactory_Details(t *testing.T) {
@@ -36,7 +37,7 @@ func Test_gutsFactory_Details(t *testing.T) {
 func Test_gutsFactory_CreateGame(t *testing.T) {
 	factory := factories["guts"]
 
-	game, err := factory.CreateGame(logrus.StandardLogger(), []int64{1, 2}, playable.AdditionalData{
+	game, err := factory.CreateGame(logrus.StandardLogger(), testPlayerTables(1, 2), playable.AdditionalData{
 		"ante": float64(25),
 	})
 	assert.NoError(t, err)
@@ -48,7 +49,7 @@ func Test_gutsFactory_CreateGame_InvalidPlayerCount(t *testing.T) {
 	factory := factories["guts"]
 
 	// Too few players
-	game, err := factory.CreateGame(logrus.StandardLogger(), []int64{1}, playable.AdditionalData{})
+	game, err := factory.CreateGame(logrus.StandardLogger(), testPlayerTables(1), playable.AdditionalData{})
 	assert.Error(t, err)
 	assert.Nil(t, game)
 }

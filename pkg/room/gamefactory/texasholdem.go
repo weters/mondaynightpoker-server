@@ -1,21 +1,18 @@
 package gamefactory
 
 import (
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/texasholdem"
+
+	"github.com/sirupsen/logrus"
 )
 
 type texasHoldEmFactory struct{}
 
-func (t texasHoldEmFactory) CreateGameV2(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (t texasHoldEmFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	p := getPlayersFromPlayerTableList(players)
 	return texasholdem.NewGame(logger, p, texasHoldEmOptions(additionalData))
-}
-
-func (t texasHoldEmFactory) CreateGame(_ logrus.FieldLogger, _ []int64, _ playable.AdditionalData) (playable.Playable, error) {
-	panic("use CreateGameV2")
 }
 
 func (t texasHoldEmFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {

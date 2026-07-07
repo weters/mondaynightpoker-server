@@ -1,15 +1,17 @@
 package gamefactory
 
 import (
-	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/aceydeucey"
+
+	"github.com/sirupsen/logrus"
 )
 
 type aceyDeuceyFactory struct{}
 
-func (a aceyDeuceyFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
-	return aceydeucey.NewGame(logger, playerIDs, getAceyDeuceyOptions(additionalData))
+func (a aceyDeuceyFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
+	return aceydeucey.NewGameV2(logger, getPlayersFromPlayerTableList(players), getAceyDeuceyOptions(additionalData))
 }
 
 func (a aceyDeuceyFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {

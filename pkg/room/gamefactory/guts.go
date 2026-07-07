@@ -1,9 +1,11 @@
 package gamefactory
 
 import (
-	"github.com/sirupsen/logrus"
+	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/guts"
+
+	"github.com/sirupsen/logrus"
 )
 
 type gutsFactory struct{}
@@ -13,9 +15,9 @@ func (g gutsFactory) Details(additionalData playable.AdditionalData) (string, in
 	return guts.NameFromOptions(opts), opts.Ante, nil
 }
 
-func (g gutsFactory) CreateGame(logger logrus.FieldLogger, playerIDs []int64, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (g gutsFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	opts := getGutsOptions(additionalData)
-	game, err := guts.NewGame(logger, playerIDs, opts)
+	game, err := guts.NewGameV2(logger, getPlayersFromPlayerTableList(players), opts)
 	if err != nil {
 		return nil, err
 	}

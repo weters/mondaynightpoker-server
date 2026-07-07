@@ -1,10 +1,11 @@
 package gamefactory
 
 import (
-	"github.com/sirupsen/logrus"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/poker/littlel"
+
+	"github.com/sirupsen/logrus"
 )
 
 type littleLFactory struct{}
@@ -19,11 +20,7 @@ func (l littleLFactory) Details(additionalData playable.AdditionalData) (string,
 	return name, opts.Ante, nil
 }
 
-func (l littleLFactory) CreateGame(_ logrus.FieldLogger, _ []int64, _ playable.AdditionalData) (playable.Playable, error) {
-	panic("use CreateGameV2")
-}
-
-func (l littleLFactory) CreateGameV2(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
+func (l littleLFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	p := getPlayersFromPlayerTableList(players)
 
 	game, err := littlel.NewGameV2(logger, p, getOptions(additionalData))
