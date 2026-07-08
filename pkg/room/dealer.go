@@ -48,9 +48,6 @@ type Dealer struct {
 	stateChanged  chan state
 	close         chan bool
 
-	// persist serializes database writes on a dedicated goroutine so the run
-	// loop never blocks on the database
-	persist chan func()
 	// persistRetryDelays are the waits between persistGameResult attempts
 	persistRetryDelays []time.Duration
 
@@ -59,20 +56,12 @@ type Dealer struct {
 
 	// rosterGen tags roster fetches so stale results are dropped
 	rosterGen uint64
-	// persistingGame is true while a finished game's results are being saved;
-	// starting the next game waits on it so balances are read post-adjustment
-	persistingGame bool
-	deferredStart  *deferredGameStart
+	// persistDone is closed once the previous game's results are saved; the
+	// next game start waits on it so balances are read post-adjustment
+	persistDone chan struct{}
 
 	pendingGame       *pendingGame
 	lastGameStartedBy *model.Player
-}
-
-// deferredGameStart holds a game start that arrived while the previous game's
-// results were still persisting
-type deferredGameStart struct {
-	client  *Client
-	message *playable.PayloadIn
 }
 
 // NewDealer creates a new dealer object
@@ -87,7 +76,6 @@ func NewDealer(pitBoss *PitBoss, table *model.Table) *Dealer {
 		execInRunLoop:      make(chan func(), 256),
 		stateChanged:       make(chan state, 256),
 		close:              make(chan bool),
-		persist:            make(chan func(), 64),
 		persistRetryDelays: []time.Duration{time.Second, 5 * time.Second},
 		game:               nil,
 	}
@@ -98,28 +86,6 @@ func NewDealer(pitBoss *PitBoss, table *model.Table) *Dealer {
 // StartShift starts the run loop
 func (d *Dealer) StartShift() {
 	go d.runLoop()
-	go d.persistLoop()
-}
-
-// persistLoop executes queued database writes in order. It exits after the run
-// loop closes the persist channel and the queue fully drains, so no accepted
-// write is ever lost.
-func (d *Dealer) persistLoop() {
-	for fn := range d.persist {
-		fn()
-	}
-}
-
-// enqueuePersist queues a database write. If the queue is unexpectedly full the
-// write runs inline (blocking the run loop) rather than being dropped.
-// NOTE: must only be called from the run loop
-func (d *Dealer) enqueuePersist(fn func()) {
-	select {
-	case d.persist <- fn:
-	default:
-		logrus.WithField("uuid", d.table.UUID).Error("persist queue full; writing inline")
-		fn()
-	}
 }
 
 // tryExecInRunLoop re-enters the run loop from a background goroutine without
@@ -174,13 +140,7 @@ func (d *Dealer) runLoop() {
 		case <-pendingGameTimer:
 			pg := d.pendingGame
 			d.pendingGame = nil
-
-			if d.persistingGame {
-				// the previous game's balances are still being saved; start once done
-				d.deferredStart = &deferredGameStart{client: pg.client, message: pg.message}
-			} else {
-				d.startGame(pg.client, pg.message)
-			}
+			d.startGame(pg.client, pg.message)
 		case messages := <-logChan:
 			d.sendLogMessages(messages)
 		case s := <-d.stateChanged:
@@ -199,7 +159,6 @@ func (d *Dealer) runLoop() {
 			fn()
 		case <-d.close:
 			log.WithField("uuid", d.table.UUID).Debug("terminating dealer run loop")
-			close(d.persist)
 			return
 		}
 	}
@@ -554,41 +513,37 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			return
 		}
 
-		d.execInRunLoop <- func() {
-			if isTableAdmin, ok := msg.AdditionalData["isTableAdmin"].(bool); ok {
-				playerTable.IsTableAdmin = isTableAdmin
-			}
-
-			if canStart, ok := msg.AdditionalData["canStart"].(bool); ok {
-				playerTable.CanStart = canStart
-			}
-
-			if canRestart, ok := msg.AdditionalData["canRestart"].(bool); ok {
-				playerTable.CanRestart = canRestart
-			}
-
-			if canTerminate, ok := msg.AdditionalData["canTerminate"].(bool); ok {
-				playerTable.CanTerminate = canTerminate
-			}
-
-			if isBlocked, ok := msg.AdditionalData["isBlocked"].(bool); ok {
-				if isBlocked {
-					playerTable.Active = false
-				}
-
-				playerTable.IsBlocked = isBlocked
-			}
-
-			d.enqueuePersist(func() {
-				if err := d.store.SavePlayerTable(context.Background(), playerTable); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				d.tryExecInRunLoop(d.requestPlayerData)
-			})
+		if isTableAdmin, ok := msg.AdditionalData["isTableAdmin"].(bool); ok {
+			playerTable.IsTableAdmin = isTableAdmin
 		}
+
+		if canStart, ok := msg.AdditionalData["canStart"].(bool); ok {
+			playerTable.CanStart = canStart
+		}
+
+		if canRestart, ok := msg.AdditionalData["canRestart"].(bool); ok {
+			playerTable.CanRestart = canRestart
+		}
+
+		if canTerminate, ok := msg.AdditionalData["canTerminate"].(bool); ok {
+			playerTable.CanTerminate = canTerminate
+		}
+
+		if isBlocked, ok := msg.AdditionalData["isBlocked"].(bool); ok {
+			if isBlocked {
+				playerTable.Active = false
+			}
+
+			playerTable.IsBlocked = isBlocked
+		}
+
+		if err := d.store.SavePlayerTable(context.Background(), playerTable); err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
+		}
+
+		c.Send(playable.OK(msg.Context))
+		d.stateChanged <- stateClientEvent
 	case "tableStake":
 		pt, err := d.store.GetPlayerTable(context.Background(), c.player, c.table)
 		if err != nil {
@@ -610,19 +565,14 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			return
 		}
 
-		d.execInRunLoop <- func() {
-			pt.TableStake = int(tableStake)
-
-			d.enqueuePersist(func() {
-				if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				d.tryExecInRunLoop(d.requestPlayerData)
-			})
+		pt.TableStake = int(tableStake)
+		if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
 		}
+
+		c.Send(playable.OK(msg.Context))
+		d.stateChanged <- stateClientEvent
 	case "playerStatus":
 		var pt *model.PlayerTable
 		var err error
@@ -664,19 +614,14 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 			return
 		}
 
-		d.execInRunLoop <- func() {
-			pt.Active = isActive
-
-			d.enqueuePersist(func() {
-				if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
-					c.Send(newErrorResponse(msg.Context, err))
-					return
-				}
-
-				c.Send(playable.OK(msg.Context))
-				d.tryExecInRunLoop(d.requestPlayerData)
-			})
+		pt.Active = isActive
+		if err := d.store.SavePlayerTable(context.Background(), pt); err != nil {
+			c.Send(newErrorResponse(msg.Context, err))
+			return
 		}
+
+		c.Send(playable.OK(msg.Context))
+		d.stateChanged <- stateClientEvent
 	default:
 		d.execInRunLoop <- func() {
 			game := d.game
@@ -708,9 +653,9 @@ func (d *Dealer) ReceivedMessage(c *Client, msg *playable.PayloadIn) {
 	}
 }
 
-// endGame tears the game down immediately and persists the results in the
-// background. The next game cannot start until persistence completes so it
-// reads post-adjustment balances.
+// endGame tears the game down immediately and persists the results on a
+// background goroutine. startGame waits on persistDone before reading the
+// roster, so the next game always sees post-adjustment balances.
 // NOTE: must only be called from the run loop
 func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetails) {
 	gameName := game.Name()
@@ -722,13 +667,18 @@ func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetai
 
 	d.unsetGame()
 	d.stateChanged <- stateGameEnded
-	d.persistingGame = true
 
-	d.enqueuePersist(func() {
+	done := make(chan struct{})
+	d.persistDone = done
+
+	go func() {
 		persistErr := d.persistGameResult(gameName, details)
 		if persistErr != nil {
 			logrus.WithField("uuid", d.table.UUID).WithError(persistErr).Error("could not persist game result")
 		}
+
+		// release any waiting game start before the cosmetic picker fetch
+		close(done)
 
 		var pickerMsgs []*playable.LogMessage
 		if lastPickerID > 0 {
@@ -738,8 +688,6 @@ func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetai
 		}
 
 		d.tryExecInRunLoop(func() {
-			d.persistingGame = false
-
 			if persistErr != nil {
 				d.sendLogMessages([]*playable.LogMessage{{
 					UUID:    uuid.New().String(),
@@ -752,18 +700,13 @@ func (d *Dealer) endGame(game playable.Playable, details *playable.GameOverDetai
 				d.sendLogMessages(pickerMsgs)
 			}
 
-			if ds := d.deferredStart; ds != nil {
-				d.deferredStart = nil
-				d.startGame(ds.client, ds.message)
-			}
-
 			d.requestPlayerData()
 		})
-	})
+	}()
 }
 
 // persistGameResult saves the game record and balance adjustments, retrying on
-// failure. Runs on the persist goroutine.
+// failure. Runs on a background goroutine.
 func (d *Dealer) persistGameResult(gameName string, details *playable.GameOverDetails) error {
 	var lastErr error
 	for attempt := 0; attempt <= len(d.persistRetryDelays); attempt++ {
@@ -874,10 +817,17 @@ func (d *Dealer) scheduleGame(c *Client, msg *playable.PayloadIn) error {
 }
 
 // startGame fetches the seating order in the background, then constructs the
-// game back on the run loop
+// game back on the run loop. If the previous game's results are still being
+// saved, the roster read waits for them so it sees post-adjustment balances.
 // NOTE: must only be called from the run loop
 func (d *Dealer) startGame(client *Client, msg *playable.PayloadIn) {
+	persistDone := d.persistDone
+
 	go func() {
+		if persistDone != nil {
+			<-persistDone
+		}
+
 		players, err := d.getNextPlayersForGame()
 
 		d.tryExecInRunLoop(func() {
