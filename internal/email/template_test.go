@@ -36,3 +36,21 @@ func TestRenderTemplate_passwordReset(t *testing.T) {
 	a.Contains(out, "This email was intended for player@example.com")
 	a.Contains(out, `src="https://example.com/monday-night-poker@2x.png"`)
 }
+
+func TestRenderTemplate_verifyAccount(t *testing.T) {
+	a := assert.New(t)
+	tpl, err := NewTemplate(filepath.Join("..", "..", "templates"))
+	a.NoError(err)
+
+	out, err := tpl.RenderTemplate("verify_account.html", map[string]string{
+		"url":   "https://example.com/verify-account/token123",
+		"email": "player@example.com",
+		"host":  "https://example.com",
+	})
+	a.NoError(err)
+	a.Contains(out, `href="https://example.com/verify-account/token123"`)
+	a.Contains(out, "Verify Account</a>")
+	a.Contains(out, "You have registered player@example.com for an account")
+	a.Contains(out, "This email was intended for player@example.com")
+	a.Contains(out, `src="https://example.com/monday-night-poker@2x.png"`)
+}

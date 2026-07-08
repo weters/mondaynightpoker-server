@@ -3,91 +3,78 @@
 <head>
     <title>Monday Night Poker: Verify Account</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light only">
     <style>
         @import url("https://use.typekit.net/ukr2lpr.css");
 
-        * {
-            padding: 0;
+        body {
             margin: 0;
-            outline: none;
-            box-sizing: border-box;
-        }
-
-        html, body {
-            background-color: #f2f2f2;
-            font-family: gesta, sans-serif;
-            color: #011F26
-        }
-
-        h1, h2, p {
-            margin-bottom: 20px;
-        }
-
-        header {
-            background-color: #011F26;
-            text-align: right;
-            padding: 24px 0;
-        }
-
-        header div {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        header img {
-            height: 32px;
-        }
-
-        main {
-            background: linear-gradient(#011F26, #011F26 49px, #f2f2f2 50px);
-        }
-
-        main > div {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 24px;
-        }
-
-        a {
-            color: #F26E50;
-        }
-
-        footer {
-            margin-top: 24px;
-        }
-
-        footer p {
-            max-width: 800px;
-            margin: 0 auto;
-            padding-left: 24px;
-            font-size: 0.8em;
-            color: #999;
+            padding: 0;
         }
     </style>
 </head>
-<body>
-<div class="container">
-    <header>
-        <div><img alt="Monday Night Poker"
-                  src="{{ .host }}/monday-night-poker@2x.png"
-                  srcset="{{ .host }}/monday-night-poker.png,
-                     {{ .host }}/monday-night-poker@2x.png 2x"/></div>
-    </header>
-    <main>
-        <div>
-            <h2>Verify Your Account</h2>
-
-            <p>You have registered {{ .email }} for an account on Monday Night Poker.</p>
-
-            <p>To complete your sign-up, please verify your account by clicking the following URL:
-                <a href="{{ .url }}">{{ .url }}</a></p>
-        </div>
-    </main>
-    <footer>
-        <p>This email was intended for {{ .email }}</p>
-    </footer>
+<body style="margin: 0; padding: 0; background-color: #f2f2f2;">
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">
+    Verify your account to finish signing up for Monday Night Poker.
 </div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f2f2f2"
+       style="background-color: #f2f2f2;">
+    <tr>
+        <td align="center" style="padding: 32px 16px;">
+            <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                   style="width: 100%; max-width: 600px;">
+                <tr>
+                    <td bgcolor="#011F26" align="center"
+                        style="background-color: #011F26; padding: 24px; border-radius: 8px 8px 0 0;">
+                        <img alt="Monday Night Poker" height="32"
+                             src="{{ .host }}/monday-night-poker@2x.png"
+                             style="display: block; border: 0; height: 32px;"/>
+                    </td>
+                </tr>
+                <tr>
+                    <td bgcolor="#ffffff"
+                        style="background-color: #ffffff; padding: 40px 32px; border-radius: 0 0 8px 8px; font-family: gesta, 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #011F26;">
+                        <h1 style="margin: 0 0 16px; font-size: 24px; line-height: 32px; color: #011F26;">
+                            Verify Your Account</h1>
+
+                        <p style="margin: 0 0 24px; font-size: 16px; line-height: 24px;">
+                            You have registered {{ .email }} for an account on Monday Night Poker.
+                            Click the button below to verify your account and complete your
+                            sign-up.</p>
+
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+                               style="margin: 0 auto 24px;">
+                            <tr>
+                                <td align="center" bgcolor="#F26E50"
+                                    style="background-color: #F26E50; border-radius: 6px;">
+                                    <a href="{{ .url }}" target="_blank"
+                                       style="display: inline-block; padding: 14px 32px; font-family: gesta, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: bold; line-height: 20px; color: #ffffff; text-decoration: none; border-radius: 6px;">
+                                        Verify Account</a>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="margin: 0 0 24px; font-size: 14px; line-height: 21px; color: #55666b;">
+                            If you didn't create this account, you can safely ignore this
+                            email.</p>
+
+                        <p style="margin: 0; padding-top: 24px; border-top: 1px solid #e5e8e9; font-size: 12px; line-height: 18px; color: #55666b;">
+                            If the button doesn't work, copy and paste this link into your
+                            browser:<br>
+                            <a href="{{ .url }}" target="_blank"
+                               style="color: #F26E50; word-break: break-all;">{{ .url }}</a></p>
+                    </td>
+                </tr>
+                <tr>
+                    <td align="center" style="padding: 24px 16px 0;">
+                        <p style="margin: 0; font-family: gesta, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; line-height: 18px; color: #999999;">
+                            This email was intended for {{ .email }}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 </body>
 </html>
