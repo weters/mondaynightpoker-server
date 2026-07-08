@@ -1,8 +1,10 @@
 package email
 
 import (
-	"github.com/stretchr/testify/assert"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRenderTemplate(t *testing.T) {
@@ -16,4 +18,21 @@ func TestRenderTemplate(t *testing.T) {
 	out, err = tpl.RenderTemplate("file2.html", map[string]string{"Var": "Another Variable"})
 	a.NoError(err)
 	a.Equal("<p>File 2 Another Variable</p>", out)
+}
+
+func TestRenderTemplate_passwordReset(t *testing.T) {
+	a := assert.New(t)
+	tpl, err := NewTemplate(filepath.Join("..", "..", "templates"))
+	a.NoError(err)
+
+	out, err := tpl.RenderTemplate("password_reset.html", map[string]string{
+		"url":   "https://example.com/reset-password/token123",
+		"email": "player@example.com",
+		"host":  "https://example.com",
+	})
+	a.NoError(err)
+	a.Contains(out, `href="https://example.com/reset-password/token123"`)
+	a.Contains(out, "Reset Password</a>")
+	a.Contains(out, "This email was intended for player@example.com")
+	a.Contains(out, `src="https://example.com/monday-night-poker@2x.png"`)
 }
