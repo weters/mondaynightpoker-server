@@ -1965,6 +1965,16 @@ func TestTrade_TradedFieldSetOnParticipant(t *testing.T) {
 func TestTrade_TradedFieldResetOnNextRound(t *testing.T) {
 	g := setupTradeTestGame(t, []string{"14c,14d", "12d,11d"})
 
+	// Control the deck so the trades draw deterministic replacement cards.
+	// Otherwise the cards are drawn from a randomly shuffled deck, and the
+	// players can occasionally tie. On a tie there are no losers, no penalty is
+	// paid into the next pot, and the game ends instead of dealing a new round,
+	// leaving the traded field untouched. Draw order is player 1 (1 card) then
+	// player 2 (2 cards), so seed the top of the deck accordingly to guarantee
+	// player 1 wins, player 2 pays a penalty, and a next round is dealt.
+	g.deck = deck.New()
+	g.deck.Cards = append(deck.CardsFromString("14h,2c,3c"), g.deck.Cards...)
+
 	_ = g.submitDecision(1, true)
 	_ = g.submitDecision(2, true)
 
