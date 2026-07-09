@@ -35,7 +35,7 @@ func TestLoad(t *testing.T) {
 func TestDefaults(t *testing.T) {
 	cfg, err := Load()
 	assert.NoError(t, err)
-	assert.Equal(t, "no-reply@mondaynight.bid", cfg.Email.Sender)
+	assert.Equal(t, "dealer@mondaynight.bid", cfg.Email.Sender)
 }
 
 func TestConfig_WebSocketOrigins(t *testing.T) {

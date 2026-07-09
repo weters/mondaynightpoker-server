@@ -152,8 +152,9 @@ The [room](pkg/room) package contains logic for managing clients and communicati
 
 The run loop itself never blocks on the database:
 
-* Database *writes* are handed off to a dedicated `persistLoop()` goroutine via a `persist` channel (`enqueuePersist`). While a finished game's results are being persisted, a flag gates the next game start so it always reads post-adjustment balances.
-* Database *reads* (roster and permission lookups) run on background goroutines and re-enter the run loop via `tryExecInRunLoop`; a generation counter discards stale roster fetches.
+* End-of-game results are persisted on a one-shot background goroutine that closes a `persistDone` channel when finished. `startGame` already fetches the seating order on a background goroutine; that goroutine waits on `persistDone` first, so the next game always reads post-adjustment balances without any gating state in the run loop.
+* Roster *reads* for client-state broadcasts run on background goroutines and re-enter the run loop via `tryExecInRunLoop`; a generation counter discards stale fetches.
+* Permission lookups and player-settings *writes* (`tableAdmin`, `tableStake`, `playerStatus`) run on the requesting client's websocket goroutine, so a slow save only blocks the client that asked for it.
 
 The `Dealer` handles all client messages in the `ReceivedMessage()` method. Each message is a `playable.PayloadIn`. These messages have an `Action` field that determines what action the dealer should take. Some common actions are to `createGame` or `terminateGame`. Any action not handled by the `Dealer` is sent to the active game being played.
 
@@ -173,14 +174,13 @@ classDiagram
         -clients map[*Client]bool
         -game playable.Playable
         -execInRunLoop chan func()
-        -persist chan func()
+        -persistDone chan struct
         +StartShift()
         +ReceivedMessage(c *Client, msg *PayloadIn)
         +AddClient(c *Client)
         +RemoveClient(c *Client) bool
         +EndShift()
         -runLoop()
-        -persistLoop()
     }
     class Client {
         +Conn *websocket.Conn

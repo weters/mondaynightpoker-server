@@ -1,6 +1,6 @@
 # mondaynightpoker-server
 
-[![.github/workflows/ci.yaml](https://github.com/weters/mondaynightpoker-server/workflows/.github/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/weters/mondaynightpoker-server/actions?query=workflow%3A.github%2Fworkflows%2Fci.yaml+branch%3Amaster)
+[![CI/CD](https://github.com/weters/mondaynightpoker-server/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/weters/mondaynightpoker-server/actions/workflows/ci.yaml)
 
 mondaynightpoker-server is the backend application for the Monday Night Poker site (see: [mondaynight.bid](https://mondaynight.bid)). The front-end code can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue).
 
@@ -10,21 +10,28 @@ For more information about the architecture of this open-source project, see the
 
 * Acey Deucey
 * Bourré
+* Guts
 * Pass the Poop
+  * Standard Edition
+  * Diarrhea Edition
+  * Pairs Edition
 * Poker
   * Pot-Limit Texas Hold'em
   * Little L
   * Seven-card games
+    * Seven-Card Stud
     * Follow the Queen
     * Baseball
-    * Seven-card Stud
+    * High Chicago
     * Low Card Wild
+    * Coupons and Clippings
+    * 7 Card Chiggs
 
 ## Getting Started
 
 ### Prerequisites
 
-1. [Go 1.17+](https://golang.org/dl/)
+1. [Go 1.24+](https://golang.org/dl/)
 2. [golangci-lint v2](https://golangci-lint.run/docs/install/)
 3. [Docker](https://www.docker.com/products/docker-desktop)
 4. Google [reCAPTCHA v3](https://www.google.com/u/1/recaptcha/admin/create) Secret
@@ -58,7 +65,7 @@ $ MNP_RECAPTCHA_SECRET=X go run ./cmd/server
 5. Verify the server is running
 
 ```
-$ curl http://localhost:5000/health
+$ curl http://localhost:5080/health
 ```
     
 6. Start the Vue.js front-end. Repo can be found at [github.com/weters/mondaynightpoker-vue](https://github.com/weters/mondaynightpoker-vue)
@@ -74,9 +81,10 @@ Any environment variables take precedence over values defined in YAML. The defau
 
 ```yaml
 host: https://mondaynight.bid
+allowedOrigins: []
 log:
-  level: info
   disableAccessLogs: false
+  level: info
 database:
   dsn: postgres://postgres@localhost:5432/postgres?sslmode=disable
   migrationsPath: ./sql

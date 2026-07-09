@@ -120,6 +120,7 @@ func (m *Mux) sendAccountVerificationEmail(player *model.Player, verifyToken str
 	body, err := m.emailTemplates.RenderTemplate("verify_account.html", map[string]string{
 		"url":   fmt.Sprintf("%s/verify-account/%s", m.cfg.Host, verifyToken),
 		"email": player.Email,
+		"host":  m.cfg.Host,
 	})
 
 	if err != nil {

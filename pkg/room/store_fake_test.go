@@ -269,12 +269,39 @@ func TestDealer_endGamePersistRetries(t *testing.T) {
 	// and the persisting gate must be released
 	require.Eventually(t, func() bool {
 		result := make(chan bool, 1)
-		d.execInRunLoop <- func() { result <- !d.persistingGame }
+		d.execInRunLoop <- func() {
+			select {
+			case <-d.persistDone:
+				result <- true
+			default:
+				result <- false
+			}
+		}
 		return <-result
 	}, 2*time.Second, 10*time.Millisecond)
 }
 
-func TestDealer_deferredStartWaitsForPersist(t *testing.T) {
+func TestDealer_slowPersistDoesNotBlockRunLoop(t *testing.T) {
+	store := &fakeStore{
+		players:      []*model.PlayerTable{fakePlayerTable(1)},
+		endGameDelay: 500 * time.Millisecond,
+	}
+	d := newFakeDealer(store)
+	d.StartShift()
+	defer d.EndShift()
+
+	// finish a game; its results persist slowly in the background
+	d.execInRunLoop <- func() {
+		d.game = newFakeGame()
+		d.endGame(d.game, &playable.GameOverDetails{})
+	}
+
+	start := time.Now()
+	probeRunLoop(t, d, 200*time.Millisecond)
+	assert.Less(t, time.Since(start), 200*time.Millisecond, "run loop must not wait on the game-result persist")
+}
+
+func TestDealer_nextGameStartWaitsForPersist(t *testing.T) {
 	store := &fakeStore{
 		players:      []*model.PlayerTable{fakePlayerTable(1), fakePlayerTable(2), fakePlayerTable(3)},
 		endGameDelay: 300 * time.Millisecond,
@@ -300,16 +327,55 @@ func TestDealer_deferredStartWaitsForPersist(t *testing.T) {
 		},
 	})
 
-	// while persistence is still running, the start must be deferred
+	// while persistence is still running, the start must wait
 	time.Sleep(100 * time.Millisecond)
-	deferred := make(chan bool, 1)
-	d.execInRunLoop <- func() { deferred <- d.deferredStart != nil && d.game == nil }
-	assert.True(t, <-deferred, "the game start must wait for persistence to finish")
+	waiting := make(chan bool, 1)
+	d.execInRunLoop <- func() { waiting <- d.game == nil }
+	assert.True(t, <-waiting, "the game start must wait for persistence to finish")
 
-	// once persistence completes, the deferred game must start
+	// once persistence completes, the game must start
 	require.Eventually(t, func() bool {
 		started := make(chan bool, 1)
 		d.execInRunLoop <- func() { started <- d.game != nil }
 		return <-started
-	}, 3*time.Second, 20*time.Millisecond, "the deferred game must start after persistence completes")
+	}, 3*time.Second, 20*time.Millisecond, "the game must start after persistence completes")
+}
+
+// TestDealer_tableStakeSavesOnCallerGoroutine verifies the settings-write path:
+// the save and OK happen synchronously on the caller's goroutine, and the
+// roster rebroadcast goes through the run loop.
+func TestDealer_tableStakeSavesOnCallerGoroutine(t *testing.T) {
+	store := &fakeStore{players: []*model.PlayerTable{fakePlayerTable(1)}}
+	d := newFakeDealer(store)
+	d.StartShift()
+	defer d.EndShift()
+
+	c := NewClient(nil, &model.Player{ID: 1}, &model.Table{})
+	d.ReceivedMessage(c, &playable.PayloadIn{
+		Context: "ctx",
+		Action:  "tableStake",
+		AdditionalData: playable.AdditionalData{
+			"tableStake": float64(1000),
+		},
+	})
+
+	// ReceivedMessage is synchronous for this action, so the save and the OK
+	// must have already happened
+	store.mu.Lock()
+	require.Len(t, store.saved, 1)
+	assert.Equal(t, 1000, store.saved[0].TableStake)
+	store.mu.Unlock()
+
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case msg := <-c.SendChan():
+			if resp, ok := msg.(*playable.Response); ok && resp.Value == "OK" {
+				assert.Equal(t, "ctx", resp.Context)
+				return
+			}
+		case <-deadline:
+			t.Fatal("did not receive OK response")
+		}
+	}
 }
