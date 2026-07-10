@@ -9,6 +9,10 @@ import (
 
 var defaultConfig = Config{
 	Host: "https://mondaynight.bid",
+	AllowedOrigins: []string{
+		"https://mondaynight.bid",
+		"https://beta.mondaynight.bid",
+	},
 	Log: Log{
 		DisableAccessLogs: false,
 		Level:             "info",
@@ -37,7 +41,9 @@ var defaultConfig = Config{
 // Config provides configuration for Monday Night Poker
 type Config struct {
 	Host string
-	// AllowedOrigins is the list of origins allowed to open a WebSocket connection.
+	// AllowedOrigins is the single list of browser origins permitted to make
+	// cross-origin requests. It governs BOTH the HTTP CORS layer and the
+	// WebSocket upgrade origin check, so the two policies never drift apart.
 	// If empty, only Host is allowed.
 	AllowedOrigins    []string `yaml:"allowedOrigins" envconfig:"allowed_origins"`
 	Log               Log
@@ -49,8 +55,11 @@ type Config struct {
 	Email             Email
 }
 
-// WebSocketOrigins returns the origins allowed to open a WebSocket connection
-func (c Config) WebSocketOrigins() []string {
+// BrowserOrigins returns the browser origins permitted to make cross-origin
+// requests. The same list is shared by the HTTP CORS layer and the WebSocket
+// upgrade origin check so they cannot diverge. When AllowedOrigins is unset it
+// falls back to Host.
+func (c Config) BrowserOrigins() []string {
 	if len(c.AllowedOrigins) > 0 {
 		return c.AllowedOrigins
 	}

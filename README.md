@@ -81,7 +81,11 @@ Any environment variables take precedence over values defined in YAML. The defau
 
 ```yaml
 host: https://mondaynight.bid
-allowedOrigins: []
+# Browser origins allowed for both CORS (REST) and the WebSocket upgrade.
+# When empty, only `host` is permitted.
+allowedOrigins:
+  - https://mondaynight.bid
+  - https://beta.mondaynight.bid
 log:
   disableAccessLogs: false
   level: info
@@ -103,6 +107,13 @@ email:
   templatesDir: templates
   disable: false
 ```
+
+> **Note on `allowedOrigins`:** this single list is enforced by both the CORS
+> layer (REST) and the WebSocket upgrade check, so the two can never disagree
+> about which browser origins are permitted. When developing locally against a
+> front-end on a different origin (e.g. `http://localhost:8080`), add that origin
+> to `allowedOrigins` or set `MNP_ALLOWED_ORIGINS=http://localhost:8080` — a
+> missing entry now blocks REST as well as the WebSocket.
 
 You can generate a YAML file with the defaults by running:
 

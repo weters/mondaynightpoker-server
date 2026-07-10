@@ -38,12 +38,21 @@ func TestDefaults(t *testing.T) {
 	assert.Equal(t, "dealer@mondaynight.bid", cfg.Email.Sender)
 }
 
-func TestConfig_WebSocketOrigins(t *testing.T) {
+func TestConfig_BrowserOrigins(t *testing.T) {
+	// with no AllowedOrigins set, it falls back to Host
 	cfg := Config{Host: "https://mondaynight.bid"}
-	assert.Equal(t, []string{"https://mondaynight.bid"}, cfg.WebSocketOrigins())
+	assert.Equal(t, []string{"https://mondaynight.bid"}, cfg.BrowserOrigins())
 
 	cfg.AllowedOrigins = []string{"http://localhost:8080", "https://mondaynight.bid"}
-	assert.Equal(t, []string{"http://localhost:8080", "https://mondaynight.bid"}, cfg.WebSocketOrigins())
+	assert.Equal(t, []string{"http://localhost:8080", "https://mondaynight.bid"}, cfg.BrowserOrigins())
+}
+
+func TestDefaultConfig_AllowsProdAndBeta(t *testing.T) {
+	// the default allowlist governs both CORS and the WebSocket upgrade, and must
+	// include both the production and beta frontends out of the box
+	origins := DefaultConfig().BrowserOrigins()
+	assert.Contains(t, origins, "https://mondaynight.bid")
+	assert.Contains(t, origins, "https://beta.mondaynight.bid")
 }
 
 func setEnv(key, val string) func() {

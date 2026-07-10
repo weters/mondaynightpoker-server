@@ -34,7 +34,7 @@ func (m *Mux) checkOrigin(r *http.Request) bool {
 		return false
 	}
 
-	for _, allowed := range m.cfg.WebSocketOrigins() {
+	for _, allowed := range m.cfg.BrowserOrigins() {
 		allowedURL, err := url.Parse(allowed)
 		if err != nil {
 			continue
