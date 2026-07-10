@@ -87,7 +87,11 @@ func main() {
 		EmailTemplates: emailTemplates,
 	})
 
+	// Share the same origin allowlist as the WebSocket upgrade check so the two
+	// layers cannot diverge. Previously CORS was left unset (allow-all), which
+	// let REST requests through from origins the WebSocket check would reject.
 	c := cors.New(cors.Options{
+		AllowedOrigins: cfg.BrowserOrigins(),
 		AllowedHeaders: []string{"Origin", "Accept", "Content-Type", "X-Requested-With", "Authorization"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete},
 	})
