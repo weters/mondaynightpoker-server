@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	"github.com/kelseyhightower/envconfig"
 	"gopkg.in/yaml.v2"
@@ -40,12 +41,23 @@ var defaultConfig = Config{
 
 // Config provides configuration for Monday Night Poker
 type Config struct {
+	// Host is the player-facing website's base URL (e.g. https://mondaynight.bid).
+	// It is used to build links in emails (account verification, password reset)
+	// and, when AllowedOrigins is unset, as the BrowserOrigins() fallback. It is
+	// NOT necessarily where this API server itself is reachable; see PublicURL.
 	Host string
 	// AllowedOrigins is the single list of browser origins permitted to make
 	// cross-origin requests. It governs BOTH the HTTP CORS layer and the
 	// WebSocket upgrade origin check, so the two policies never drift apart.
 	// If empty, only Host is allowed.
-	AllowedOrigins    []string `yaml:"allowedOrigins" envconfig:"allowed_origins"`
+	AllowedOrigins []string `yaml:"allowedOrigins" envconfig:"allowed_origins"`
+	// PublicURL is the public base URL of THIS API server (e.g.
+	// https://api.mondaynight.bid), as opposed to Host, which is the
+	// player-facing website. It is used as the OAuth issuer and MCP resource
+	// identifier via APIBaseURL(). When unset, APIBaseURL() falls back to Host,
+	// which is correct for single-host/dev deployments where the API and the
+	// website share an origin.
+	PublicURL         string `yaml:"publicURL" envconfig:"public_url"`
 	Log               Log
 	Database          Database
 	JWT               JWT
@@ -65,6 +77,17 @@ func (c Config) BrowserOrigins() []string {
 	}
 
 	return []string{c.Host}
+}
+
+// APIBaseURL returns the public base URL of this API server, used as the
+// OAuth issuer and MCP resource identifier. It falls back to Host when
+// PublicURL is unset, which is correct for single-host/dev deployments.
+func (c Config) APIBaseURL() string {
+	if c.PublicURL != "" {
+		return strings.TrimRight(c.PublicURL, "/")
+	}
+
+	return strings.TrimRight(c.Host, "/")
 }
 
 // Log represents logging configuration
