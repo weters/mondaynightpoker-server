@@ -153,7 +153,15 @@ func (g *Game) ExecuteTurnForPlayer(playerID int64, gameAction GameAction) error
 		p := g.idToParticipant[playerID]
 		g.sendLogMessage(playerID, "{} revealed a King", p.card)
 	case ActionBlockTrade:
-		g.sendLogMessage(playerID, "{} blocked the trade")
+		// name both the blocked player (who initiated the trade, recorded as the
+		// secondary player) and the blocker so the log reads "X was blocked by Y"
+		// instead of ambiguously attributing a "stay" to either player
+		g.SendLogMessages([]*playable.LogMessage{{
+			UUID:      uuid.New().String(),
+			PlayerIDs: []int64{gameActionDetails.SecondaryPlayerID, playerID},
+			Message:   "{} was blocked by {}",
+			Time:      time.Now(),
+		}})
 	case ActionDrawFromDeck:
 		p := g.idToParticipant[playerID]
 		g.sendLogMessage(playerID, "{} pulled a card from the deck", p.card)
@@ -294,17 +302,12 @@ func (g *Game) executeTurnForPlayer(playerID int64, gameAction GameAction, gameA
 		}
 
 		// record who was blocked (the player who initiated the trade) so the
-		// action can be logged and rendered as "X was blocked by Y"
+		// block can be logged as "{blocked} was blocked by {blocker}"
 		gameActionDetails.SecondaryPlayerID = g.participants[g.decisionIndex-1].PlayerID
 
 		participant.hasBlock = false
 		g.pendingTrade = false
-
-		// unlike flipping a King (which forces the blocker to keep an
-		// un-tradeable card and thus ends their turn), a block simply rejects the
-		// incoming trade. The blocker keeps their own card and still gets to make
-		// their own decision, so we do NOT advance the decision index here —
-		// mirroring how ActionAccept leaves the turn with the current player.
+		g.decisionIndex++
 		return nil
 	}
 
