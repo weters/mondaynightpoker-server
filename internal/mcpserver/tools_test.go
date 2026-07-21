@@ -110,7 +110,8 @@ func TestGetPlayerStats(t *testing.T) {
 	a.NoError(err)
 	a.Equal(1, out.TablesJoined)
 	a.Equal(1, out.GamesPlayed)
-	a.Equal(100, out.TotalWinnings)
+	a.Equal(100, out.TotalWinningsCents)
+	a.Equal("$1", out.TotalWinningsDisplay)
 
 	// bad date input errors
 	_, err = s.getPlayerStats(cbg, nil, adminCaller(admin.ID), getPlayerStatsInput{ID: admin.ID, From: ptrStr("not-a-date")})
@@ -135,7 +136,8 @@ func TestGetPlayerProfile(t *testing.T) {
 	a.NoError(err)
 	a.Equal(admin.ID, out.Player.ID)
 	a.NotEmpty(out.Tables)
-	a.Equal(500, out.Stats.TotalWinnings)
+	a.Equal(500, out.Stats.TotalWinningsCents)
+	a.Equal("$5", out.Stats.TotalWinningsDisplay)
 	// self/admin can see the profile's own email
 	require.NotNil(t, out.Player.Email)
 	a.Equal(admin.Email, *out.Player.Email)
