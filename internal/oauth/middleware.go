@@ -7,43 +7,64 @@ import (
 	"strconv"
 	"strings"
 
+	"mondaynightpoker-server/pkg/model"
+
 	jwtgo "github.com/golang-jwt/jwt/v5"
 )
 
 // contextKey is a private type for context keys defined in this package.
 type contextKey string
 
-// playerIDContextKey stores the authenticated player ID on the request context.
-const playerIDContextKey contextKey = "oauth_player_id"
+// callerContextKey stores the authenticated Caller on the request context.
+const callerContextKey contextKey = "oauth_caller"
+
+// Caller identifies the authenticated player making an MCP request.
+type Caller struct {
+	PlayerID    int64
+	IsSiteAdmin bool // live value from the DB, not the token claim
+}
+
+// CallerFromContext returns the authenticated MCP caller, if any.
+func CallerFromContext(ctx context.Context) (Caller, bool) {
+	c, ok := ctx.Value(callerContextKey).(Caller)
+	return c, ok
+}
+
+// ContextWithCaller returns a copy of ctx carrying the given Caller. RequireMCPAuth
+// uses it to stash the authenticated caller; it is exported so tests and embedding
+// packages can construct an authenticated context without driving the full token flow.
+func ContextWithCaller(ctx context.Context, c Caller) context.Context {
+	return context.WithValue(ctx, callerContextKey, c)
+}
 
 // PlayerIDFromContext returns the authenticated player ID stashed by RequireMCPAuth.
 func PlayerIDFromContext(ctx context.Context) (int64, bool) {
-	id, ok := ctx.Value(playerIDContextKey).(int64)
-	return id, ok
+	c, ok := CallerFromContext(ctx)
+	return c.PlayerID, ok
 }
 
 // RequireMCPAuth wraps next with bearer-token authentication for the MCP resource. It
-// verifies the RS256 signature, issuer, audience, expiry, and token_use claim, then does
-// a live site-admin check before invoking next.
+// verifies the RS256 signature, issuer, audience, expiry, and token_use claim, does a
+// live load of the player, and stashes the caller identity on the request context.
 func (s *Server) RequireMCPAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playerID, ok := s.authenticateBearer(r)
+		caller, ok := s.authenticateBearer(r)
 		if !ok {
 			s.writeInvalidToken(w)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), playerIDContextKey, playerID)
+		ctx := ContextWithCaller(r.Context(), caller)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// authenticateBearer validates the Authorization bearer token and returns the player ID.
-func (s *Server) authenticateBearer(r *http.Request) (int64, bool) {
+// authenticateBearer validates the Authorization bearer token and returns the caller.
+func (s *Server) authenticateBearer(r *http.Request) (Caller, bool) {
 	auth := r.Header.Get("Authorization")
 	const prefix = "Bearer "
 	if len(auth) <= len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) {
-		return 0, false
+		return Caller{}, false
 	}
 
 	raw := strings.TrimSpace(auth[len(prefix):])
@@ -60,31 +81,32 @@ func (s *Server) authenticateBearer(r *http.Request) (int64, bool) {
 		jwtgo.WithExpirationRequired(),
 	)
 	if err != nil || !token.Valid {
-		return 0, false
+		return Caller{}, false
 	}
 
 	claims, ok := token.Claims.(jwtgo.MapClaims)
 	if !ok {
-		return 0, false
+		return Caller{}, false
 	}
 
 	if tokenUse, _ := claims["token_use"].(string); tokenUse != tokenUseMCPAccess {
-		return 0, false
+		return Caller{}, false
 	}
 
 	sub, _ := claims["sub"].(string)
 	playerID, err := strconv.ParseInt(sub, 10, 64)
 	if err != nil {
-		return 0, false
+		return Caller{}, false
 	}
 
-	// Live authorization check: the player must still be a site admin.
+	// Live authorization check: the player must still exist and not be deleted. The
+	// site-admin flag is read live so per-tool scoping never trusts the token claim.
 	player, err := s.repos.Players.GetPlayerByID(r.Context(), playerID)
-	if err != nil || !player.IsSiteAdmin {
-		return 0, false
+	if err != nil || player.Status == model.PlayerStatusDeleted {
+		return Caller{}, false
 	}
 
-	return playerID, true
+	return Caller{PlayerID: playerID, IsSiteAdmin: player.IsSiteAdmin}, true
 }
 
 // writeInvalidToken writes a 401 with an RFC 6750 WWW-Authenticate challenge pointing at

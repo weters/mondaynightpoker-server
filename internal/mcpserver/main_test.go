@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"mondaynightpoker-server/internal/config"
+	"mondaynightpoker-server/internal/oauth"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/model"
@@ -35,9 +36,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// newServer returns a server wired to the test repositories.
+// newServer returns a server wired to the test repositories, with an initialized tool
+// registry so registerTool/registerTools can record policies.
 func newServer() *server {
-	return &server{repos: testRepos}
+	return &server{repos: testRepos, registry: make(map[string]accessPolicy)}
 }
 
 // createPlayer creates a new verified player for testing.
@@ -69,4 +71,24 @@ func createSiteAdmin(t *testing.T) *model.Player {
 	}
 
 	return p
+}
+
+// adminCaller returns a site-admin Caller for the given player id.
+func adminCaller(id int64) oauth.Caller {
+	return oauth.Caller{PlayerID: id, IsSiteAdmin: true}
+}
+
+// playerCaller returns a non-admin Caller for the given player id.
+func playerCaller(id int64) oauth.Caller {
+	return oauth.Caller{PlayerID: id, IsSiteAdmin: false}
+}
+
+// ctxForAdmin returns a context carrying a site-admin Caller for the given player id.
+func ctxForAdmin(id int64) context.Context {
+	return oauth.ContextWithCaller(cbg, adminCaller(id))
+}
+
+// ctxForPlayer returns a context carrying a non-admin Caller for the given player id.
+func ctxForPlayer(id int64) context.Context {
+	return oauth.ContextWithCaller(cbg, playerCaller(id))
 }

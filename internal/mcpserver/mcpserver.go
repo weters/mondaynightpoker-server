@@ -21,16 +21,19 @@ const (
 	minRows     = 1
 )
 
-// server bundles the repositories that tool handlers close over.
+// server bundles the repositories that tool handlers close over. registry records the
+// access policy declared for each registered tool (populated by registerTool) so an
+// exhaustiveness test can verify every tool is classified and none bypasses registration.
 type server struct {
-	repos *model.Repositories
+	repos    *model.Repositories
+	registry map[string]accessPolicy
 }
 
 // New builds a stateless streamable HTTP handler exposing the read-only MCP
 // tools. Each POST request is handled independently; no long-lived SSE stream
 // is used.
 func New(repos *model.Repositories, version string) http.Handler {
-	s := &server{repos: repos}
+	s := &server{repos: repos, registry: make(map[string]accessPolicy)}
 
 	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "mondaynightpoker", Version: version}, nil)
 	s.registerTools(mcpServer)

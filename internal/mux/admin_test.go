@@ -30,7 +30,7 @@ func TestMux_getAdminTable(t *testing.T) {
 	a.Equal("rows must be greater than zero", err.Message)
 
 	for i := 0; i < 5; i++ {
-		tbl, err := testRepos.Tables.CreateTable(cbg, p1, fmt.Sprintf("Table %d", i))
+		tbl, err := testRepos.Tables.CreateTable(cbg, p1, fmt.Sprintf("TestMux_getAdminTable %d", i))
 		a.NoError(err)
 
 		if i == 4 {
@@ -39,13 +39,38 @@ func TestMux_getAdminTable(t *testing.T) {
 		}
 	}
 
+	// other tests running concurrently against the same database may create tables
+	// of their own, so a small page (rows=3) cannot be asserted positionally. Just
+	// confirm pagination is honored by page size...
+	var page []*model.TableWithPlayerEmail
+	assertGet(t, ts, "/admin/table?rows=3", &page, http.StatusOK, j1)
+	a.Equal(3, len(page))
+
+	// ...then fetch a generously large page (the max allowed) and filter down to this
+	// test's own tables (identified by the fresh, unique player email) to verify
+	// pagination correctness, deleted-table inclusion, the email join, and ordering.
 	var tables []*model.TableWithPlayerEmail
-	assertGet(t, ts, "/admin/table?rows=3", &tables, http.StatusOK, j1)
-	a.Equal(3, len(tables))
-	a.Equal(p1.Email, tables[0].Email)
-	a.Equal("Table 4", tables[0].Name)
-	a.True(tables[0].Deleted)
-	a.False(tables[1].Deleted)
+	assertGet(t, ts, "/admin/table?rows=100", &tables, http.StatusOK, j1)
+
+	var mine []*model.TableWithPlayerEmail
+	for _, tbl := range tables {
+		if tbl.Email == p1.Email {
+			mine = append(mine, tbl)
+		}
+	}
+
+	if a.Equal(5, len(mine)) {
+		for i, tbl := range mine {
+			a.Equal(fmt.Sprintf("TestMux_getAdminTable %d", 4-i), tbl.Name)
+			a.Equal(p1.Email, tbl.Email)
+
+			if i == 0 {
+				a.True(tbl.Deleted)
+			} else {
+				a.False(tbl.Deleted)
+			}
+		}
+	}
 }
 
 func TestMux_adminPostTableUUID(t *testing.T) {

@@ -132,22 +132,57 @@ func TestTable_GetActivePlayersShifted_noActivePlayers(t *testing.T) {
 }
 
 func TestGetTables(t *testing.T) {
-	_, _ = playerAndTable()
-	p2, tbl2 := playerAndTable()
-	p3, tbl3 := playerAndTable()
-	_, _ = playerAndTable()
-
 	a := assert.New(t)
+
+	type playerTable struct {
+		player *Player
+		table  *Table
+	}
+
+	// each playerAndTable() call creates a table under a fresh, unique-email player,
+	// so these can be picked back out even if other tables are created concurrently
+	var entries []playerTable
+	for i := 0; i < 4; i++ {
+		p, tbl := playerAndTable()
+		entries = append(entries, playerTable{player: p, table: tbl})
+	}
+
+	// other test packages running concurrently against the same database may create
+	// tables of their own, so a small page cannot be asserted positionally. Just
+	// confirm pagination is honored by page size...
 	tables, err := testRepos.Tables.GetTables(cbg, 1, 2)
 	a.NoError(err)
 	a.Equal(2, len(tables))
-	a.Equal(p3.Email, tables[0].Email)
-	a.Equal(tbl3.UUID, tables[0].UUID)
-	a.Equal(p2.Email, tables[1].Email)
-	a.Equal(tbl2.UUID, tables[1].UUID)
+
+	// ...then fetch a generously large page and filter down to this test's own
+	// tables (identified by the fresh, unique player emails) to verify pagination
+	// correctness, the email join, field mapping, and ordering.
+	all, err := testRepos.Tables.GetTables(cbg, 0, 1000)
+	a.NoError(err)
+
+	emails := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		emails[e.player.Email] = true
+	}
+
+	var mine []*TableWithPlayerEmail
+	for _, tbl := range all {
+		if emails[tbl.Email] {
+			mine = append(mine, tbl)
+		}
+	}
+
+	// GetTables orders newest first, so mine[0] should be the most recently created entry
+	if a.Equal(len(entries), len(mine)) {
+		for i, tbl := range mine {
+			expected := entries[len(entries)-1-i]
+			a.Equal(expected.player.Email, tbl.Email)
+			a.Equal(expected.table.UUID, tbl.UUID)
+		}
+	}
 
 	// sanity check
-	a.NotEqual(p2.Email, p3.Email)
+	a.NotEqual(entries[0].player.Email, entries[1].player.Email)
 }
 
 func TestTableRepo_CloneTable_randomizesOrder(t *testing.T) {

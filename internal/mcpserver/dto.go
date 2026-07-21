@@ -3,14 +3,28 @@ package mcpserver
 import (
 	"time"
 
+	"mondaynightpoker-server/internal/oauth"
 	"mondaynightpoker-server/pkg/model"
 )
+
+// visibleEmail is the single decision point for surfacing a player's email. It returns a
+// non-nil pointer to email only when the caller is a site admin or is the owner of the
+// record (ownerPlayerID == caller.PlayerID); otherwise it returns nil so the field is
+// omitted from the JSON entirely (structural absence, never an empty string). Every mapper
+// that emits an email routes it through this helper, so a new tool cannot leak another
+// player's email by accident.
+func visibleEmail(caller oauth.Caller, ownerPlayerID int64, email string) *string {
+	if caller.IsSiteAdmin || ownerPlayerID == caller.PlayerID {
+		return &email
+	}
+	return nil
+}
 
 // PlayerDTO is a read-only representation of a player. It never contains any
 // password material.
 type PlayerDTO struct {
 	ID          int64     `json:"id" jsonschema:"the player's unique identifier"`
-	Email       string    `json:"email" jsonschema:"the player's email address"`
+	Email       *string   `json:"email,omitempty" jsonschema:"the player's email address; present only for site admins or when the caller is this player, omitted otherwise"`
 	DisplayName string    `json:"displayName" jsonschema:"the player's display name"`
 	IsSiteAdmin bool      `json:"isSiteAdmin" jsonschema:"whether the player is a site administrator"`
 	Status      string    `json:"status" jsonschema:"the player's account status"`
@@ -18,11 +32,12 @@ type PlayerDTO struct {
 	Updated     time.Time `json:"updated" jsonschema:"when the player was last updated"`
 }
 
-// fromPlayer maps a model.Player to a PlayerDTO.
-func fromPlayer(p *model.Player) PlayerDTO {
+// fromPlayer maps a model.Player to a PlayerDTO, surfacing the email only when the caller
+// is permitted to see it.
+func fromPlayer(p *model.Player, caller oauth.Caller) PlayerDTO {
 	return PlayerDTO{
 		ID:          p.ID,
-		Email:       p.Email,
+		Email:       visibleEmail(caller, p.ID, p.Email),
 		DisplayName: p.DisplayName,
 		IsSiteAdmin: p.IsSiteAdmin,
 		Status:      string(p.Status),
@@ -32,10 +47,10 @@ func fromPlayer(p *model.Player) PlayerDTO {
 }
 
 // fromPlayers maps a slice of model.Player to a slice of PlayerDTO.
-func fromPlayers(players []*model.Player) []PlayerDTO {
+func fromPlayers(players []*model.Player, caller oauth.Caller) []PlayerDTO {
 	out := make([]PlayerDTO, 0, len(players))
 	for _, p := range players {
-		out = append(out, fromPlayer(p))
+		out = append(out, fromPlayer(p, caller))
 	}
 	return out
 }
@@ -88,17 +103,29 @@ func fromTablesWithBalance(tables []*model.TableWithBalance) []TableWithBalanceD
 // TableWithEmailDTO is a TableDTO extended with the email of the creating player.
 type TableWithEmailDTO struct {
 	TableDTO
-	PlayerEmail string `json:"playerEmail" jsonschema:"the email of the player who created the table"`
+	PlayerEmail *string `json:"playerEmail,omitempty" jsonschema:"the email of the player who created the table; present only for site admins or when the caller created the table, omitted otherwise"`
 }
 
-// fromTablesWithEmail maps a slice of model.TableWithPlayerEmail to DTOs.
-func fromTablesWithEmail(tables []*model.TableWithPlayerEmail) []TableWithEmailDTO {
+// fromTablesWithEmail maps a slice of model.TableWithPlayerEmail to DTOs, surfacing the
+// creator's email only when the caller is permitted to see it.
+func fromTablesWithEmail(tables []*model.TableWithPlayerEmail, caller oauth.Caller) []TableWithEmailDTO {
 	out := make([]TableWithEmailDTO, 0, len(tables))
 	for _, t := range tables {
 		out = append(out, TableWithEmailDTO{
 			TableDTO:    fromTable(t.Table),
-			PlayerEmail: t.Email,
+			PlayerEmail: visibleEmail(caller, t.Table.PlayerID, t.Email),
 		})
+	}
+	return out
+}
+
+// fromTablesWithBalanceAsEmail maps membership tables (which carry no creator email) into
+// the TableWithEmailDTO shape, leaving PlayerEmail empty. It backs the non-admin
+// list_tables path so its output matches the admin schema without leaking creator emails.
+func fromTablesWithBalanceAsEmail(tables []*model.TableWithBalance) []TableWithEmailDTO {
+	out := make([]TableWithEmailDTO, 0, len(tables))
+	for _, t := range tables {
+		out = append(out, TableWithEmailDTO{TableDTO: fromTable(t.Table)})
 	}
 	return out
 }
@@ -120,9 +147,9 @@ type PlayerTableDTO struct {
 }
 
 // fromPlayerTable maps a model.PlayerTable to a PlayerTableDTO.
-func fromPlayerTable(pt *model.PlayerTable) PlayerTableDTO {
+func fromPlayerTable(pt *model.PlayerTable, caller oauth.Caller) PlayerTableDTO {
 	return PlayerTableDTO{
-		Player:       fromPlayer(pt.Player),
+		Player:       fromPlayer(pt.Player, caller),
 		PlayerID:     pt.PlayerID,
 		TableUUID:    pt.TableUUID,
 		IsTableAdmin: pt.IsTableAdmin,
@@ -137,10 +164,10 @@ func fromPlayerTable(pt *model.PlayerTable) PlayerTableDTO {
 }
 
 // fromPlayerTables maps a slice of model.PlayerTable to DTOs.
-func fromPlayerTables(pts []*model.PlayerTable) []PlayerTableDTO {
+func fromPlayerTables(pts []*model.PlayerTable, caller oauth.Caller) []PlayerTableDTO {
 	out := make([]PlayerTableDTO, 0, len(pts))
 	for _, pt := range pts {
-		out = append(out, fromPlayerTable(pt))
+		out = append(out, fromPlayerTable(pt, caller))
 	}
 	return out
 }
@@ -180,14 +207,14 @@ type PlayerProfileDTO struct {
 }
 
 // fromPlayerProfile maps a model.PlayerProfile to a PlayerProfileDTO.
-func fromPlayerProfile(p *model.PlayerProfile) PlayerProfileDTO {
+func fromPlayerProfile(p *model.PlayerProfile, caller oauth.Caller) PlayerProfileDTO {
 	graph := make([]GraphPointDTO, 0, len(p.GraphData))
 	for _, gp := range p.GraphData {
 		graph = append(graph, GraphPointDTO{Created: gp.Created, Balance: gp.Balance})
 	}
 
 	return PlayerProfileDTO{
-		Player:    fromPlayer(p.Player),
+		Player:    fromPlayer(p.Player, caller),
 		Stats:     fromPlayerStats(p.Stats),
 		Tables:    fromTablesWithBalance(p.Tables),
 		GraphData: graph,
