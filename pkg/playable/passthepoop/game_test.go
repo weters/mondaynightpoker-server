@@ -151,11 +151,103 @@ func TestGame_ExecuteTurnForPlayer_WithBlocks(t *testing.T) {
 	execOK, execErr = createExecFunctions(t, game)
 	execOK(1, ActionTrade)
 	execOK(2, ActionBlockTrade)
-	execErr(3, ActionBlockTrade, "there is not a pending trade to block")
-	execOK(3, ActionTrade)
 
+	// blocking rejects the incoming trade but does NOT consume the blocker's
+	// own turn: player 2 keeps their card and is still up to make a decision
+	execErr(3, ActionTrade, "you are not up")
+	execErr(2, ActionBlockTrade, "there is not a pending trade to block")
+	execOK(2, ActionTrade) // player 2 now trades into player 3
+
+	// player 3 can, in turn, block player 2's trade and keep their own turn
+	execOK(3, ActionBlockTrade)
+	execErr(4, ActionTrade, "you are not up")
+	execOK(3, ActionTrade) // player 3 trades into player 4 (the dealer)
+
+	// player 4 (dealer) has no block chip, so they cannot block the trade
 	game.idToParticipant[4].hasBlock = false
 	execErr(4, ActionBlockTrade, "you do not have a block")
+}
+
+func TestGame_BlockTrade_KeepsTurnAndLogsBlock(t *testing.T) {
+	opts := DefaultOptions()
+	opts.AllowBlocks = true
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2, 3}, opts)
+
+	dealCards(game, "5c", "6c", "7c")
+	game.deck.Cards[0] = card("8c")
+
+	// discard the "new game" log message so we only inspect the block below
+	drainLog(game)
+
+	execOK, _ := createExecFunctions(t, game)
+
+	execOK(1, ActionTrade)      // player 1 trades into player 2
+	execOK(2, ActionBlockTrade) // player 2 blocks
+
+	msgs := drainLog(game)
+
+	// the trade and the block should each be logged, and the block must be
+	// attributed to the blocker (player 2) — not logged as a "stay"
+	var tradeMsg, blockMsg *playable.LogMessage
+	for _, m := range msgs {
+		switch m.Message {
+		case "{} trades their card":
+			tradeMsg = m
+		case "{} blocked the trade":
+			blockMsg = m
+		}
+		assert.NotContains(t, m.Message, "will stay", "a block must never be logged as a stay")
+	}
+
+	if assert.NotNil(t, tradeMsg, "the trade should be logged") {
+		assert.Equal(t, []int64{1}, tradeMsg.PlayerIDs)
+	}
+	if assert.NotNil(t, blockMsg, "the block should be logged and attributed to the blocker") {
+		assert.Equal(t, []int64{2}, blockMsg.PlayerIDs)
+	}
+
+	// the last game action records both the blocker and the blocked trader so
+	// the client can render "player 1 was blocked by player 2"
+	assert.Equal(t, ActionBlockTrade, game.lastGameAction.GameAction)
+	assert.Equal(t, int64(2), game.lastGameAction.PlayerID)
+	assert.Equal(t, int64(1), game.lastGameAction.SecondaryPlayerID)
+
+	// blocking does not consume the blocker's turn: player 2 is still up
+	assert.Equal(t, game.idToParticipant[2], game.getCurrentTurn())
+	assert.False(t, game.pendingTrade)
+
+	// player 2 can now make their own decision, which advances play to player 3
+	execOK(2, ActionStay)
+	assert.Equal(t, game.idToParticipant[3], game.getCurrentTurn())
+}
+
+func TestGame_BlockTrade_DealerKeepsTurn(t *testing.T) {
+	opts := DefaultOptions()
+	opts.AllowBlocks = true
+	game, _ := NewGame(logrus.StandardLogger(), []int64{1, 2}, opts)
+
+	dealCards(game, "5c", "6c")
+	game.deck.Cards[0] = card("8c")
+
+	execOK, _ := createExecFunctions(t, game)
+
+	// player 1 trades into player 2, who is the dealer (last player)
+	execOK(1, ActionTrade)
+	execOK(2, ActionBlockTrade)
+
+	// blocking must NOT end the round: the dealer still owns their turn and can
+	// go to the deck. Before the fix, the block advanced past the dealer and the
+	// round ended prematurely, which left the game looking stuck to clients.
+	assert.Equal(t, game.idToParticipant[2], game.getCurrentTurn())
+	assert.Nil(t, game.loserGroups, "the round must not have ended")
+
+	actions := game.getActionsForParticipant(game.idToParticipant[2])
+	assert.Equal(t, []GameAction{ActionStay, ActionGoToDeck}, actions)
+
+	// the dealer can complete their turn, after which the round ends normally
+	execOK(2, ActionStay)
+	assert.Nil(t, game.getCurrentTurn())
+	assert.NoError(t, game.EndRound())
 }
 
 func TestGame_ExecuteTurnForPlayer_KingedAndStays(t *testing.T) {

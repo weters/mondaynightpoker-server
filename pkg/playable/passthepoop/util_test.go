@@ -3,6 +3,7 @@ package passthepoop
 import (
 	"fmt"
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,6 +11,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+// drainLog non-blockingly reads every buffered log message off the game's log
+// channel so tests can assert on what was logged.
+func drainLog(g *Game) []*playable.LogMessage {
+	var out []*playable.LogMessage
+	for {
+		select {
+		case msgs := <-g.LogChan():
+			out = append(out, msgs...)
+		default:
+			return out
+		}
+	}
+}
 
 var cardRx = regexp.MustCompile(`^(?i)([2-9]|1[0-4])([cdhs])$`)
 

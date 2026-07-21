@@ -293,9 +293,18 @@ func (g *Game) executeTurnForPlayer(playerID int64, gameAction GameAction, gameA
 			return errors.New("you do not have a block")
 		}
 
+		// record who was blocked (the player who initiated the trade) so the
+		// action can be logged and rendered as "X was blocked by Y"
+		gameActionDetails.SecondaryPlayerID = g.participants[g.decisionIndex-1].PlayerID
+
 		participant.hasBlock = false
 		g.pendingTrade = false
-		g.decisionIndex++
+
+		// unlike flipping a King (which forces the blocker to keep an
+		// un-tradeable card and thus ends their turn), a block simply rejects the
+		// incoming trade. The blocker keeps their own card and still gets to make
+		// their own decision, so we do NOT advance the decision index here —
+		// mirroring how ActionAccept leaves the turn with the current player.
 		return nil
 	}
 
