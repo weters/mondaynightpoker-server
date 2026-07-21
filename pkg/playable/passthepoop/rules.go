@@ -2,6 +2,7 @@ package passthepoop
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -10,7 +11,7 @@ func (g *Game) Rules() []playable.RuleSection {
 	sections := []playable.RuleSection{
 		{
 			Title: "Overview",
-			Body:  fmt.Sprintf("Each player is dealt 1 card. You start with %d lives. Ante: %s. The player with the lowest card loses a life each round.", g.options.Lives, formatCents(g.options.Ante)),
+			Body:  fmt.Sprintf("Each player is dealt 1 card. You start with %d lives. Ante: %s. The player with the lowest card loses a life each round.", g.options.Lives, money.FormatCents(g.options.Ante)),
 		},
 		{
 			Title: "Your Turn",
@@ -49,11 +50,4 @@ func (g *Game) Rules() []playable.RuleSection {
 	})
 
 	return sections
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }

@@ -8,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
+
+	"mondaynightpoker-server/pkg/money"
 )
 
 // Message types sent from bot goroutines to the TUI via program.Send().
@@ -738,7 +740,7 @@ func (m Model) renderHeaderBar(width int) string {
 
 	right := ""
 	if gs != nil && gs.Pot > 0 {
-		right = "POT " + formatCents(gs.Pot) + " "
+		right = "POT " + money.FormatCents(gs.Pot) + " "
 	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
@@ -1025,31 +1027,11 @@ func replaceAmountTokens(s string) string {
 		}
 		var cents int
 		if _, err := fmt.Sscanf(rest[:end], "%d", &cents); err == nil {
-			result.WriteString(formatCents(cents))
+			result.WriteString(money.FormatCents(cents))
 		} else {
 			result.WriteString(s[idx : idx+2+end+1])
 		}
 		s = rest[end+1:]
 	}
 	return result.String()
-}
-
-// formatCents converts a cent amount to a dollar string (e.g., 150 -> "$1.50", 200 -> "$2").
-func formatCents(cents int) string {
-	negative := cents < 0
-	if negative {
-		cents = -cents
-	}
-	dollars := cents / 100
-	remainder := cents % 100
-	var s string
-	if remainder == 0 {
-		s = fmt.Sprintf("$%d", dollars)
-	} else {
-		s = fmt.Sprintf("$%d.%02d", dollars, remainder)
-	}
-	if negative {
-		s = "-" + s
-	}
-	return s
 }

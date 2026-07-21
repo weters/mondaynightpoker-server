@@ -2,6 +2,7 @@ package sevencard
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -11,7 +12,7 @@ func (g *Game) Rules() []playable.RuleSection {
 	sections = append(sections, []playable.RuleSection{
 		{
 			Title: "Overview",
-			Body:  fmt.Sprintf("Each player is dealt 7 cards (2 face-down, 4 face-up, 1 face-down). Ante: %s. Make the best 5-card poker hand.", formatCents(g.options.Ante)),
+			Body:  fmt.Sprintf("Each player is dealt 7 cards (2 face-down, 4 face-up, 1 face-down). Ante: %s. Make the best 5-card poker hand.", money.FormatCents(g.options.Ante)),
 		},
 		{
 			Title: "Betting Rounds",
@@ -76,11 +77,4 @@ func (g *Game) variantRules() []playable.RuleSection {
 	default:
 		return nil
 	}
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }

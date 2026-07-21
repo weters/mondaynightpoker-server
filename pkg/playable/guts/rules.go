@@ -2,6 +2,7 @@ package guts
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -14,7 +15,7 @@ func (g *Game) Rules() []playable.RuleSection {
 		},
 		{
 			Title: "Ante & Pot",
-			Body:  fmt.Sprintf("Each player antes %s to start. The maximum penalty is capped at %s.", formatCents(g.options.Ante), formatCents(g.options.MaxOwed)),
+			Body:  fmt.Sprintf("Each player antes %s to start. The maximum penalty is capped at %s.", money.FormatCents(g.options.Ante), money.FormatCents(g.options.MaxOwed)),
 		},
 		{
 			Title: "Declaration",
@@ -37,7 +38,7 @@ func (g *Game) Rules() []playable.RuleSection {
 	}
 	sections = append(sections, playable.RuleSection{
 		Title: "Showdown",
-		Body:  fmt.Sprintf(showdownBody, formatCents(g.options.MaxOwed)),
+		Body:  fmt.Sprintf(showdownBody, money.FormatCents(g.options.MaxOwed)),
 	})
 
 	sections = append(sections, playable.RuleSection{
@@ -46,11 +47,4 @@ func (g *Game) Rules() []playable.RuleSection {
 	})
 
 	return sections
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }

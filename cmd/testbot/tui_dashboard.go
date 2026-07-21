@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"mondaynightpoker-server/pkg/money"
 )
 
 // RenderDashboard renders a one-line-per-bot overview: focus marker, name,
@@ -37,7 +39,7 @@ func RenderDashboard(bots []*Bot, active int) string {
 
 		balance := fmt.Sprintf("%8s", "-")
 		if gs != nil && gs.Balance != 0 {
-			balance = fmt.Sprintf("%8s", formatCents(gs.Balance))
+			balance = fmt.Sprintf("%8s", money.FormatCents(gs.Balance))
 		}
 
 		hand := ""
