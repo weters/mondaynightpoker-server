@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -26,6 +27,55 @@ func newTestSigner(t *testing.T, ttl time.Duration) *Signer {
 	signer, err := NewSigner(testJWTConfig(), ttl)
 	require.NoError(t, err)
 	return signer
+}
+
+func TestLoadKeyPair(t *testing.T) {
+	privateKey, publicKey, err := LoadKeyPair(testJWTConfig())
+	require.NoError(t, err)
+	require.NotNil(t, privateKey)
+	require.NotNil(t, publicKey)
+	assert.True(t, privateKey.PublicKey.Equal(publicKey))
+}
+
+func TestLoadKeyPair_missingPrivateKey(t *testing.T) {
+	cfg := testJWTConfig()
+	cfg.PrivateKey = filepath.Join("testdata", "does-not-exist.key")
+
+	privateKey, publicKey, err := LoadKeyPair(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, privateKey)
+	assert.Nil(t, publicKey)
+}
+
+func TestLoadKeyPair_missingPublicKey(t *testing.T) {
+	cfg := testJWTConfig()
+	cfg.PublicKey = filepath.Join("testdata", "does-not-exist.pem")
+
+	privateKey, publicKey, err := LoadKeyPair(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, privateKey)
+	assert.Nil(t, publicKey)
+}
+
+func TestLoadKeyPair_garbagePEM(t *testing.T) {
+	garbage := filepath.Join(t.TempDir(), "garbage.pem")
+	require.NoError(t, os.WriteFile(garbage, []byte("not a real PEM file"), 0o600))
+
+	cfg := testJWTConfig()
+	cfg.PrivateKey = garbage
+
+	privateKey, publicKey, err := LoadKeyPair(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, privateKey)
+	assert.Nil(t, publicKey)
+
+	cfg = testJWTConfig()
+	cfg.PublicKey = garbage
+
+	privateKey, publicKey, err = LoadKeyPair(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, privateKey)
+	assert.Nil(t, publicKey)
 }
 
 func TestNewSigner_badKeys(t *testing.T) {

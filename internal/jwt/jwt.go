@@ -30,15 +30,27 @@ type Signer struct {
 	ttl time.Duration
 }
 
-// NewSigner loads the configured key pair and returns a Signer whose tokens
-// expire after ttl (zero means no expiry claim)
-func NewSigner(cfg config.JWT, ttl time.Duration) (*Signer, error) {
+// LoadKeyPair loads the RSA keypair referenced by the JWT config. It is
+// exported so other packages (e.g. internal/oauth) can reuse the same
+// keypair to sign/verify their own JWTs.
+func LoadKeyPair(cfg config.JWT) (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	privateKey, err := loadPrivateKey(cfg.PrivateKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	publicKey, err := loadPublicKey(cfg.PublicKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return privateKey, publicKey, nil
+}
+
+// NewSigner loads the configured key pair and returns a Signer whose tokens
+// expire after ttl (zero means no expiry claim)
+func NewSigner(cfg config.JWT, ttl time.Duration) (*Signer, error) {
+	privateKey, publicKey, err := LoadKeyPair(cfg)
 	if err != nil {
 		return nil, err
 	}

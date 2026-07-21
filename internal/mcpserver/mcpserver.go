@@ -1,0 +1,103 @@
+// Package mcpserver exposes a read-only Model Context Protocol (MCP) server
+// over the poker service's data-access repositories. It is served as a
+// stateless streamable HTTP handler so that each POST is independent.
+package mcpserver
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"mondaynightpoker-server/pkg/model"
+)
+
+const (
+	defaultRows = 100
+	maxRows     = 100
+	minRows     = 1
+)
+
+// server bundles the repositories that tool handlers close over.
+type server struct {
+	repos *model.Repositories
+}
+
+// New builds a stateless streamable HTTP handler exposing the read-only MCP
+// tools. Each POST request is handled independently; no long-lived SSE stream
+// is used.
+func New(repos *model.Repositories, version string) http.Handler {
+	s := &server{repos: repos}
+
+	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "mondaynightpoker", Version: version}, nil)
+	s.registerTools(mcpServer)
+
+	return mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return mcpServer },
+		&mcp.StreamableHTTPOptions{Stateless: true},
+	)
+}
+
+// parsePagination resolves optional start/rows inputs into an offset and limit.
+// start defaults to 0 and may not be negative. rows defaults to 100 and is
+// clamped to the range [1, 100].
+func parsePagination(start *int64, rows *int) (offset int64, limit int, err error) {
+	offset = 0
+	if start != nil {
+		if *start < 0 {
+			return 0, 0, errors.New("start cannot be less than zero")
+		}
+		offset = *start
+	}
+
+	limit = defaultRows
+	if rows != nil {
+		limit = *rows
+		if limit > maxRows {
+			limit = maxRows
+		}
+		if limit < minRows {
+			limit = minRows
+		}
+	}
+
+	return offset, limit, nil
+}
+
+// parseDateRange resolves optional RFC3339 from/to inputs into a time range.
+// When omitted, from defaults to the Unix epoch and to defaults to now (with a
+// small margin, mirroring internal/mux). All times are normalized to UTC.
+func parseDateRange(from, to *string) (fromTime, toTime time.Time, err error) {
+	fromTime = time.Unix(0, 0).UTC()
+	toTime = time.Now().In(time.UTC).Add(24 * time.Hour)
+
+	if from != nil {
+		parsed, err := time.Parse(time.RFC3339, *from)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid 'from' date (expected RFC3339): %w", err)
+		}
+		fromTime = parsed.In(time.UTC)
+	}
+
+	if to != nil {
+		parsed, err := time.Parse(time.RFC3339, *to)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid 'to' date (expected RFC3339): %w", err)
+		}
+		toTime = parsed.In(time.UTC)
+	}
+
+	return fromTime, toTime, nil
+}
+
+// notFound converts a sql.ErrNoRows into a friendly error, otherwise returns
+// the original error unchanged.
+func notFound(err error, entity string) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%s not found", entity)
+	}
+	return err
+}

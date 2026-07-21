@@ -8,6 +8,7 @@ import (
 
 	"mondaynightpoker-server/internal/config"
 	"mondaynightpoker-server/internal/email"
+	"mondaynightpoker-server/internal/oauth"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/room"
 
@@ -38,6 +39,12 @@ type Deps struct {
 	EmailTemplates *email.Template
 	// Recaptcha is optional; when nil, a verifier is built from Config
 	Recaptcha recaptcha
+	// OAuth is optional; when set alongside MCPHandler, the OAuth 2.1
+	// authorization server and MCP resource-server middleware are wired up
+	OAuth *oauth.Server
+	// MCPHandler is optional; when set alongside OAuth, it is mounted at /mcp
+	// behind OAuth's bearer-token middleware
+	MCPHandler http.Handler
 }
 
 // Mux handles HTTP requests
@@ -93,6 +100,21 @@ func NewMux(deps Deps) *Mux {
 		r.Methods(http.MethodPost).Path("/player/reset-password-request").Handler(this.postPlayerResetPasswordRequest())
 		r.Methods(http.MethodPost).Path("/player/reset-password/{token:[a-zA-Z0-9_-]{20}}").Handler(this.postPlayerResetPasswordToken())
 		r.Methods(http.MethodGet).Path("/player/reset-password/{token:[a-zA-Z0-9_-]{20}}").Handler(this.getPlayerResetPasswordToken())
+	}
+
+	// OAuth 2.1 authorization server + MCP endpoint. These are unauthenticated
+	// at the router level: /oauth/* uses PKCE + its own login flow, and /mcp is
+	// guarded by OAuth's own bearer-token middleware rather than authMiddleware.
+	// Both deps ship together; if only one is set, nothing is registered.
+	if deps.OAuth != nil && deps.MCPHandler != nil {
+		r := this.Router
+		r.Methods(http.MethodGet).Path("/.well-known/oauth-protected-resource").Handler(deps.OAuth.ProtectedResourceMetadata())
+		r.Methods(http.MethodGet).Path("/.well-known/oauth-authorization-server").Handler(deps.OAuth.AuthorizationServerMetadata())
+		r.Methods(http.MethodGet).Path("/oauth/authorize").Handler(deps.OAuth.Authorize())
+		r.Methods(http.MethodPost).Path("/oauth/authorize").Handler(deps.OAuth.AuthorizePost())
+		r.Methods(http.MethodPost).Path("/oauth/token").Handler(deps.OAuth.Token())
+		r.Methods(http.MethodPost).Path("/oauth/register").Handler(deps.OAuth.Register())
+		r.PathPrefix("/mcp").Handler(deps.OAuth.RequireMCPAuth(http.StripPrefix("/mcp", deps.MCPHandler)))
 	}
 
 	// requires bearer authorization
