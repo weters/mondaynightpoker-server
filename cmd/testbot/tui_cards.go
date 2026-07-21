@@ -9,6 +9,15 @@ import (
 // minWidthForArt is the minimum terminal width to show ASCII card art.
 const minWidthForArt = 60
 
+// Card art dimensions (in terminal cells) for the two art tiers.
+const (
+	smallCardWidth = 6 // 4 interior cells + 2 border cells
+	smallInnerCols = 4
+	largeCardWidth = 9 // 7 interior cells + 2 border cells
+	largeInnerCols = 7
+	cardGap        = 1 // horizontal gap between rendered cards
+)
+
 const suitStars = "stars"
 
 // suitSymbol returns the unicode suit symbol.
@@ -34,6 +43,12 @@ func isRedSuit(suit string) bool {
 	return suit == "hearts" || suit == "diamonds"
 }
 
+// isHidden reports whether a card represents a face-down / unknown card.
+// The zero value (rank 0, empty suit) is treated as hidden.
+func isHidden(c CardInfo) bool {
+	return c.Rank == 0 || c.Suit == ""
+}
+
 // cardStyle returns the appropriate style for a card's suit.
 func cardStyle(suit string) lipgloss.Style {
 	if isRedSuit(suit) {
@@ -45,6 +60,103 @@ func cardStyle(suit string) lipgloss.Style {
 	return styleCardWhite
 }
 
+// cardFrame holds the box-drawing characters used to frame a card.
+type cardFrame struct {
+	topLeft, topRight, botLeft, botRight, horiz, vert string
+}
+
+var (
+	frameSquare = cardFrame{"┌", "┐", "└", "┘", "─", "│"}
+	frameRound  = cardFrame{"╭", "╮", "╰", "╯", "─", "│"}
+)
+
+// padRightTo pads s on the right with spaces to reach w display cells.
+func padRightTo(s string, w int) string {
+	if diff := w - lipgloss.Width(s); diff > 0 {
+		return s + strings.Repeat(" ", diff)
+	}
+	return s
+}
+
+// padLeftTo pads s on the left with spaces to reach w display cells.
+func padLeftTo(s string, w int) string {
+	if diff := w - lipgloss.Width(s); diff > 0 {
+		return strings.Repeat(" ", diff) + s
+	}
+	return s
+}
+
+// centerTo centers s within w display cells.
+func centerTo(s string, w int) string {
+	diff := w - lipgloss.Width(s)
+	if diff <= 0 {
+		return s
+	}
+	left := diff / 2
+	right := diff - left
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", right)
+}
+
+// renderCardBox frames the given interior lines with a border. The border
+// characters use borderStyle while the interior content uses contentStyle.
+// Each interior line must already be padded to exactly inner display cells so
+// that every rendered line has an equal lipgloss.Width of inner+2.
+func renderCardBox(f cardFrame, inner int, lines []string, borderStyle, contentStyle lipgloss.Style) string {
+	top := borderStyle.Render(f.topLeft + strings.Repeat(f.horiz, inner) + f.topRight)
+	bot := borderStyle.Render(f.botLeft + strings.Repeat(f.horiz, inner) + f.botRight)
+	v := borderStyle.Render(f.vert)
+
+	out := make([]string, 0, len(lines)+2)
+	out = append(out, top)
+	for _, ln := range lines {
+		out = append(out, v+contentStyle.Render(ln)+v)
+	}
+	out = append(out, bot)
+	return strings.Join(out, "\n")
+}
+
+// smallCardLines returns the 2 interior lines for the small (6×4) tier.
+func smallCardLines(c CardInfo) []string {
+	rank := cardRankDisplay(c.Rank)
+	suit := suitSymbol(c.Suit)
+	return []string{
+		" " + padRightTo(rank, 2) + " ", // rank, top-left
+		centerTo(suit, smallInnerCols),  // suit, centered
+	}
+}
+
+// largeCardLines returns the 5 interior lines for the large (9×7) tier.
+func largeCardLines(c CardInfo) []string {
+	rank := cardRankDisplay(c.Rank)
+	suit := suitSymbol(c.Suit)
+	corner := rank + suit
+	return []string{
+		padRightTo(" "+corner, largeInnerCols), // rank+suit, top-left
+		strings.Repeat(" ", largeInnerCols),
+		centerTo(suit, largeInnerCols), // centered suit pip
+		strings.Repeat(" ", largeInnerCols),
+		padLeftTo(corner+" ", largeInnerCols), // mirrored rank+suit, bottom-right
+	}
+}
+
+// backLines returns interior pattern lines for a face-down card.
+func backLines(inner, rows int) []string {
+	lines := make([]string, rows)
+	for i := range lines {
+		lines[i] = strings.Repeat("▒", inner)
+	}
+	return lines
+}
+
+// renderSmallCard renders a card in the small (6×4) tier using borderStyle for
+// the frame. Hidden cards render a patterned back.
+func renderSmallCard(c CardInfo, borderStyle lipgloss.Style) string {
+	if isHidden(c) {
+		return renderCardBox(frameSquare, smallInnerCols, backLines(smallInnerCols, 2), styleCardBack, styleCardBack)
+	}
+	return renderCardBox(frameSquare, smallInnerCols, smallCardLines(c), borderStyle, cardStyle(c.Suit))
+}
+
 // RenderCard renders a single card as a 6×4 ASCII art block.
 //
 //	┌────┐
@@ -52,27 +164,21 @@ func cardStyle(suit string) lipgloss.Style {
 //	│ ♥  │
 //	└────┘
 func RenderCard(c CardInfo) string {
-	r := cardRankDisplay(c.Rank)
-	s := suitSymbol(c.Suit)
+	if isHidden(c) {
+		return renderSmallCard(c, styleCardBack)
+	}
+	return renderSmallCard(c, cardStyle(c.Suit))
+}
+
+// RenderCardLarge renders a single card as a 9×7 art block with rounded
+// borders, corner rank+suit and a centered suit pip. Hidden cards render a
+// patterned back.
+func RenderCardLarge(c CardInfo) string {
+	if isHidden(c) {
+		return renderCardBox(frameRound, largeInnerCols, backLines(largeInnerCols, 5), styleCardBack, styleCardBack)
+	}
 	style := cardStyle(c.Suit)
-
-	// Pad rank to 2 chars for alignment
-	rankPad := r
-	if len(r) == 1 {
-		rankPad = r + " "
-	}
-
-	top := style.Render("┌────┐")
-	mid1 := style.Render("│ " + rankPad + " │")
-	// Stars emoji is 2 cells wide, so use less padding
-	suitPad := "  "
-	if c.Suit == suitStars {
-		suitPad = " "
-	}
-	mid2 := style.Render("│ " + s + suitPad + "│")
-	bot := style.Render("└────┘")
-
-	return top + "\n" + mid1 + "\n" + mid2 + "\n" + bot
+	return renderCardBox(frameRound, largeInnerCols, largeCardLines(c), style, style)
 }
 
 // cardRankDisplay returns the display string for rendering inside card art.
@@ -88,8 +194,17 @@ func cardRankDisplay(rank int) string {
 	return "?"
 }
 
-// RenderHand renders multiple cards side by side as ASCII art.
-// Falls back to inline text (e.g., "A♥ K♠") if width < minWidthForArt.
+// handArtWidth returns the total display width needed to render n cards at the
+// given per-card width with gaps between them.
+func handArtWidth(n, cardWidth int) int {
+	if n <= 0 {
+		return 0
+	}
+	return n*cardWidth + (n-1)*cardGap
+}
+
+// RenderHand renders multiple cards side by side, choosing the richest tier
+// that fits in availableWidth: large art, then small art, then inline text.
 func RenderHand(cards []CardInfo, availableWidth int) string {
 	if len(cards) == 0 {
 		return ""
@@ -99,7 +214,14 @@ func RenderHand(cards []CardInfo, availableWidth int) string {
 		return RenderHandInline(cards)
 	}
 
-	return RenderHandArt(cards)
+	n := len(cards)
+	if handArtWidth(n, largeCardWidth) <= availableWidth {
+		return RenderHandArtLarge(cards)
+	}
+	if handArtWidth(n, smallCardWidth) <= availableWidth {
+		return RenderHandArt(cards)
+	}
+	return RenderHandInline(cards)
 }
 
 // RenderHandInline renders cards as inline text: "A♥ K♠ Q♦"
@@ -112,19 +234,25 @@ func RenderHandInline(cards []CardInfo) string {
 	return strings.Join(parts, " ")
 }
 
-// RenderHandArt renders cards side by side as ASCII art blocks.
+// RenderHandArt renders cards side by side as small (6×4) ASCII art blocks.
 func RenderHandArt(cards []CardInfo) string {
+	return renderHandTier(cards, RenderCard)
+}
+
+// RenderHandArtLarge renders cards side by side as large (9×7) art blocks.
+func RenderHandArtLarge(cards []CardInfo) string {
+	return renderHandTier(cards, RenderCardLarge)
+}
+
+// renderHandTier renders each card with the given renderer and joins them.
+func renderHandTier(cards []CardInfo, render func(CardInfo) string) string {
 	if len(cards) == 0 {
 		return ""
 	}
-
-	// Render each card individually
 	rendered := make([]string, len(cards))
 	for i, c := range cards {
-		rendered[i] = RenderCard(c)
+		rendered[i] = render(c)
 	}
-
-	// Join cards horizontally
 	return lipgloss.JoinHorizontal(lipgloss.Top, intersperse(rendered, " ")...)
 }
 

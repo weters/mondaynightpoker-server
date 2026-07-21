@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // overlayItem represents a menu item in the ESC overlay.
@@ -103,9 +104,10 @@ func (m OverlayModel) View(width, height int) string {
 		} else {
 			lines[i] = styleOverlayItem.Render("  " + item.Label)
 		}
+		lines[i] = zone.Mark(fmt.Sprintf("overlay:%d", i), lines[i])
 	}
 
-	hint := styleOverlayHint.Render("↑/↓ move · enter select · esc close")
+	hint := styleOverlayHint.Render("↑/↓ move · enter/click select · esc close")
 	content := title + "\n\n" + strings.Join(lines, "\n") + "\n\n" + hint
 	box := styleOverlayBorder.Render(content)
 
@@ -194,9 +196,10 @@ func (m GameSelectModel) View(width, height int) string {
 		} else {
 			lines[i] = "  " + key + styleOverlayItem.Render(" "+item.Label)
 		}
+		lines[i] = zone.Mark(fmt.Sprintf("gameselect:%d", i), lines[i])
 	}
 
-	hint := styleOverlayHint.Render("1-9 quick pick · enter select · esc close")
+	hint := styleOverlayHint.Render("1-9 quick pick · enter/click select · esc close")
 	content := title + "\n\n" + strings.Join(lines, "\n") + "\n\n" + hint
 	box := styleOverlayBorder.Render(content)
 

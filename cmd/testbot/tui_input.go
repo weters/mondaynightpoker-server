@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // inputMode tracks which sub-input is currently active.
@@ -146,26 +148,66 @@ func (m CardSelectModel) Update(msg tea.KeyMsg) (CardSelectModel, []CardInfo, bo
 	}
 }
 
-// View renders the card selection inline.
+// View renders the card selection as art cards with cursor/selection states.
 func (m CardSelectModel) View(width int) string {
 	title := styleInputLabel.Render(m.Title + " (←/→ move, space select, enter confirm, esc cancel)")
 
+	// Fall back to inline text when the small art cards would not fit.
+	if !m.artFits(width) {
+		return title + "\n" + m.inlineView()
+	}
+
+	blocks := make([]string, len(m.Cards))
+	for i, c := range m.Cards {
+		blocks[i] = zone.Mark(fmt.Sprintf("card:%d", i), m.renderCardBlock(i, c))
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, intersperse(blocks, " ")...)
+	return title + "\n" + body
+}
+
+// artFits reports whether the small art cards fit within width.
+func (m CardSelectModel) artFits(width int) bool {
+	return width > 0 && handArtWidth(len(m.Cards), smallCardWidth) <= width
+}
+
+// renderCardBlock renders one card plus a marker row, raising selected cards.
+func (m CardSelectModel) renderCardBlock(i int, c CardInfo) string {
+	border := cardStyle(c.Suit)
+	switch {
+	case i == m.Cursor:
+		border = styleCardCursor
+	case m.Selected[i]:
+		border = styleCardSelected
+	}
+	card := renderSmallCard(c, border)
+
+	blank := strings.Repeat(" ", smallCardWidth)
+	if m.Selected[i] {
+		// Raise the card one line and mark it as selected below.
+		mark := styleCardMark.Render(centerTo("✔", smallCardWidth))
+		return card + "\n" + mark
+	}
+	// Push unselected cards down one line so selected cards sit higher.
+	return blank + "\n" + card
+}
+
+// inlineView renders the narrow-width fallback with cursor/selection markers.
+func (m CardSelectModel) inlineView() string {
 	parts := make([]string, len(m.Cards))
 	for i, c := range m.Cards {
 		style := cardStyle(c.Suit)
 		label := c.String()
 		if m.Selected[i] {
 			label = "[" + label + "]"
+			style = styleCardSelected
 		} else {
 			label = " " + label + " "
 		}
 		if i == m.Cursor {
 			label = ">" + label + "<"
-			style = style.Bold(true)
+			style = styleCardCursor
 		}
-		parts[i] = style.Render(label)
+		parts[i] = zone.Mark(fmt.Sprintf("card:%d", i), style.Render(label))
 	}
-
-	_ = width // reserved for future use
-	return title + "\n" + strings.Join(parts, " ")
+	return strings.Join(parts, " ")
 }

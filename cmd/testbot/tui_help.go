@@ -27,6 +27,7 @@ var helpBindings = []helpBinding{
 	{"esc", "open menu"},
 	{"?", "toggle this help"},
 	{"ctrl+c", "quit"},
+	{"mouse", "click tabs/actions/cards/menus · wheel scrolls log"},
 }
 
 // RenderHelp renders the help overlay centered on screen.
@@ -46,7 +47,7 @@ func RenderHelp(width, height int) string {
 		lines[i] = styleFooterKey.Render(key) + "  " + styleOverlayItem.Render(b.Desc)
 	}
 
-	hint := styleOverlayHint.Render("press any key to close")
+	hint := styleOverlayHint.Render("press any key or click to close")
 	content := title + "\n\n" + strings.Join(lines, "\n") + "\n\n" + hint
 	box := styleOverlayBorder.Render(content)
 

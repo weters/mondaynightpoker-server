@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // Message types sent from bot goroutines to the TUI via program.Send().
@@ -172,6 +173,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	}
 
 	return m, nil
@@ -221,17 +225,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPgUp:
-		m.logScroll += logScrollStep
-		if limit := m.logBuf.Len(); m.logScroll > limit {
-			m.logScroll = limit
-		}
+		m.scrollLogBack(logScrollStep)
 		return m, nil
 
 	case tea.KeyPgDown:
-		m.logScroll -= logScrollStep
-		if m.logScroll < 0 {
-			m.logScroll = 0
-		}
+		m.scrollLogForward(logScrollStep)
 		return m, nil
 
 	case tea.KeyEnd:
@@ -241,6 +239,122 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyRunes:
 		if len(msg.Runes) == 1 {
 			return m.handleRuneKey(msg.Runes[0])
+		}
+	}
+
+	return m, nil
+}
+
+// logWheelStep is how many entries a single mouse-wheel notch moves the log.
+const logWheelStep = 2
+
+// scrollLogBack scrolls the log view back (toward older entries) by step,
+// clamped to the number of buffered entries.
+func (m *Model) scrollLogBack(step int) {
+	m.logScroll += step
+	if limit := m.logBuf.Len(); m.logScroll > limit {
+		m.logScroll = limit
+	}
+}
+
+// scrollLogForward scrolls the log view toward the live tail by step, clamped
+// so it never scrolls past the newest entry.
+func (m *Model) scrollLogForward(step int) {
+	m.logScroll -= step
+	if m.logScroll < 0 {
+		m.logScroll = 0
+	}
+}
+
+// inZone reports whether the mouse event landed inside the marked zone id.
+func inZone(id string, msg tea.MouseMsg) bool {
+	z := zone.Get(id)
+	return z != nil && z.InBounds(msg)
+}
+
+// handleMouse routes mouse events to the same code paths as their keyboard
+// equivalents. Only left-button releases act as clicks; wheel events scroll the
+// log; motion and other buttons are ignored.
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// Mouse wheel over the log panel scrolls it, mirroring PgUp/PgDn.
+	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+		if inZone("logpanel", msg) {
+			if msg.Button == tea.MouseButtonWheelUp {
+				m.scrollLogBack(logWheelStep)
+			} else {
+				m.scrollLogForward(logWheelStep)
+			}
+		}
+		return m, nil
+	}
+
+	// Everything else only reacts to a completed left click (button release).
+	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionRelease {
+		return m, nil
+	}
+
+	// Help is modal: any click dismisses it (parallel to any-key dismissal).
+	if m.showHelp {
+		m.showHelp = false
+		return m, nil
+	}
+
+	// Game select modal: click activates a game (same as cursor + enter).
+	if m.gameSelect.Active {
+		for i := range m.gameSelect.Items {
+			if inZone(fmt.Sprintf("gameselect:%d", i), msg) {
+				m.gameSelect.Cursor = i
+				return m.applyGameSelect(m.gameSelect.Items[i].Name)
+			}
+		}
+		return m, nil
+	}
+
+	// Overlay menu: click activates an item (same as cursor + enter).
+	if m.overlay.Active {
+		for i := range m.overlay.Items {
+			if inZone(fmt.Sprintf("overlay:%d", i), msg) {
+				m.overlay.Cursor = i
+				return m.applyOverlayAction(m.overlay.Items[i].Action)
+			}
+		}
+		return m, nil
+	}
+
+	// Tabs are visible in every non-modal state; clicking one focuses that bot
+	// and cancels any pending input, mirroring the Tab key's inputMode reset.
+	for i := range m.bots {
+		if inZone(fmt.Sprintf("tab:%d", i), msg) {
+			m.active = i
+			m.inputMode = inputNone
+			return m, nil
+		}
+	}
+
+	// Card selection: click sets the cursor and toggles that card.
+	if m.inputMode == inputCardSelect {
+		for i := range m.cardSelect.Cards {
+			if inZone(fmt.Sprintf("card:%d", i), msg) {
+				m.cardSelect.Cursor = i
+				m.cardSelect.Selected[i] = !m.cardSelect.Selected[i]
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
+	// Other input modes (bet entry) have no clickable zones besides the tabs.
+	if m.inputMode != inputNone {
+		return m, nil
+	}
+
+	// Main view: clicking an action chip fires that action (same as its digit).
+	gs := m.bots[m.active].GetGameState()
+	if gs != nil {
+		for i := range gs.ValidActions {
+			if inZone(fmt.Sprintf("action:%d", i+1), msg) {
+				return m.handleActionKey(i + 1)
+			}
 		}
 	}
 
@@ -460,7 +574,12 @@ func (m Model) handleInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var action string
 	m.overlay, action = m.overlay.Update(msg)
+	return m.applyOverlayAction(action)
+}
 
+// applyOverlayAction performs the effect of the given overlay menu action.
+// Shared by keyboard (enter) and mouse (click) activation.
+func (m Model) applyOverlayAction(action string) (tea.Model, tea.Cmd) {
 	switch {
 	case action == "":
 		return m, nil
@@ -509,7 +628,12 @@ func (m Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleGameSelectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var gameName string
 	m.gameSelect, gameName = m.gameSelect.Update(msg)
+	return m.applyGameSelect(gameName)
+}
 
+// applyGameSelect starts the given game (if any) and closes the picker.
+// Shared by keyboard (enter/digit) and mouse (click) activation.
+func (m Model) applyGameSelect(gameName string) (tea.Model, tea.Cmd) {
 	if gameName != "" {
 		m.gameSelect.Active = false
 		m.bots[0].StartGame(gameName)
@@ -531,8 +655,14 @@ func (m Model) triggerAutoPilot() {
 	}
 }
 
-// View implements tea.Model.
+// View implements tea.Model. It scans the composed output so bubblezone can
+// resolve the mouse hit-test regions marked with zone.Mark below.
 func (m Model) View() string {
+	return zone.Scan(m.renderView())
+}
+
+// renderView composes the full screen, marking interactive regions as zones.
+func (m Model) renderView() string {
 	if m.width == 0 || m.height == 0 {
 		return "Initializing..."
 	}
@@ -575,7 +705,7 @@ func (m Model) View() string {
 		}
 		tableWidth := m.width - logWidth
 		tablePanel := panel(tableTitle, m.renderTableContent(tableWidth-4), tableWidth, mainHeight, true)
-		logPanel := panel("Log", m.renderLogContent(mainHeight-2, logWidth-4), logWidth, mainHeight, false)
+		logPanel := zone.Mark("logpanel", panel("Log", m.renderLogContent(mainHeight-2, logWidth-4), logWidth, mainHeight, false))
 		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, tablePanel, logPanel)
 	} else {
 		// Narrow: table stacked above log
@@ -585,7 +715,7 @@ func (m Model) View() string {
 		}
 		tableHeight := mainHeight - logHeight
 		tablePanel := panel(tableTitle, m.renderTableContent(m.width-4), m.width, tableHeight, true)
-		logPanel := panel("Log", m.renderLogContent(logHeight-2, m.width-4), m.width, logHeight, false)
+		logPanel := zone.Mark("logpanel", panel("Log", m.renderLogContent(logHeight-2, m.width-4), m.width, logHeight, false))
 		mainArea = tablePanel + "\n" + logPanel
 	}
 
@@ -636,6 +766,7 @@ func (m Model) renderTabs() string {
 		default:
 			parts[i] = styleTabInactive.Render(label)
 		}
+		parts[i] = zone.Mark(fmt.Sprintf("tab:%d", i), parts[i])
 	}
 
 	return " " + strings.Join(parts, " ")
@@ -700,7 +831,8 @@ func (m Model) renderActionsContent() string {
 			if (a.Action == actionBet || a.Action == actionRaise || a.NeedsAmount) && gs.MinBet > 0 {
 				label += fmt.Sprintf(" ($%d-$%d)", gs.MinBet, gs.MaxBet)
 			}
-			parts[i] = styleAction.Render(fmt.Sprintf("%d", i+1)) + " " + styleActionLabel.Render(label)
+			chip := styleAction.Render(fmt.Sprintf("%d", i+1)) + " " + styleActionLabel.Render(label)
+			parts[i] = zone.Mark(fmt.Sprintf("action:%d", i+1), chip)
 		}
 		lines = append(lines, strings.Join(parts, "  "))
 	}
@@ -709,7 +841,7 @@ func (m Model) renderActionsContent() string {
 	case inputBet:
 		lines = append(lines, m.betInput.View())
 	case inputCardSelect:
-		lines = append(lines, m.cardSelect.View(0))
+		lines = append(lines, m.cardSelect.View(m.width-4))
 	}
 
 	if m.errMsg != "" {
