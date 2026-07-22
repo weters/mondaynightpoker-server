@@ -306,6 +306,27 @@ func TestGetTable(t *testing.T) {
 	a.Contains(err.Error(), "not found")
 }
 
+func TestGetTable_DeletedIsNotFound(t *testing.T) {
+	a := assert.New(t)
+	s := newServer()
+
+	admin := createSiteAdmin(t)
+	tbl, err := testRepos.Tables.CreateTable(cbg, admin, "Deleted Get Table")
+	a.NoError(err)
+
+	// while live, the table is retrievable
+	_, err = s.getTable(cbg, nil, adminCaller(admin.ID), getTableInput{UUID: tbl.UUID})
+	a.NoError(err)
+
+	// once soft-deleted, the tool reports it as not found (even to a site admin)
+	tbl.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, tbl))
+
+	_, err = s.getTable(cbg, nil, adminCaller(admin.ID), getTableInput{UUID: tbl.UUID})
+	a.Error(err)
+	a.Contains(err.Error(), "not found")
+}
+
 // -------------------- get_table_roster (email visibility) --------------------
 
 func TestGetTableRoster_Admin(t *testing.T) {
@@ -371,6 +392,52 @@ func TestGetTableRoster_NonAdminRedaction(t *testing.T) {
 			a.Nil(pt.Player.Email)
 		}
 	}
+}
+
+func TestGetTableRoster_DeletedIsNotFound(t *testing.T) {
+	a := assert.New(t)
+	s := newServer()
+
+	admin := createSiteAdmin(t)
+	tbl, err := testRepos.Tables.CreateTable(cbg, admin, "Deleted Roster Table")
+	a.NoError(err)
+
+	tbl.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, tbl))
+
+	_, err = s.getTableRoster(cbg, nil, adminCaller(admin.ID), getTableRosterInput{UUID: tbl.UUID})
+	a.Error(err)
+	a.Contains(err.Error(), "not found")
+}
+
+func TestListTables_ExcludesDeleted(t *testing.T) {
+	a := assert.New(t)
+	s := newServer()
+
+	admin := createSiteAdmin(t)
+	live, err := testRepos.Tables.CreateTable(cbg, admin, "Live Listed Table")
+	a.NoError(err)
+	gone, err := testRepos.Tables.CreateTable(cbg, admin, "Deleted Listed Table")
+	a.NoError(err)
+
+	gone.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, gone))
+
+	// admin path: the deleted table must not be listed, the live one must be
+	out, err := s.listTables(cbg, nil, adminCaller(admin.ID), listTablesInput{Rows: ptrInt(maxRows)})
+	a.NoError(err)
+
+	var sawLive, sawDeleted bool
+	for _, tw := range out.Tables {
+		switch tw.UUID {
+		case live.UUID:
+			sawLive = true
+		case gone.UUID:
+			sawDeleted = true
+		}
+	}
+	a.True(sawLive, "expected the live table to be listed")
+	a.False(sawDeleted, "did not expect the deleted table to be listed")
 }
 
 // -------------------- list_game_types (data) --------------------

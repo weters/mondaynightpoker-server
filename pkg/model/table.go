@@ -216,7 +216,7 @@ WHERE uuid = $1`
 	return getTableByRow(row)
 }
 
-// GetTables returns a list of tables
+// GetTables returns a paginated list of tables, including soft-deleted ones.
 func (r *TableRepo) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
 	const query = `
 SELECT ` + tableColumns + `, players.email
@@ -226,7 +226,30 @@ ORDER BY tables.created DESC, tables.uuid DESC
 OFFSET $1
 LIMIT $2`
 
-	rows, err := r.db.QueryContext(ctx, query, offset, limit)
+	return scanTablesWithPlayerEmail(r.db.QueryContext(ctx, query, offset, limit))
+}
+
+// GetActiveTables returns a paginated list of non-deleted tables. The deleted
+// filter is applied in SQL so pagination stays consistent (offset/limit are not
+// distorted by a post-fetch filter).
+func (r *TableRepo) GetActiveTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
+	const query = `
+SELECT ` + tableColumns + `, players.email
+FROM tables
+INNER JOIN players ON tables.player_id = players.id
+WHERE NOT tables.deleted
+ORDER BY tables.created DESC, tables.uuid DESC
+OFFSET $1
+LIMIT $2`
+
+	return scanTablesWithPlayerEmail(r.db.QueryContext(ctx, query, offset, limit))
+}
+
+// scanTablesWithPlayerEmail collects the rows from a tables-with-email query
+// (the tableColumns plus players.email) into TableWithPlayerEmail records. It
+// takes the raw QueryContext result so the deleted/active variants differ only
+// in their SQL.
+func scanTablesWithPlayerEmail(rows *sql.Rows, err error) ([]*TableWithPlayerEmail, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -240,12 +263,10 @@ LIMIT $2`
 			return nil, err
 		}
 
-		t := &TableWithPlayerEmail{
+		tables = append(tables, &TableWithPlayerEmail{
 			Table: row,
 			Email: email,
-		}
-
-		tables = append(tables, t)
+		})
 	}
 
 	return tables, nil

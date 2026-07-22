@@ -262,7 +262,7 @@ func (s *server) listTables(ctx context.Context, _ *mcp.CallToolRequest, caller 
 		return listTablesOutput{Tables: fromTablesWithBalanceAsEmail(tables)}, nil
 	}
 
-	tables, err := s.repos.Tables.GetTables(ctx, offset, limit)
+	tables, err := s.repos.Tables.GetActiveTables(ctx, offset, limit)
 	if err != nil {
 		return listTablesOutput{}, err
 	}
@@ -285,6 +285,11 @@ func (s *server) getTable(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.C
 	table, err := s.repos.Tables.GetTableByUUID(ctx, in.UUID)
 	if err != nil {
 		return getTableOutput{}, notFound(err, "table")
+	}
+
+	// Soft-deleted tables are invisible to the MCP surface; report as not found.
+	if table.Deleted {
+		return getTableOutput{}, errNotFound("table")
 	}
 
 	count, err := s.repos.Tables.GetGamesCount(ctx, table)
@@ -310,6 +315,11 @@ func (s *server) getTableRoster(ctx context.Context, _ *mcp.CallToolRequest, cal
 	table, err := s.repos.Tables.GetTableByUUID(ctx, in.UUID)
 	if err != nil {
 		return getTableRosterOutput{}, notFound(err, "table")
+	}
+
+	// Soft-deleted tables are invisible to the MCP surface; report as not found.
+	if table.Deleted {
+		return getTableRosterOutput{}, errNotFound("table")
 	}
 
 	players, err := s.repos.Tables.GetPlayers(ctx, table)
