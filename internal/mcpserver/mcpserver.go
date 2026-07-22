@@ -118,7 +118,14 @@ func parseDateRange(from, to *string) (fromTime, toTime time.Time, err error) {
 // the original error unchanged.
 func notFound(err error, entity string) error {
 	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%s not found", entity)
+		return errNotFound(entity)
 	}
 	return err
+}
+
+// errNotFound builds the "not found" error for an entity, matching the message
+// notFound produces for a sql.ErrNoRows. Handlers use it to treat a record they
+// fetched but must not expose (for example a soft-deleted table) as absent.
+func errNotFound(entity string) error {
+	return fmt.Errorf("%s not found", entity)
 }

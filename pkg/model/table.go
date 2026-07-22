@@ -216,20 +216,6 @@ WHERE uuid = $1`
 	return getTableByRow(row)
 }
 
-// GetActiveTableByUUID returns a non-deleted table by its UUID. A deleted table
-// yields sql.ErrNoRows, so callers cannot observe the difference between a table
-// that never existed and one that has been soft-deleted.
-func (r *TableRepo) GetActiveTableByUUID(ctx context.Context, uuid string) (*Table, error) {
-	const query = `
-SELECT ` + tableColumns + `
-FROM tables
-WHERE uuid = $1
-  AND NOT tables.deleted`
-
-	row := r.db.QueryRowContext(ctx, query, uuid)
-	return getTableByRow(row)
-}
-
 // GetTables returns a paginated list of tables, including soft-deleted ones.
 func (r *TableRepo) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
 	const query = `

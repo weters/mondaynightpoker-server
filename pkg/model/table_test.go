@@ -33,35 +33,6 @@ func TestGetTableByUUID(t *testing.T) {
 	assert.Equal(t, tbl.Name, tbl2.Name)
 }
 
-func TestGetActiveTableByUUID(t *testing.T) {
-	a := assert.New(t)
-
-	// a non-existent uuid yields sql.ErrNoRows
-	tbl, err := testRepos.Tables.GetActiveTableByUUID(cbg, uuid.New().String())
-	a.Equal(sql.ErrNoRows, err)
-	a.Nil(tbl)
-
-	_, tbl2 := playerAndTable()
-
-	// a live table is returned
-	tbl, err = testRepos.Tables.GetActiveTableByUUID(cbg, tbl2.UUID)
-	a.NoError(err)
-	a.Equal(tbl2.Name, tbl.Name)
-
-	// once soft-deleted, it is indistinguishable from a missing table
-	tbl2.Deleted = true
-	a.NoError(testRepos.Tables.Save(cbg, tbl2))
-
-	tbl, err = testRepos.Tables.GetActiveTableByUUID(cbg, tbl2.UUID)
-	a.Equal(sql.ErrNoRows, err)
-	a.Nil(tbl)
-
-	// the plain getter still sees it, confirming only the active variant filters
-	tbl, err = testRepos.Tables.GetTableByUUID(cbg, tbl2.UUID)
-	a.NoError(err)
-	a.True(tbl.Deleted)
-}
-
 func TestGetActiveTables(t *testing.T) {
 	a := assert.New(t)
 
