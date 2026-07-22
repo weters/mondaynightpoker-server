@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 func main() {
@@ -109,9 +110,12 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Create and run the TUI
+	// Create and run the TUI. zone.NewGlobal initializes the bubblezone
+	// manager used for mouse hit-testing; WithMouseCellMotion enables mouse
+	// reporting so clicks and wheel events reach Update.
+	zone.NewGlobal()
 	m := NewModel(bots)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Wire up tea.Program to all bots so they can send messages
 	for _, bot := range bots {

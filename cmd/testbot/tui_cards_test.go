@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -103,9 +104,84 @@ func TestRenderHandWide(t *testing.T) {
 		{Rank: 14, Suit: "hearts"},
 		{Rank: 13, Suit: "spades"},
 	}
-	result := RenderHand(cards, 100) // above minWidthForArt
-	// Should use art rendering
-	assert.Contains(t, result, "┌────┐")
+	result := RenderHand(cards, 100) // above minWidthForArt, plenty of room
+	// Should use large art rendering (rounded borders)
+	assert.Contains(t, result, "╭───────╮")
+	assert.Contains(t, result, "╰───────╯")
+}
+
+func TestRenderCardLargeAlignment(t *testing.T) {
+	// Every rendered line must have equal display width, including the
+	// two-char "10" rank and the double-width ⭐ suit.
+	cards := []CardInfo{
+		{Rank: 14, Suit: "hearts"},
+		{Rank: 10, Suit: "spades"},
+		{Rank: 14, Suit: "stars"},
+		{},                        // hidden / face-down card
+		{Rank: 10, Suit: "stars"}, // two-char rank + double-width suit
+		{Rank: 13, Suit: "diamonds"},
+	}
+	for _, c := range cards {
+		rendered := RenderCardLarge(c)
+		lines := strings.Split(rendered, "\n")
+		assert.Len(t, lines, 7, "large card should be 7 rows")
+		for i, ln := range lines {
+			assert.Equal(t, largeCardWidth, lipgloss.Width(ln),
+				"card %+v line %d width mismatch", c, i)
+		}
+	}
+}
+
+func TestRenderCardSmallAlignment(t *testing.T) {
+	cards := []CardInfo{
+		{Rank: 14, Suit: "hearts"},
+		{Rank: 10, Suit: "spades"},
+		{Rank: 14, Suit: "stars"},
+		{Rank: 10, Suit: "stars"},
+		{}, // hidden
+	}
+	for _, c := range cards {
+		rendered := RenderCard(c)
+		lines := strings.Split(rendered, "\n")
+		assert.Len(t, lines, 4, "small card should be 4 rows")
+		for i, ln := range lines {
+			assert.Equal(t, smallCardWidth, lipgloss.Width(ln),
+				"card %+v line %d width mismatch", c, i)
+		}
+	}
+}
+
+func TestRenderCardHiddenBack(t *testing.T) {
+	// Zero-value card is hidden; both tiers render a patterned back.
+	small := RenderCard(CardInfo{})
+	assert.Contains(t, small, "▒")
+	assert.NotContains(t, small, "?")
+
+	large := RenderCardLarge(CardInfo{})
+	assert.Contains(t, large, "▒")
+	assert.Contains(t, large, "╭")
+}
+
+func TestRenderHandTierSelection(t *testing.T) {
+	// 8 cards: large art needs 8*9+7=79, small art needs 8*6+7=55.
+	cards := make([]CardInfo, 8)
+	for i := range cards {
+		cards[i] = CardInfo{Rank: 2 + i, Suit: "hearts"}
+	}
+
+	// Narrow (< minWidthForArt): inline text only.
+	narrow := RenderHand(cards, 30)
+	assert.NotContains(t, narrow, "┌")
+	assert.NotContains(t, narrow, "╭")
+
+	// Medium: fits small art (55) but not large (79).
+	medium := RenderHand(cards, 60)
+	assert.Contains(t, medium, "┌────┐")
+	assert.NotContains(t, medium, "╭───────╮")
+
+	// Wide: fits large art.
+	wide := RenderHand(cards, 120)
+	assert.Contains(t, wide, "╭───────╮")
 }
 
 func TestRenderHandArtEmpty(t *testing.T) {

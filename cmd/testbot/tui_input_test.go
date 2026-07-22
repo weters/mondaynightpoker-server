@@ -171,4 +171,37 @@ func TestCardSelectView(t *testing.T) {
 	m := NewCardSelect(ValidAction{Action: "discard", Name: "Discard"}, cards, "Select cards")
 	view := m.View(80)
 	assert.Contains(t, view, "Select cards")
+	// Wide enough for small art cards.
+	assert.Contains(t, view, "┌────┐")
+}
+
+func TestCardSelectViewSelectionMarker(t *testing.T) {
+	cards := []CardInfo{
+		{Rank: 14, Suit: "hearts"},
+		{Rank: 13, Suit: "spades"},
+	}
+	m := NewCardSelect(ValidAction{Action: "discard", Name: "Discard"}, cards, "Select")
+
+	// No selection: no check marker yet.
+	assert.NotContains(t, m.View(80), "✔")
+
+	// Select the second card.
+	m.Selected[1] = true
+	view := m.View(80)
+	assert.Contains(t, view, "✔", "selected card should show a check marker")
+}
+
+func TestCardSelectViewInlineFallback(t *testing.T) {
+	cards := []CardInfo{
+		{Rank: 14, Suit: "hearts"},
+		{Rank: 13, Suit: "spades"},
+	}
+	m := NewCardSelect(ValidAction{Action: "discard", Name: "Discard"}, cards, "Select")
+	m.Selected[0] = true
+
+	// Width 0 forces the inline fallback (as when width is unknown).
+	view := m.View(0)
+	assert.NotContains(t, view, "┌────┐")
+	assert.Contains(t, view, ">") // cursor marker on card 0
+	assert.Contains(t, view, "[") // selection brackets
 }

@@ -70,6 +70,25 @@ var (
 	styleCardYellow = lipgloss.NewStyle().
 			Foreground(colorYellow)
 
+	// styleCardBack renders the pattern and border of a face-down card.
+	styleCardBack = lipgloss.NewStyle().
+			Foreground(colorComment)
+
+	// styleCardCursor renders the border of the card under the selection cursor.
+	styleCardCursor = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colorPink)
+
+	// styleCardSelected renders the border of a selected card.
+	styleCardSelected = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(colorGreen)
+
+	// styleCardMark renders the ✔ marker shown under selected cards.
+	styleCardMark = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(colorGreen)
+
 	// styleAction renders action keys in the action bar.
 	styleAction = lipgloss.NewStyle().
 			Bold(true).
