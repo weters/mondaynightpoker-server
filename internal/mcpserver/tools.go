@@ -55,7 +55,7 @@ func (s *server) registerTools(m *mcp.Server) {
 
 	registerTool(s, m, &mcp.Tool{
 		Name:        "get_table_roster",
-		Description: "Get the roster of players at a table, including their table permissions and balances. Available to any authenticated player; for non-admin callers every roster member's email is omitted except the caller's own.",
+		Description: "Get the roster of players at a table, including their table permissions and balances (in cents, with preformatted dollar strings alongside). Available to any authenticated player; for non-admin callers every roster member's email is omitted except the caller's own.",
 	}, accessAuthenticated, s.getTableRoster)
 
 	registerTool(s, m, &mcp.Tool{

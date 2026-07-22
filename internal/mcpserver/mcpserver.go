@@ -29,13 +29,31 @@ type server struct {
 	registry map[string]accessPolicy
 }
 
+// serverInstructions is sent to clients in the initialize result. Its main job is to
+// pin down the unit of every monetary value, since the fields carry raw cents and a
+// client that assumes dollars would be off by a factor of one hundred.
+const serverInstructions = `Monday Night Poker exposes read-only data about players, tables, and game history.
+
+All monetary values are integers denominated in CENTS, never dollars. A field named
+"balanceCents" with the value 150 means one dollar and fifty cents. Never present a
+raw cents value to the user as if it were dollars.
+
+Where a field has a "...Display" counterpart (for example balanceDisplay alongside
+balanceCents), that string is already formatted as dollars — prefer it verbatim when
+showing an amount to the user. For cents-only fields, such as the per-game winnings
+map and the profile graph points, divide by 100 and format as dollars before
+displaying. Use the raw cents values for any arithmetic or comparison.`
+
 // New builds a stateless streamable HTTP handler exposing the read-only MCP
 // tools. Each POST request is handled independently; no long-lived SSE stream
 // is used.
 func New(repos *model.Repositories, version string) http.Handler {
 	s := &server{repos: repos, registry: make(map[string]accessPolicy)}
 
-	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "mondaynightpoker", Version: version}, nil)
+	mcpServer := mcp.NewServer(
+		&mcp.Implementation{Name: "mondaynightpoker", Version: version},
+		&mcp.ServerOptions{Instructions: serverInstructions},
+	)
 	s.registerTools(mcpServer)
 
 	return mcp.NewStreamableHTTPHandler(
