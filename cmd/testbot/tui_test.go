@@ -465,16 +465,6 @@ func TestFormatLogMessage(t *testing.T) {
 	})
 }
 
-func TestFormatCents(t *testing.T) {
-	assert.Equal(t, "$0", formatCents(0))
-	assert.Equal(t, "$1", formatCents(100))
-	assert.Equal(t, "$1.50", formatCents(150))
-	assert.Equal(t, "$10", formatCents(1000))
-	assert.Equal(t, "$0.25", formatCents(25))
-	assert.Equal(t, "-$5", formatCents(-500))
-	assert.Equal(t, "-$2.50", formatCents(-250))
-}
-
 func TestModelOverlayQuit(t *testing.T) {
 	m := newTestModel()
 

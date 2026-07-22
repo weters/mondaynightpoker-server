@@ -2,6 +2,7 @@ package texasholdem
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -25,9 +26,9 @@ func (g *Game) Rules() []playable.RuleSection {
 		Body:  fmt.Sprintf("Each player is dealt %d hole cards. Five community cards are revealed over multiple rounds. Make the best 5-card hand using any combination of your hole cards and the community cards.%s", holeCards, overviewSuffix),
 	})
 
-	blindsBody := fmt.Sprintf("Ante: %s.", formatCents(g.options.Ante))
+	blindsBody := fmt.Sprintf("Ante: %s.", money.FormatCents(g.options.Ante))
 	if g.options.SmallBlind > 0 || g.options.BigBlind > 0 {
-		blindsBody += fmt.Sprintf(" Small blind: %s. Big blind: %s.", formatCents(g.options.SmallBlind), formatCents(g.options.BigBlind))
+		blindsBody += fmt.Sprintf(" Small blind: %s. Big blind: %s.", money.FormatCents(g.options.SmallBlind), money.FormatCents(g.options.BigBlind))
 	}
 	sections = append(sections, playable.RuleSection{
 		Title: "Blinds & Ante",
@@ -45,11 +46,4 @@ func (g *Game) Rules() []playable.RuleSection {
 	})
 
 	return sections
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }

@@ -2,6 +2,7 @@ package littlel
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -10,7 +11,7 @@ func (g *Game) Rules() []playable.RuleSection {
 	return []playable.RuleSection{
 		{
 			Title: "Overview",
-			Body:  fmt.Sprintf("Each player is dealt %d cards plus 3 community cards are placed face-down. Ante: %s.", g.options.InitialDeal, formatCents(g.options.Ante)),
+			Body:  fmt.Sprintf("Each player is dealt %d cards plus 3 community cards are placed face-down. Ante: %s.", g.options.InitialDeal, money.FormatCents(g.options.Ante)),
 		},
 		{
 			Title: "Trade-In",
@@ -29,11 +30,4 @@ func (g *Game) Rules() []playable.RuleSection {
 			Body:  "After the final betting round, remaining players reveal their hands. The best 5-card hand using your cards and community cards wins.",
 		},
 	}
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }

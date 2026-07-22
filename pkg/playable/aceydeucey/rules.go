@@ -2,6 +2,7 @@ package aceydeucey
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -10,7 +11,7 @@ func (g *Game) Rules() []playable.RuleSection {
 	sections := []playable.RuleSection{
 		{
 			Title: "Overview",
-			Body:  fmt.Sprintf("Players take turns betting whether a third card will fall between two dealt cards. Ante: %s.", formatCents(g.options.Ante)),
+			Body:  fmt.Sprintf("Players take turns betting whether a third card will fall between two dealt cards. Ante: %s.", money.FormatCents(g.options.Ante)),
 		},
 		{
 			Title: "Gameplay",
@@ -48,11 +49,4 @@ func (g *Game) Rules() []playable.RuleSection {
 	})
 
 	return sections
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }

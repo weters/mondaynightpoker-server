@@ -2,6 +2,7 @@ package bourre
 
 import (
 	"fmt"
+	"mondaynightpoker-server/pkg/money"
 	"mondaynightpoker-server/pkg/playable"
 )
 
@@ -14,7 +15,7 @@ func (g *Game) Rules() []playable.RuleSection {
 		},
 		{
 			Title: "Ante",
-			Body:  fmt.Sprintf("Each player antes %s to start.", formatCents(g.options.Ante)),
+			Body:  fmt.Sprintf("Each player antes %s to start.", money.FormatCents(g.options.Ante)),
 		},
 		{
 			Title: "Trade-In Round",
@@ -38,11 +39,4 @@ func (g *Game) Rules() []playable.RuleSection {
 	}
 
 	return sections
-}
-
-func formatCents(cents int) string {
-	if cents%100 == 0 {
-		return fmt.Sprintf("$%d", cents/100)
-	}
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }
