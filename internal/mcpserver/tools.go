@@ -262,7 +262,7 @@ func (s *server) listTables(ctx context.Context, _ *mcp.CallToolRequest, caller 
 		return listTablesOutput{Tables: fromTablesWithBalanceAsEmail(tables)}, nil
 	}
 
-	tables, err := s.repos.Tables.GetTables(ctx, offset, limit)
+	tables, err := s.repos.Tables.GetActiveTables(ctx, offset, limit)
 	if err != nil {
 		return listTablesOutput{}, err
 	}
@@ -282,7 +282,7 @@ type getTableOutput struct {
 }
 
 func (s *server) getTable(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.Caller, in getTableInput) (getTableOutput, error) {
-	table, err := s.repos.Tables.GetTableByUUID(ctx, in.UUID)
+	table, err := s.repos.Tables.GetActiveTableByUUID(ctx, in.UUID)
 	if err != nil {
 		return getTableOutput{}, notFound(err, "table")
 	}
@@ -307,7 +307,7 @@ type getTableRosterOutput struct {
 }
 
 func (s *server) getTableRoster(ctx context.Context, _ *mcp.CallToolRequest, caller oauth.Caller, in getTableRosterInput) (getTableRosterOutput, error) {
-	table, err := s.repos.Tables.GetTableByUUID(ctx, in.UUID)
+	table, err := s.repos.Tables.GetActiveTableByUUID(ctx, in.UUID)
 	if err != nil {
 		return getTableRosterOutput{}, notFound(err, "table")
 	}

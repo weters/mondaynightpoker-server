@@ -33,6 +33,63 @@ func TestGetTableByUUID(t *testing.T) {
 	assert.Equal(t, tbl.Name, tbl2.Name)
 }
 
+func TestGetActiveTableByUUID(t *testing.T) {
+	a := assert.New(t)
+
+	// a non-existent uuid yields sql.ErrNoRows
+	tbl, err := testRepos.Tables.GetActiveTableByUUID(cbg, uuid.New().String())
+	a.Equal(sql.ErrNoRows, err)
+	a.Nil(tbl)
+
+	_, tbl2 := playerAndTable()
+
+	// a live table is returned
+	tbl, err = testRepos.Tables.GetActiveTableByUUID(cbg, tbl2.UUID)
+	a.NoError(err)
+	a.Equal(tbl2.Name, tbl.Name)
+
+	// once soft-deleted, it is indistinguishable from a missing table
+	tbl2.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, tbl2))
+
+	tbl, err = testRepos.Tables.GetActiveTableByUUID(cbg, tbl2.UUID)
+	a.Equal(sql.ErrNoRows, err)
+	a.Nil(tbl)
+
+	// the plain getter still sees it, confirming only the active variant filters
+	tbl, err = testRepos.Tables.GetTableByUUID(cbg, tbl2.UUID)
+	a.NoError(err)
+	a.True(tbl.Deleted)
+}
+
+func TestGetActiveTables(t *testing.T) {
+	a := assert.New(t)
+
+	// two tables under fresh, unique-email players so they can be picked back out
+	p1, _ := playerAndTable()
+	p2, deleted := playerAndTable()
+
+	deleted.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, deleted))
+
+	all, err := testRepos.Tables.GetActiveTables(cbg, 0, 1000)
+	a.NoError(err)
+
+	var sawLive, sawDeleted bool
+	for _, tbl := range all {
+		a.False(tbl.Deleted)
+		switch tbl.Email {
+		case p1.Email:
+			sawLive = true
+		case p2.Email:
+			sawDeleted = true
+		}
+	}
+
+	a.True(sawLive, "expected the live table to be listed")
+	a.False(sawDeleted, "did not expect the deleted table to be listed")
+}
+
 func playerAndTable() (*Player, *Table) {
 	p := player()
 	t, err := testRepos.Tables.CreateTable(cbg, p, "test table")

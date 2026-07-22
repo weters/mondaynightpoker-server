@@ -216,12 +216,64 @@ WHERE uuid = $1`
 	return getTableByRow(row)
 }
 
+// GetActiveTableByUUID returns a non-deleted table by its UUID. A deleted table
+// yields sql.ErrNoRows, so callers cannot observe the difference between a table
+// that never existed and one that has been soft-deleted.
+func (r *TableRepo) GetActiveTableByUUID(ctx context.Context, uuid string) (*Table, error) {
+	const query = `
+SELECT ` + tableColumns + `
+FROM tables
+WHERE uuid = $1
+  AND NOT tables.deleted`
+
+	row := r.db.QueryRowContext(ctx, query, uuid)
+	return getTableByRow(row)
+}
+
 // GetTables returns a list of tables
 func (r *TableRepo) GetTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
 	const query = `
 SELECT ` + tableColumns + `, players.email
 FROM tables
 INNER JOIN players ON tables.player_id = players.id
+ORDER BY tables.created DESC, tables.uuid DESC
+OFFSET $1
+LIMIT $2`
+
+	rows, err := r.db.QueryContext(ctx, query, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tables := make([]*TableWithPlayerEmail, 0)
+	for rows.Next() {
+		var email string
+		row, err := getTableByRow(rows, &email)
+		if err != nil {
+			return nil, err
+		}
+
+		t := &TableWithPlayerEmail{
+			Table: row,
+			Email: email,
+		}
+
+		tables = append(tables, t)
+	}
+
+	return tables, nil
+}
+
+// GetActiveTables returns a paginated list of non-deleted tables. The deleted
+// filter is applied in SQL so pagination stays consistent (offset/limit are not
+// distorted by a post-fetch filter).
+func (r *TableRepo) GetActiveTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
+	const query = `
+SELECT ` + tableColumns + `, players.email
+FROM tables
+INNER JOIN players ON tables.player_id = players.id
+WHERE NOT tables.deleted
 ORDER BY tables.created DESC, tables.uuid DESC
 OFFSET $1
 LIMIT $2`
