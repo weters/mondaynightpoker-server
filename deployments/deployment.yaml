@@ -47,6 +47,11 @@ spec:
                   name: mondaynightpoker-server-config
             - name: MNP_LOG_LEVEL
               value: DEBUG
+            # Public base URL of this API server. Used as the OAuth issuer and
+            # MCP resource identifier, so it must be the host MCP clients
+            # connect to -- not MNP_HOST, which is the player-facing website.
+            - name: MNP_PUBLIC_URL
+              value: https://api.mondaynight.bid
       volumes:
         - name: keys
           secret:
