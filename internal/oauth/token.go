@@ -129,9 +129,11 @@ func (s *Server) handleRefreshGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Live authorization re-check: a demoted admin loses access immediately.
+	// Live authorization re-check: the player must still exist and not be deleted.
+	// The MCP resource is open to all verified players, so no site-admin check here;
+	// per-tool scoping happens at request time from the live IsSiteAdmin flag.
 	player, err := s.repos.Players.GetPlayerByID(r.Context(), stored.PlayerID)
-	if err != nil || !player.IsSiteAdmin {
+	if err != nil || player.Status == model.PlayerStatusDeleted {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "player is no longer authorized")
 		return
 	}

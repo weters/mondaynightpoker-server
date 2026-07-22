@@ -10,9 +10,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// genericLoginError is shown for both invalid credentials and non-admin players so the
-// form never leaks which condition failed.
-const genericLoginError = "Invalid credentials, or you are not authorized to access this resource."
+// genericLoginError is shown for any failed sign-in (unknown email, wrong password, or
+// an unverified account) so the form never leaks which condition failed.
+const genericLoginError = "Invalid email address or password."
 
 // Authorize returns the GET handler for the authorization endpoint. It validates the
 // client and OAuth parameters and renders the login form.
@@ -83,9 +83,11 @@ func (s *Server) AuthorizePost() http.HandlerFunc {
 			return
 		}
 
+		// Any player with valid credentials for a verified account may authorize;
+		// GetPlayerByEmailAndPassword already rejects unverified/blocked/deleted accounts.
 		player, err := s.repos.Players.GetPlayerByEmailAndPassword(r.Context(), r.FormValue("email"), r.FormValue("password"))
-		if err != nil || !player.IsSiteAdmin {
-			// Same generic message for bad credentials and non-admin players.
+		if err != nil {
+			// Generic message so the form never reveals whether the email exists.
 			nonce := s.signNonce(collectParams(r.FormValue), time.Now().Add(nonceTTL))
 			s.renderLogin(w, http.StatusOK, loginPageDataFrom(r.FormValue, nonce, genericLoginError))
 			return

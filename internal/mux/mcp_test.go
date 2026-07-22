@@ -52,6 +52,11 @@ const (
 	// required before tools/list or tools/call.
 	rpcToolsList     = `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
 	rpcListGameTypes = `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_game_types","arguments":{}}}`
+	rpcListPlayers   = `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_players","arguments":{}}}`
+	rpcGetPlayerFmt  = `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_player","arguments":{"id":%d}}}`
+
+	errTextRequiresAdmin    = "requires site admin"
+	errTextPermissionDenied = "permission denied"
 )
 
 // mcpResource is the protected-resource URL (aud claim on access tokens).
@@ -197,11 +202,11 @@ func runAuthorize(t *testing.T, m *Mux, clientID, challenge, email, password str
 	return authorizePost(m, form)
 }
 
-// obtainCode drives the full authorize flow for an admin and returns the issued code.
-func obtainCode(t *testing.T, m *Mux, clientID, challenge, email string, extra url.Values) string {
+// obtainCode drives the full authorize flow for a player and returns the issued code.
+func obtainCode(t *testing.T, m *Mux, clientID, challenge, email string) string {
 	t.Helper()
 
-	rr := runAuthorize(t, m, clientID, challenge, email, mcpPassword, extra)
+	rr := runAuthorize(t, m, clientID, challenge, email, mcpPassword, nil)
 	require.Equal(t, http.StatusFound, rr.Code)
 
 	loc, err := url.Parse(rr.Header().Get("Location"))
@@ -420,28 +425,38 @@ func TestMCP_Unauthorized(t *testing.T) {
 	}
 }
 
-// TestMCP_DemotedAdminLosesAccess verifies the live admin re-check: a valid token
-// stops working once the player is demoted.
-func TestMCP_DemotedAdminLosesAccess(t *testing.T) {
+// TestMCP_DemotedAdminBecomesScoped verifies the live admin re-check: a valid token
+// keeps working once the player is demoted (401s are reserved for invalid/missing
+// tokens), but admin-only tools now reject it with a tool error instead of succeeding.
+func TestMCP_DemotedAdminBecomesScoped(t *testing.T) {
 	m, _, _ := newMCPMux(t)
 	admin := seedMCPPlayer(t, true)
 	clientID := registerClient(t, m)
 
 	verifier, challenge := mcpPKCE(t)
-	code := obtainCode(t, m, clientID, challenge, admin.Email, nil)
+	code := obtainCode(t, m, clientID, challenge, admin.Email)
 	tokRR := tokenRequest(m, authCodeForm(code, clientID, verifier))
 	require.Equal(t, http.StatusOK, tokRR.Code)
 	accessToken, _ := decodeMap(t, tokRR.Body.Bytes())["access_token"].(string)
 	require.NotEmpty(t, accessToken)
 
-	// token works while admin
-	okRR := mcpPost(m, accessToken, rpcToolsList)
+	// admin-only tool works while admin
+	okRR := mcpPost(m, accessToken, rpcListPlayers)
 	require.Equal(t, http.StatusOK, okRR.Code)
+	assert.NotContains(t, mcpPayload(t, okRR.Body.String()), errTextRequiresAdmin)
 
-	// demote and retry: the live check rejects it
+	// demote and retry: the token itself still works (live check reads the DB,
+	// not the token claims), but the admin-only tool now returns a tool error.
 	require.NoError(t, testRepos.Players.SetIsSiteAdmin(cbg, admin, false))
-	deniedRR := mcpPost(m, accessToken, rpcToolsList)
-	assert.Equal(t, http.StatusUnauthorized, deniedRR.Code)
+
+	stillAuthedRR := mcpPost(m, accessToken, rpcToolsList)
+	require.Equal(t, http.StatusOK, stillAuthedRR.Code)
+
+	scopedRR := mcpPost(m, accessToken, rpcListPlayers)
+	require.Equal(t, http.StatusOK, scopedRR.Code)
+	scopedPayload := mcpPayload(t, scopedRR.Body.String())
+	assert.Contains(t, scopedPayload, `"isError":true`)
+	assert.Contains(t, scopedPayload, errTextRequiresAdmin)
 }
 
 // TestMCP_TokenExchangeFailures covers PKCE and code-reuse failures at the token endpoint.
@@ -452,7 +467,7 @@ func TestMCP_TokenExchangeFailures(t *testing.T) {
 
 	t.Run("wrong code_verifier", func(t *testing.T) {
 		_, challenge := mcpPKCE(t)
-		code := obtainCode(t, m, clientID, challenge, admin.Email, nil)
+		code := obtainCode(t, m, clientID, challenge, admin.Email)
 
 		rr := tokenRequest(m, authCodeForm(code, clientID, "totally-wrong-verifier"))
 		require.Equal(t, http.StatusBadRequest, rr.Code)
@@ -461,7 +476,7 @@ func TestMCP_TokenExchangeFailures(t *testing.T) {
 
 	t.Run("reused authorization code", func(t *testing.T) {
 		verifier, challenge := mcpPKCE(t)
-		code := obtainCode(t, m, clientID, challenge, admin.Email, nil)
+		code := obtainCode(t, m, clientID, challenge, admin.Email)
 		form := authCodeForm(code, clientID, verifier)
 
 		require.Equal(t, http.StatusOK, tokenRequest(m, form).Code)
@@ -500,13 +515,68 @@ func TestMCP_AuthorizeRejections(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Empty(t, rr.Header().Get("Location"))
 	})
+}
 
-	t.Run("non-admin credentials issue no code", func(t *testing.T) {
-		nonAdmin := seedMCPPlayer(t, false)
-		_, challenge := mcpPKCE(t)
+// TestMCP_NonAdminEndToEnd walks the full OAuth 2.1 + MCP flow for a verified
+// non-admin player and asserts the per-tool scoping: self access and list_game_types
+// succeed, cross-player and admin-only tools are rejected with tool errors, and the
+// refresh grant still works for a non-admin.
+func TestMCP_NonAdminEndToEnd(t *testing.T) {
+	m, _, _ := newMCPMux(t)
+	nonAdmin := seedMCPPlayer(t, false)
+	other := seedMCPPlayer(t, false)
+	clientID := registerClient(t, m)
 
-		rr := runAuthorize(t, m, clientID, challenge, nonAdmin.Email, mcpPassword, nil)
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Empty(t, rr.Header().Get("Location"))
-	})
+	// full OAuth flow as the non-admin
+	verifier, challenge := mcpPKCE(t)
+	code := obtainCode(t, m, clientID, challenge, nonAdmin.Email)
+	tokRR := tokenRequest(m, authCodeForm(code, clientID, verifier))
+	require.Equal(t, http.StatusOK, tokRR.Code)
+	tok := decodeMap(t, tokRR.Body.Bytes())
+	accessToken, _ := tok["access_token"].(string)
+	refreshToken, _ := tok["refresh_token"].(string)
+	require.NotEmpty(t, accessToken)
+	require.NotEmpty(t, refreshToken)
+
+	// get_player with own id succeeds and their own email is visible to self
+	selfRR := mcpPost(m, accessToken, fmt.Sprintf(rpcGetPlayerFmt, nonAdmin.ID))
+	require.Equal(t, http.StatusOK, selfRR.Code)
+	selfPayload := mcpPayload(t, selfRR.Body.String())
+	assert.NotContains(t, selfPayload, `"isError":true`)
+	assert.Contains(t, selfPayload, nonAdmin.Email)
+
+	// get_player with the other player's id is denied
+	otherRR := mcpPost(m, accessToken, fmt.Sprintf(rpcGetPlayerFmt, other.ID))
+	require.Equal(t, http.StatusOK, otherRR.Code)
+	otherPayload := mcpPayload(t, otherRR.Body.String())
+	assert.Contains(t, otherPayload, `"isError":true`)
+	assert.Contains(t, otherPayload, errTextPermissionDenied)
+
+	// list_players is admin only
+	listRR := mcpPost(m, accessToken, rpcListPlayers)
+	require.Equal(t, http.StatusOK, listRR.Code)
+	listPayload := mcpPayload(t, listRR.Body.String())
+	assert.Contains(t, listPayload, `"isError":true`)
+	assert.Contains(t, listPayload, errTextRequiresAdmin)
+
+	// list_game_types is open to everyone
+	gtRR := mcpPost(m, accessToken, rpcListGameTypes)
+	require.Equal(t, http.StatusOK, gtRR.Code)
+	assertContainsAll(t, mcpPayload(t, gtRR.Body.String()), allGameSlugs)
+
+	// refresh grant is allowed for non-admins and the new tokens work
+	refreshForm := url.Values{
+		"grant_type":    {grantRefresh},
+		"refresh_token": {refreshToken},
+		"client_id":     {clientID},
+	}
+	refRR := tokenRequest(m, refreshForm)
+	require.Equal(t, http.StatusOK, refRR.Code)
+	refBody := decodeMap(t, refRR.Body.Bytes())
+	newAccessToken, _ := refBody["access_token"].(string)
+	require.NotEmpty(t, newAccessToken)
+
+	newTokRR := mcpPost(m, newAccessToken, rpcListGameTypes)
+	require.Equal(t, http.StatusOK, newTokRR.Code)
+	assertContainsAll(t, mcpPayload(t, newTokRR.Body.String()), allGameSlugs)
 }

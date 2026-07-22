@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"mondaynightpoker-server/internal/util"
+	"mondaynightpoker-server/pkg/model"
 
 	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -277,19 +281,44 @@ func TestAuthorizePost_WrongPassword(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), genericLoginError)
 }
 
-func TestAuthorizePost_NonAdminRejected(t *testing.T) {
+func TestAuthorizePost_NonAdminAllowed(t *testing.T) {
 	s := newTestServer(t, nil)
 	nonAdmin := seedPlayer(t, false)
 	client := seedClient(t, "https://app.example.com/cb")
 	_, challenge := pkcePair(t)
-	nonce := runAuthorizeGet(t, s, client.ClientID, "https://app.example.com/cb", challenge, nil)
 
-	form := authorizePostForm(client.ClientID, "https://app.example.com/cb", challenge, nonce, nonAdmin.Email, testPassword, nil)
+	extra := url.Values{"state": {"na-state"}, "scope": {"mcp"}}
+	nonce := runAuthorizeGet(t, s, client.ClientID, "https://app.example.com/cb", challenge, extra)
+
+	form := authorizePostForm(client.ClientID, "https://app.example.com/cb", challenge, nonce, nonAdmin.Email, testPassword, extra)
+	rr := postAuthorize(t, s, form)
+
+	// non-admin players may now authorize: the login POST issues a code and redirects
+	require.Equal(t, http.StatusFound, rr.Code)
+	loc, err := url.Parse(rr.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.NotEmpty(t, loc.Query().Get("code"))
+	assert.Equal(t, "na-state", loc.Query().Get("state"))
+}
+
+func TestAuthorizePost_UnverifiedRejected(t *testing.T) {
+	s := newTestServer(t, nil)
+	client := seedClient(t, "https://app.example.com/cb")
+	_, challenge := pkcePair(t)
+
+	// a freshly created (unverified) player cannot authorize
+	email := util.RandomEmail()
+	player, err := testRepos.Players.CreatePlayer(cbg, email, "Unverified", testPassword, "127.0.0.1")
+	require.NoError(t, err)
+	require.Equal(t, model.PlayerStatusCreated, player.Status)
+
+	nonce := runAuthorizeGet(t, s, client.ClientID, "https://app.example.com/cb", challenge, nil)
+	form := authorizePostForm(client.ClientID, "https://app.example.com/cb", challenge, nonce, email, testPassword, nil)
 	rr := postAuthorize(t, s, form)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Empty(t, rr.Header().Get("Location"))
-	// identical generic message: does not leak that credentials were valid
+	// identical generic message: does not leak that the account merely needs verifying
 	assert.Contains(t, rr.Body.String(), genericLoginError)
 }
 
@@ -308,11 +337,15 @@ func TestAuthorizePost_BadNonce(t *testing.T) {
 
 // -------------------- token: authorization_code --------------------
 
-// obtainCode drives the full GET+POST authorize flow and returns the issued code.
-func obtainCode(t *testing.T, s *Server, admin, clientID, redirectURI, challenge string, extra url.Values) string {
+// testRedirectURI is the registered redirect URI shared by the token-flow test helpers.
+const testRedirectURI = "https://app.example.com/cb"
+
+// obtainCode drives the full GET+POST authorize flow (for testRedirectURI) and returns
+// the issued code.
+func obtainCode(t *testing.T, s *Server, email, clientID, challenge string, extra url.Values) string {
 	t.Helper()
-	nonce := runAuthorizeGet(t, s, clientID, redirectURI, challenge, extra)
-	form := authorizePostForm(clientID, redirectURI, challenge, nonce, admin, testPassword, extra)
+	nonce := runAuthorizeGet(t, s, clientID, testRedirectURI, challenge, extra)
+	form := authorizePostForm(clientID, testRedirectURI, challenge, nonce, email, testPassword, extra)
 	rr := postAuthorize(t, s, form)
 	require.Equal(t, http.StatusFound, rr.Code)
 	loc, err := url.Parse(rr.Header().Get("Location"))
@@ -344,7 +377,7 @@ func TestToken_AuthCodeHappy(t *testing.T) {
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb")
 	verifier, challenge := pkcePair(t)
-	code := obtainCode(t, s, admin.Email, client.ClientID, "https://app.example.com/cb", challenge, url.Values{"scope": {"mcp"}})
+	code := obtainCode(t, s, admin.Email, client.ClientID, challenge, url.Values{"scope": {"mcp"}})
 
 	rr := postToken(t, s, tokenForm(map[string]string{
 		"grant_type":    "authorization_code",
@@ -388,7 +421,7 @@ func TestToken_AuthCodeWrongVerifier(t *testing.T) {
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb")
 	_, challenge := pkcePair(t)
-	code := obtainCode(t, s, admin.Email, client.ClientID, "https://app.example.com/cb", challenge, nil)
+	code := obtainCode(t, s, admin.Email, client.ClientID, challenge, nil)
 
 	rr := postToken(t, s, tokenForm(map[string]string{
 		"grant_type":    "authorization_code",
@@ -407,7 +440,7 @@ func TestToken_AuthCodeReused(t *testing.T) {
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb")
 	verifier, challenge := pkcePair(t)
-	code := obtainCode(t, s, admin.Email, client.ClientID, "https://app.example.com/cb", challenge, nil)
+	code := obtainCode(t, s, admin.Email, client.ClientID, challenge, nil)
 
 	form := tokenForm(map[string]string{
 		"grant_type":    "authorization_code",
@@ -429,7 +462,7 @@ func TestToken_AuthCodeRedirectMismatch(t *testing.T) {
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb", "https://app.example.com/other")
 	verifier, challenge := pkcePair(t)
-	code := obtainCode(t, s, admin.Email, client.ClientID, "https://app.example.com/cb", challenge, nil)
+	code := obtainCode(t, s, admin.Email, client.ClientID, challenge, nil)
 
 	rr := postToken(t, s, tokenForm(map[string]string{
 		"grant_type":    "authorization_code",
@@ -453,14 +486,14 @@ func TestToken_MissingParams(t *testing.T) {
 // -------------------- token: refresh --------------------
 
 // firstRefresh obtains an initial refresh token via the auth-code flow.
-func firstRefresh(t *testing.T, s *Server, admin, clientID, redirectURI string) string {
+func firstRefresh(t *testing.T, s *Server, email, clientID string) string {
 	t.Helper()
 	verifier, challenge := pkcePair(t)
-	code := obtainCode(t, s, admin, clientID, redirectURI, challenge, nil)
+	code := obtainCode(t, s, email, clientID, challenge, nil)
 	rr := postToken(t, s, tokenForm(map[string]string{
 		"grant_type":    "authorization_code",
 		"code":          code,
-		"redirect_uri":  redirectURI,
+		"redirect_uri":  testRedirectURI,
 		"client_id":     clientID,
 		"code_verifier": verifier,
 	}))
@@ -472,7 +505,7 @@ func TestToken_RefreshHappyAndRotation(t *testing.T) {
 	s := newTestServer(t, nil)
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb")
-	refresh := firstRefresh(t, s, admin.Email, client.ClientID, "https://app.example.com/cb")
+	refresh := firstRefresh(t, s, admin.Email, client.ClientID)
 
 	rr := postToken(t, s, tokenForm(map[string]string{
 		"grant_type":    "refresh_token",
@@ -499,7 +532,7 @@ func TestToken_RefreshReuseRevokesFamily(t *testing.T) {
 	s := newTestServer(t, nil)
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb")
-	refresh := firstRefresh(t, s, admin.Email, client.ClientID, "https://app.example.com/cb")
+	refresh := firstRefresh(t, s, admin.Email, client.ClientID)
 
 	// rotate once
 	rr := postToken(t, s, tokenForm(map[string]string{
@@ -533,10 +566,48 @@ func TestToken_RefreshDemotedAdmin(t *testing.T) {
 	s := newTestServer(t, nil)
 	admin := seedAdmin(t)
 	client := seedClient(t, "https://app.example.com/cb")
-	refresh := firstRefresh(t, s, admin.Email, client.ClientID, "https://app.example.com/cb")
+	refresh := firstRefresh(t, s, admin.Email, client.ClientID)
 
-	// demote the admin
+	// demote the admin: the MCP resource is open to all players, so refresh still works
 	require.NoError(t, testRepos.Players.SetIsSiteAdmin(cbg, admin, false))
+
+	rr := postToken(t, s, tokenForm(map[string]string{
+		"grant_type":    "refresh_token",
+		"refresh_token": refresh,
+		"client_id":     client.ClientID,
+	}))
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.NotEmpty(t, decodeJSON(t, rr.Body.Bytes())["access_token"])
+}
+
+func TestToken_NonAdminAuthCodeFlow(t *testing.T) {
+	s := newTestServer(t, nil)
+	player := seedPlayer(t, false)
+	client := seedClient(t, "https://app.example.com/cb")
+	verifier, challenge := pkcePair(t)
+	code := obtainCode(t, s, player.Email, client.ClientID, challenge, url.Values{"scope": {"mcp"}})
+
+	rr := postToken(t, s, tokenForm(map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          code,
+		"redirect_uri":  "https://app.example.com/cb",
+		"client_id":     client.ClientID,
+		"code_verifier": verifier,
+	}))
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	claims := parseAccessToken(t, s, decodeJSON(t, rr.Body.Bytes())["access_token"].(string))
+	assert.Equal(t, strconv.FormatInt(player.ID, 10), claims["sub"])
+}
+
+func TestToken_RefreshDeletedPlayer(t *testing.T) {
+	s := newTestServer(t, nil)
+	player := seedPlayer(t, false)
+	client := seedClient(t, "https://app.example.com/cb")
+	refresh := firstRefresh(t, s, player.Email, client.ClientID)
+
+	// deleting the player revokes access even though the refresh token is otherwise valid
+	require.NoError(t, testRepos.Players.Delete(cbg, player))
 
 	rr := postToken(t, s, tokenForm(map[string]string{
 		"grant_type":    "refresh_token",
@@ -558,6 +629,19 @@ func okHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(strconv.FormatInt(id, 10)))
+	})
+}
+
+// callerHandler echoes the stashed Caller as "id:isAdmin" so tests can assert scoping.
+func callerHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, ok := CallerFromContext(r.Context())
+		if !ok {
+			http.Error(w, "no caller", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, "%d:%t", c.PlayerID, c.IsSiteAdmin)
 	})
 }
 
@@ -618,6 +702,37 @@ func TestRequireMCPAuth_ValidToken(t *testing.T) {
 	assert.Equal(t, strconv.FormatInt(admin.ID, 10), rr.Body.String())
 }
 
+func TestRequireMCPAuth_StashesAdminCaller(t *testing.T) {
+	s := newTestServer(t, nil)
+	admin := seedAdmin(t)
+	raw, err := s.newAccessToken(admin.ID)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rr := httptest.NewRecorder()
+	s.RequireMCPAuth(callerHandler()).ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, fmt.Sprintf("%d:true", admin.ID), rr.Body.String())
+}
+
+func TestRequireMCPAuth_StashesNonAdminCaller(t *testing.T) {
+	s := newTestServer(t, nil)
+	player := seedPlayer(t, false)
+	raw, err := s.newAccessToken(player.ID)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rr := httptest.NewRecorder()
+	s.RequireMCPAuth(callerHandler()).ServeHTTP(rr, req)
+
+	// a non-admin now passes the middleware; the Caller reflects the live flag
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, fmt.Sprintf("%d:false", player.ID), rr.Body.String())
+}
+
 func TestRequireMCPAuth_DemotedAdmin(t *testing.T) {
 	s := newTestServer(t, nil)
 	admin := seedAdmin(t)
@@ -629,7 +744,25 @@ func TestRequireMCPAuth_DemotedAdmin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	rr := httptest.NewRecorder()
-	s.RequireMCPAuth(okHandler()).ServeHTTP(rr, req)
+	s.RequireMCPAuth(callerHandler()).ServeHTTP(rr, req)
+
+	// a demoted admin is still a valid player: 200, but IsSiteAdmin is now false
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, fmt.Sprintf("%d:false", admin.ID), rr.Body.String())
+}
+
+func TestRequireMCPAuth_DeletedPlayer(t *testing.T) {
+	s := newTestServer(t, nil)
+	player := seedPlayer(t, false)
+	raw, err := s.newAccessToken(player.ID)
+	require.NoError(t, err)
+
+	require.NoError(t, testRepos.Players.Delete(cbg, player))
+
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rr := httptest.NewRecorder()
+	s.RequireMCPAuth(callerHandler()).ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
