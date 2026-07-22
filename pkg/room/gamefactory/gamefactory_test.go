@@ -1,6 +1,7 @@
 package gamefactory
 
 import (
+	"sort"
 	"testing"
 
 	"mondaynightpoker-server/pkg/model"
@@ -61,4 +62,17 @@ func Test_factorySlugsMatchPlayerState(t *testing.T) {
 			assert.Equal(t, slug, state.Value, "player-state value must match the factory registry key")
 		})
 	}
+}
+
+// Test_Names ensures Names returns exactly the registered slugs, sorted.
+func Test_Names(t *testing.T) {
+	expected := make([]string, 0, len(factories))
+	for slug := range factories {
+		expected = append(expected, slug)
+	}
+	sort.Strings(expected)
+
+	names := Names()
+	assert.Equal(t, expected, names)
+	assert.True(t, sort.StringsAreSorted(names), "Names() must be sorted")
 }

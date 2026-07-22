@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 )
@@ -32,6 +33,18 @@ func Get(name string) (GameFactory, error) {
 	}
 
 	return factory, nil
+}
+
+// Names returns the registered game-type identifiers, sorted.
+func Names() []string {
+	names := make([]string, 0, len(factories))
+	for name := range factories {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names
 }
 
 func getPlayersFromPlayerTableList(players []*model.PlayerTable) []playable.Player {
