@@ -47,6 +47,36 @@ func TestConfig_BrowserOrigins(t *testing.T) {
 	assert.Equal(t, []string{"http://localhost:8080", "https://mondaynight.bid"}, cfg.BrowserOrigins())
 }
 
+func TestConfig_APIBaseURL(t *testing.T) {
+	// falls back to Host when PublicURL is unset
+	cfg := Config{Host: "https://mondaynight.bid"}
+	assert.Equal(t, "https://mondaynight.bid", cfg.APIBaseURL())
+
+	// trims a trailing slash from Host when falling back
+	cfg = Config{Host: "https://mondaynight.bid/"}
+	assert.Equal(t, "https://mondaynight.bid", cfg.APIBaseURL())
+
+	// prefers PublicURL when set
+	cfg = Config{Host: "https://mondaynight.bid", PublicURL: "https://api.mondaynight.bid"}
+	assert.Equal(t, "https://api.mondaynight.bid", cfg.APIBaseURL())
+
+	// trims a trailing slash from PublicURL
+	cfg = Config{Host: "https://mondaynight.bid", PublicURL: "https://api.mondaynight.bid/"}
+	assert.Equal(t, "https://api.mondaynight.bid", cfg.APIBaseURL())
+}
+
+func TestLoad_PublicURLEnvOverride(t *testing.T) {
+	clear1 := setEnv("MNP_CONFIG_FILE", "testdata/config.yaml")
+	defer clear1()
+	clear2 := setEnv("MNP_PUBLIC_URL", "https://api.mondaynight.bid")
+	defer clear2()
+
+	cfg, err := Load()
+	assert.NoError(t, err)
+	assert.Equal(t, "https://api.mondaynight.bid", cfg.PublicURL)
+	assert.Equal(t, "https://api.mondaynight.bid", cfg.APIBaseURL())
+}
+
 func TestDefaultConfig_AllowsProdAndBeta(t *testing.T) {
 	// the default allowlist governs both CORS and the WebSocket upgrade, and must
 	// include both the production and beta frontends out of the box

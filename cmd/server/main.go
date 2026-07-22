@@ -84,10 +84,10 @@ func main() {
 		logrus.WithError(err).Fatal("could not load JWT keypair for OAuth server")
 	}
 
-	host := strings.TrimRight(cfg.Host, "/")
+	apiBaseURL := cfg.APIBaseURL()
 	oauthServer := oauth.New(repos, privKey, pubKey, oauth.Config{
-		Issuer:   host,
-		Resource: host + "/mcp",
+		Issuer:   apiBaseURL,
+		Resource: apiBaseURL + "/mcp",
 	})
 	mcpHandler := mcpserver.New(repos, Version)
 
