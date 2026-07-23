@@ -272,6 +272,114 @@ func scanTablesWithPlayerEmail(rows *sql.Rows, err error) ([]*TableWithPlayerEma
 	return tables, nil
 }
 
+// GetActiveTablesFiltered returns a paginated list of non-deleted tables created
+// within the given range. It is GetActiveTables with a date filter on
+// tables.created (a table is one night by convention). The deleted filter stays in
+// SQL so pagination is not distorted by a post-fetch filter.
+func (r *TableRepo) GetActiveTablesFiltered(ctx context.Context, from, to time.Time, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
+	const query = `
+SELECT ` + tableColumns + `, players.email
+FROM tables
+INNER JOIN players ON tables.player_id = players.id
+WHERE NOT tables.deleted
+  AND tables.created >= $1 AND tables.created <= $2
+ORDER BY tables.created DESC, tables.uuid DESC
+OFFSET $3
+LIMIT $4`
+
+	return scanTablesWithPlayerEmail(r.db.QueryContext(ctx, query, from, to, offset, limit))
+}
+
+// GetActiveTablesCount returns the total number of non-deleted tables created
+// within the given range, for pagination totals.
+func (r *TableRepo) GetActiveTablesCount(ctx context.Context, from, to time.Time) (int64, error) {
+	const query = `
+SELECT COUNT(*)
+FROM tables
+WHERE NOT tables.deleted
+  AND tables.created >= $1 AND tables.created <= $2`
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, from, to).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// TablePlayerStats is a single roster member's summary at a table: their current
+// balance plus per-game aggregates. Balance and NetWinnings are raw integer cents.
+type TablePlayerStats struct {
+	PlayerID    int64
+	DisplayName string
+	Balance     int
+	GamesPlayed int
+	NetWinnings int
+}
+
+// GetTableStats returns one TablePlayerStats per roster member at the table.
+// Balance is the current players_tables balance. GamesPlayed and NetWinnings are
+// computed from game-driven ledger rows only (game_id IS NOT NULL); the ledger is
+// LEFT JOINed so members who have not played a game still appear with zeros.
+// Results are ordered by net winnings descending, then player id ascending.
+func (r *TableRepo) GetTableStats(ctx context.Context, t *Table) ([]*TablePlayerStats, error) {
+	const query = `
+SELECT pt.player_id,
+       players.display_name,
+       pt.balance,
+       COUNT(DISTINCT ptt.game_id) FILTER (WHERE ptt.game_id IS NOT NULL) AS games_played,
+       COALESCE(SUM(ptt.adjustment) FILTER (WHERE ptt.game_id IS NOT NULL), 0) AS net_winnings
+FROM players_tables pt
+INNER JOIN players ON pt.player_id = players.id
+LEFT JOIN players_tables_transactions ptt ON ptt.players_tables_id = pt.id
+WHERE pt.table_uuid = $1
+GROUP BY pt.player_id, players.display_name, pt.balance
+ORDER BY net_winnings DESC, pt.player_id ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, t.UUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := make([]*TablePlayerStats, 0)
+	for rows.Next() {
+		var s TablePlayerStats
+		if err := rows.Scan(&s.PlayerID, &s.DisplayName, &s.Balance, &s.GamesPlayed, &s.NetWinnings); err != nil {
+			return nil, err
+		}
+
+		stats = append(stats, &s)
+	}
+
+	return stats, nil
+}
+
+// TableAggregates summarizes a table: how many players are seated, how many games
+// have been played, and the sum of every seated player's balance (raw cents).
+type TableAggregates struct {
+	PlayersCount int
+	GamesCount   int64
+	TotalBalance int
+}
+
+// GetTableAggregates returns the roster size, games count, and total balance for
+// the table in a single query.
+func (r *TableRepo) GetTableAggregates(ctx context.Context, t *Table) (*TableAggregates, error) {
+	const query = `
+SELECT
+  (SELECT COUNT(*) FROM players_tables WHERE table_uuid = $1),
+  (SELECT COUNT(*) FROM games WHERE table_uuid = $1),
+  (SELECT COALESCE(SUM(balance), 0) FROM players_tables WHERE table_uuid = $1)`
+
+	var agg TableAggregates
+	if err := r.db.QueryRowContext(ctx, query, t.UUID).Scan(&agg.PlayersCount, &agg.GamesCount, &agg.TotalBalance); err != nil {
+		return nil, err
+	}
+
+	return &agg, nil
+}
+
 // GetActivePlayersShifted returns all the active players at the table with the players shifted by the number of games
 func (r *TableRepo) GetActivePlayersShifted(ctx context.Context, t *Table) ([]*PlayerTable, error) {
 	players, err := r.GetPlayers(ctx, t)

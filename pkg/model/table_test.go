@@ -5,10 +5,21 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// setTableCreated overrides a table's created timestamp so date-filtered queries
+// can be tested in an isolated window that no other table (created via now())
+// lands in. The window is derived from a unique per-run instant.
+func setTableCreated(t *testing.T, tableUUID string, created time.Time) {
+	t.Helper()
+	_, err := testDB.Exec(`UPDATE tables SET created = $1 WHERE uuid = $2`, created, tableUUID)
+	require.NoError(t, err)
+}
 
 func TestTable_CreateGame(t *testing.T) {
 	_, tbl := playerAndTable()
@@ -272,6 +283,122 @@ func TestTableRepo_CloneTable_carriesOverPlayers(t *testing.T) {
 		a.Equal(0, cp.Balance)
 		a.False(cp.Active)
 	}
+}
+
+func TestGetTableStats(t *testing.T) {
+	a := assert.New(t)
+
+	p1, tbl := playerAndTable()
+
+	// p1 plays two games
+	g1, _ := testRepos.Games.CreateGame(cbg, tbl, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, g1, nil, map[int64]int{p1.ID: 100}))
+	g2, _ := testRepos.Games.CreateGame(cbg, tbl, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, g2, nil, map[int64]int{p1.ID: -30}))
+
+	// p2 joins after the games, so has a roster row but no game transactions
+	p2 := player()
+	_, err := testRepos.Tables.Join(cbg, p2, tbl)
+	require.NoError(t, err)
+
+	stats, err := testRepos.Tables.GetTableStats(cbg, tbl)
+	a.NoError(err)
+	require.Equal(t, 2, len(stats))
+
+	// ordered by net winnings DESC: p1 (70) then p2 (0)
+	a.Equal(p1.ID, stats[0].PlayerID)
+	a.Equal(70, stats[0].NetWinnings)
+	a.Equal(70, stats[0].Balance)
+	a.Equal(2, stats[0].GamesPlayed)
+	a.NotEmpty(stats[0].DisplayName)
+
+	// p2 appears with zeros (LEFT JOIN)
+	a.Equal(p2.ID, stats[1].PlayerID)
+	a.Equal(0, stats[1].NetWinnings)
+	a.Equal(0, stats[1].Balance)
+	a.Equal(0, stats[1].GamesPlayed)
+}
+
+func TestGetTableAggregates(t *testing.T) {
+	a := assert.New(t)
+
+	p1, tbl := playerAndTable()
+	p2 := player()
+	_, err := testRepos.Tables.Join(cbg, p2, tbl)
+	require.NoError(t, err)
+
+	// empty table: 2 players, 0 games, 0 balance
+	agg, err := testRepos.Tables.GetTableAggregates(cbg, tbl)
+	a.NoError(err)
+	a.Equal(2, agg.PlayersCount)
+	a.Equal(int64(0), agg.GamesCount)
+	a.Equal(0, agg.TotalBalance)
+
+	g1, _ := testRepos.Games.CreateGame(cbg, tbl, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, g1, nil, map[int64]int{p1.ID: 100, p2.ID: -100}))
+	g2, _ := testRepos.Games.CreateGame(cbg, tbl, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, g2, nil, map[int64]int{p1.ID: 40, p2.ID: -40}))
+
+	agg, err = testRepos.Tables.GetTableAggregates(cbg, tbl)
+	a.NoError(err)
+	a.Equal(2, agg.PlayersCount)
+	a.Equal(int64(2), agg.GamesCount)
+	// balances net to zero across the two players
+	a.Equal(0, agg.TotalBalance)
+}
+
+func TestGetActiveTablesFiltered(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
+	live1, _ := testRepos.Tables.CreateTable(cbg, p, "Filtered Live 1")
+	live2, _ := testRepos.Tables.CreateTable(cbg, p, "Filtered Live 2")
+	gone, _ := testRepos.Tables.CreateTable(cbg, p, "Filtered Deleted")
+
+	// GetActiveTablesFiltered is global (not player-scoped), so isolate this test's
+	// tables into a tight, unique created window that no other table lands in. The
+	// base is a far-future instant offset by a per-run nanosecond value; the window
+	// spans only a couple of milliseconds so a separate run seconds later cannot
+	// collide with it.
+	base := time.Date(2200, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(time.Now().UnixNano()))
+	setTableCreated(t, live1.UUID, base)
+	setTableCreated(t, live2.UUID, base.Add(time.Millisecond))
+	setTableCreated(t, gone.UUID, base.Add(2*time.Millisecond))
+
+	gone.Deleted = true
+	require.NoError(t, testRepos.Tables.Save(cbg, gone))
+
+	from := base
+	to := base.Add(2 * time.Millisecond)
+
+	tables, err := testRepos.Tables.GetActiveTablesFiltered(cbg, from, to, 0, 100)
+	a.NoError(err)
+	// only the two live tables, newest (created DESC) first
+	require.Equal(t, 2, len(tables))
+	a.Equal(live2.UUID, tables[0].UUID)
+	a.Equal(live1.UUID, tables[1].UUID)
+	a.Equal(p.Email, tables[0].Email)
+
+	count, err := testRepos.Tables.GetActiveTablesCount(cbg, from, to)
+	a.NoError(err)
+	a.Equal(int64(2), count)
+
+	// pagination is honored
+	page, err := testRepos.Tables.GetActiveTablesFiltered(cbg, from, to, 1, 1)
+	a.NoError(err)
+	require.Equal(t, 1, len(page))
+	a.Equal(live1.UUID, page[0].UUID)
+
+	// a distinct far window that no table occupies excludes everything
+	lo := time.Date(2150, 1, 1, 0, 0, 0, 0, time.UTC)
+	hi := time.Date(2150, 1, 2, 0, 0, 0, 0, time.UTC)
+	empty, err := testRepos.Tables.GetActiveTablesFiltered(cbg, lo, hi, 0, 100)
+	a.NoError(err)
+	a.Equal(0, len(empty))
+	emptyCount, err := testRepos.Tables.GetActiveTablesCount(cbg, lo, hi)
+	a.NoError(err)
+	a.Equal(int64(0), emptyCount)
 }
 
 func TestTable_Save(t *testing.T) {

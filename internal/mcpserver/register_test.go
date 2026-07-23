@@ -148,16 +148,21 @@ func TestRegisterTool_PanicsPropagate(t *testing.T) {
 // must appear here with the correct policy. When adding a new tool, classify it here AND add
 // behavioral tests for its policy; otherwise this test fails.
 var expectedPolicies = map[string]accessPolicy{
-	"list_players":        accessAdminOnly,
-	"get_player":          accessSelfScoped,
-	"get_player_by_email": accessAdminOnly,
-	"get_player_stats":    accessSelfScoped,
-	"get_player_profile":  accessSelfScoped,
-	"list_player_tables":  accessSelfScoped,
-	"list_tables":         accessAuthenticated,
-	"get_table":           accessAuthenticated,
-	"get_table_roster":    accessAuthenticated,
-	"list_game_types":     accessAuthenticated,
+	"list_players":             accessAdminOnly,
+	"get_player":               accessSelfScoped,
+	"get_player_by_email":      accessAdminOnly,
+	"get_player_stats":         accessSelfScoped,
+	"get_player_profile":       accessSelfScoped,
+	"list_player_tables":       accessSelfScoped,
+	"list_tables":              accessAuthenticated,
+	"get_table":                accessAuthenticated,
+	"get_table_roster":         accessAuthenticated,
+	"list_table_games":         accessAuthenticated,
+	"get_game":                 accessAuthenticated,
+	"get_table_stats":          accessAuthenticated,
+	"list_player_transactions": accessSelfScoped,
+	"leaderboard":              accessAuthenticated,
+	"list_game_types":          accessAuthenticated,
 }
 
 func TestRegistry_MatchesExpectedPolicies(t *testing.T) {

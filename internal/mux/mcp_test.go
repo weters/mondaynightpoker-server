@@ -69,7 +69,8 @@ var mcpNonceRe = regexp.MustCompile(`name="nonce" value="([^"]+)"`)
 var allToolNames = []string{
 	"list_players", "get_player", "get_player_by_email", "get_player_stats",
 	"get_player_profile", "list_player_tables", "list_tables", "get_table",
-	"get_table_roster", "list_game_types",
+	"get_table_roster", "list_table_games", "get_game", "get_table_stats",
+	"list_player_transactions", "leaderboard", "list_game_types",
 }
 
 // allGameSlugs are the game-type identifiers list_game_types must return.

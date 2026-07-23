@@ -631,7 +631,7 @@ GROUP BY g.game_type`
 		if err := rows.Scan(&gameType, &total, &gameCount); err != nil {
 			return nil, err
 		}
-		group := gameTypeGroup(gameType)
+		group := GameTypeGroup(gameType)
 		stats.WinningsByGame[group] += total
 		stats.GamesCountByType[group] += gameCount
 	}
@@ -651,9 +651,9 @@ var sevenCardVariants = []string{
 	"coupons and clippings",
 }
 
-// gameTypeGroup maps a stored game_type display name to its canonical group name.
+// GameTypeGroup maps a stored game_type display name to its canonical group name.
 // The game_type column stores the full display name (e.g., "4-Card Little L (trade: 0, 2)").
-func gameTypeGroup(gameType string) string {
+func GameTypeGroup(gameType string) string {
 	lower := strings.ToLower(gameType)
 	switch {
 	case strings.HasPrefix(lower, "bourr"):
@@ -716,6 +716,141 @@ LIMIT $5`
 	}
 
 	return records, nil
+}
+
+// GetPlayerTablesFilteredCount returns the total number of non-deleted tables the
+// player belongs to within the given date range, for pagination totals. It mirrors
+// the filter used by GetPlayerTablesFiltered.
+func (r *PlayerRepo) GetPlayerTablesFilteredCount(ctx context.Context, playerID int64, from, to time.Time) (int64, error) {
+	const query = `
+SELECT COUNT(*)
+FROM tables
+INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
+WHERE NOT tables.deleted
+  AND players_tables.player_id = $1
+  AND tables.created >= $2 AND tables.created <= $3`
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, playerID, from, to).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// GetPlayersCount returns the total number of players matching the search string,
+// mirroring the filter used by GetPlayersWithSearch, for pagination totals. A
+// numeric search matches a single player id (count of 0 or 1); a non-numeric
+// search prefix-matches display name or email; an empty search counts all players.
+func (r *PlayerRepo) GetPlayersCount(ctx context.Context, search string) (int64, error) {
+	var count int64
+
+	if search == "" {
+		const query = `SELECT COUNT(*) FROM players`
+		if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
+			return 0, err
+		}
+
+		return count, nil
+	}
+
+	if searchInt, _ := strconv.ParseInt(search, 10, 64); searchInt > 0 {
+		const query = `SELECT COUNT(*) FROM players WHERE id = $1`
+		if err := r.db.QueryRowContext(ctx, query, searchInt).Scan(&count); err != nil {
+			return 0, err
+		}
+
+		return count, nil
+	}
+
+	const query = `
+SELECT COUNT(*)
+FROM players
+WHERE display_name LIKE $1 || '%' OR email LIKE $1 || '%'`
+
+	if err := r.db.QueryRowContext(ctx, query, search).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// GetTablesCount returns the total number of non-deleted tables the player belongs
+// to, mirroring the filter used by GetTables, for pagination totals.
+func (r *PlayerRepo) GetTablesCount(ctx context.Context, p *Player) (int64, error) {
+	const query = `
+SELECT COUNT(*)
+FROM tables
+INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
+WHERE NOT tables.deleted
+  AND players_tables.player_id = $1`
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, p.ID).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// LeaderboardEntry is one player's aggregated performance across the tables the
+// leaderboard is scoped to. NetWinnings is raw integer cents.
+type LeaderboardEntry struct {
+	PlayerID     int64
+	DisplayName  string
+	NetWinnings  int
+	GamesPlayed  int
+	TablesJoined int
+}
+
+// GetLeaderboard returns a leaderboard scoped to the tables the caller belongs to.
+//
+// Only non-deleted tables created within [from, to] that the caller (callerPlayerID)
+// is a member of are considered. Within those tables, every member player is
+// aggregated: NetWinnings sums game-driven adjustments (game_id IS NOT NULL),
+// GamesPlayed counts distinct games played, and TablesJoined counts distinct tables.
+// The ledger is LEFT JOINed so a member with no game rows still appears with zeros.
+// The date filter is applied to tables.created, matching GetPlayerStats semantics.
+// Entries are ordered by net winnings descending, then player id ascending.
+func (r *PlayerRepo) GetLeaderboard(ctx context.Context, callerPlayerID int64, from, to time.Time) ([]*LeaderboardEntry, error) {
+	const query = `
+SELECT pt.player_id,
+       players.display_name,
+       COALESCE(SUM(ptt.adjustment) FILTER (WHERE ptt.game_id IS NOT NULL), 0) AS net_winnings,
+       COUNT(DISTINCT ptt.game_id) FILTER (WHERE ptt.game_id IS NOT NULL) AS games_played,
+       COUNT(DISTINCT t.uuid) AS tables_joined
+FROM players_tables pt
+INNER JOIN players ON pt.player_id = players.id
+INNER JOIN tables t ON pt.table_uuid = t.uuid
+LEFT JOIN players_tables_transactions ptt ON ptt.players_tables_id = pt.id
+WHERE NOT t.deleted
+  AND t.created >= $2 AND t.created <= $3
+  AND EXISTS (
+    SELECT 1
+    FROM players_tables pt_caller
+    WHERE pt_caller.table_uuid = t.uuid
+      AND pt_caller.player_id = $1
+  )
+GROUP BY pt.player_id, players.display_name
+ORDER BY net_winnings DESC, pt.player_id ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, callerPlayerID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	entries := make([]*LeaderboardEntry, 0)
+	for rows.Next() {
+		var e LeaderboardEntry
+		if err := rows.Scan(&e.PlayerID, &e.DisplayName, &e.NetWinnings, &e.GamesPlayed, &e.TablesJoined); err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, &e)
+	}
+
+	return entries, nil
 }
 
 // GetPlayerGraphData returns lightweight balance data points for the profile graph

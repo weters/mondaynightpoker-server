@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreatePlayer(t *testing.T) {
@@ -355,7 +356,7 @@ func TestGameTypeGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.expected, gameTypeGroup(tt.input))
+			assert.Equal(t, tt.expected, GameTypeGroup(tt.input))
 		})
 	}
 }
@@ -523,6 +524,185 @@ func TestGetPlayerTablesFiltered(t *testing.T) {
 	tables, err = testRepos.Players.GetPlayerTablesFiltered(cbg, p.ID, future, futureEnd, 0, 100)
 	a.NoError(err)
 	a.Equal(0, len(tables))
+}
+
+func TestGetLeaderboard(t *testing.T) {
+	a := assert.New(t)
+
+	caller := player()
+	caller.IsSiteAdmin = true // to rapidly create tables
+
+	// caller belongs to tableA and tableB (as their creator)
+	tableA, _ := testRepos.Tables.CreateTable(cbg, caller, "LB Table A")
+	tableB, _ := testRepos.Tables.CreateTable(cbg, caller, "LB Table B")
+
+	other := player()
+	_, err := testRepos.Tables.Join(cbg, other, tableA)
+	require.NoError(t, err)
+
+	// a table the caller is NOT a member of, run by a third player
+	outsider := player()
+	outsider.IsSiteAdmin = true
+	tableD, _ := testRepos.Tables.CreateTable(cbg, outsider, "LB Table D")
+	_, err = testRepos.Tables.Join(cbg, other, tableD)
+	require.NoError(t, err)
+
+	// games
+	gA, _ := testRepos.Games.CreateGame(cbg, tableA, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, gA, nil, map[int64]int{caller.ID: 100, other.ID: -100}))
+	gB, _ := testRepos.Games.CreateGame(cbg, tableB, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, gB, nil, map[int64]int{caller.ID: 50}))
+	gD, _ := testRepos.Games.CreateGame(cbg, tableD, "bourre")
+	require.NoError(t, testRepos.Games.EndGame(cbg, gD, nil, map[int64]int{outsider.ID: 300, other.ID: 20}))
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	entries, err := testRepos.Players.GetLeaderboard(cbg, caller.ID, from, to)
+	a.NoError(err)
+
+	byPlayer := make(map[int64]*LeaderboardEntry)
+	for _, e := range entries {
+		byPlayer[e.PlayerID] = e
+	}
+
+	// the outsider is only in tableD (out of scope) and must not appear
+	a.NotContains(byPlayer, outsider.ID)
+
+	// caller: net 150 across two tables, two games
+	if a.Contains(byPlayer, caller.ID) {
+		a.Equal(150, byPlayer[caller.ID].NetWinnings)
+		a.Equal(2, byPlayer[caller.ID].GamesPlayed)
+		a.Equal(2, byPlayer[caller.ID].TablesJoined)
+		a.NotEmpty(byPlayer[caller.ID].DisplayName)
+	}
+
+	// other: only tableA is in scope, so tableD's +20 is excluded
+	if a.Contains(byPlayer, other.ID) {
+		a.Equal(-100, byPlayer[other.ID].NetWinnings)
+		a.Equal(1, byPlayer[other.ID].GamesPlayed)
+		a.Equal(1, byPlayer[other.ID].TablesJoined)
+	}
+
+	// ordering among this test's players: caller (150) before other (-100)
+	var callerIdx, otherIdx = -1, -1
+	for i, e := range entries {
+		switch e.PlayerID {
+		case caller.ID:
+			callerIdx = i
+		case other.ID:
+			otherIdx = i
+		}
+	}
+	a.True(callerIdx >= 0 && otherIdx >= 0 && callerIdx < otherIdx, "caller should rank above other")
+
+	// soft-delete tableB: caller's total drops to tableA-only figures
+	tableB.Deleted = true
+	require.NoError(t, testRepos.Tables.Save(cbg, tableB))
+
+	entries, err = testRepos.Players.GetLeaderboard(cbg, caller.ID, from, to)
+	a.NoError(err)
+	byPlayer = make(map[int64]*LeaderboardEntry)
+	for _, e := range entries {
+		byPlayer[e.PlayerID] = e
+	}
+	if a.Contains(byPlayer, caller.ID) {
+		a.Equal(100, byPlayer[caller.ID].NetWinnings)
+		a.Equal(1, byPlayer[caller.ID].GamesPlayed)
+		a.Equal(1, byPlayer[caller.ID].TablesJoined)
+	}
+
+	// a future-only window excludes everything
+	future := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	futureEnd := time.Date(2100, 12, 31, 0, 0, 0, 0, time.UTC)
+	entries, err = testRepos.Players.GetLeaderboard(cbg, caller.ID, future, futureEnd)
+	a.NoError(err)
+	a.Equal(0, len(entries))
+}
+
+func TestGetPlayersCount(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+
+	// numeric search matches exactly one player by id
+	count, err := testRepos.Players.GetPlayersCount(cbg, strconv.FormatInt(p.ID, 10))
+	a.NoError(err)
+	a.Equal(int64(1), count)
+
+	// email prefix (emails are unique) matches exactly one
+	count, err = testRepos.Players.GetPlayersCount(cbg, p.Email)
+	a.NoError(err)
+	a.Equal(int64(1), count)
+
+	// a search matching nothing returns zero
+	count, err = testRepos.Players.GetPlayersCount(cbg, "no-such-player-"+p.Email)
+	a.NoError(err)
+	a.Equal(int64(0), count)
+
+	// empty search counts all players (at least the ones created here)
+	count, err = testRepos.Players.GetPlayersCount(cbg, "")
+	a.NoError(err)
+	a.Greater(count, int64(0))
+}
+
+func TestGetTablesCount(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
+	_, err := testRepos.Tables.CreateTable(cbg, p, "Count Table 1")
+	require.NoError(t, err)
+	t2, err := testRepos.Tables.CreateTable(cbg, p, "Count Table 2")
+	require.NoError(t, err)
+
+	count, err := testRepos.Players.GetTablesCount(cbg, p)
+	a.NoError(err)
+	a.Equal(int64(2), count)
+
+	// soft-deleting a table removes it from the count
+	t2.Deleted = true
+	require.NoError(t, testRepos.Tables.Save(cbg, t2))
+
+	count, err = testRepos.Players.GetTablesCount(cbg, p)
+	a.NoError(err)
+	a.Equal(int64(1), count)
+}
+
+func TestGetPlayerTablesFilteredCount(t *testing.T) {
+	a := assert.New(t)
+
+	// The count is player-scoped, and p is a brand-new player, so a wide date range
+	// matches only this test's tables — no created-window isolation needed.
+	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
+	_, err := testRepos.Tables.CreateTable(cbg, p, "FCount Table 1")
+	require.NoError(t, err)
+	_, err = testRepos.Tables.CreateTable(cbg, p, "FCount Table 2")
+	require.NoError(t, err)
+	t3, err := testRepos.Tables.CreateTable(cbg, p, "FCount Table 3")
+	require.NoError(t, err)
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	count, err := testRepos.Players.GetPlayerTablesFilteredCount(cbg, p.ID, from, to)
+	a.NoError(err)
+	a.Equal(int64(3), count)
+
+	// soft-deleted tables are excluded
+	t3.Deleted = true
+	require.NoError(t, testRepos.Tables.Save(cbg, t3))
+	count, err = testRepos.Players.GetPlayerTablesFilteredCount(cbg, p.ID, from, to)
+	a.NoError(err)
+	a.Equal(int64(2), count)
+
+	// a future-only window excludes everything (date filter on tables.created)
+	future := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	futureEnd := time.Date(2100, 12, 31, 0, 0, 0, 0, time.UTC)
+	count, err = testRepos.Players.GetPlayerTablesFilteredCount(cbg, p.ID, future, futureEnd)
+	a.NoError(err)
+	a.Equal(int64(0), count)
 }
 
 func TestGetPlayerProfile(t *testing.T) {

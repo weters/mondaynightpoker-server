@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"mondaynightpoker-server/pkg/db"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,7 +24,18 @@ type Game struct {
 
 const gamesColumns = `id, parent_id, table_uuid, game_type, data, created, ended`
 
-func gameByRow(row *sql.Row) (*Game, error) {
+// gamesColumnsNoData is gamesColumns without the jsonb data column. Game logs can
+// be large, so list queries omit it and callers fetch a single game by id when the
+// log is actually needed.
+const gamesColumnsNoData = `id, parent_id, table_uuid, game_type, created, ended`
+
+// Data returns the game's log/state payload (the jsonb `data` column). It is nil
+// on games loaded without the data column (e.g. ListGamesByTable).
+func (g *Game) Data() interface{} {
+	return g.data
+}
+
+func gameByRow(row db.Scanner) (*Game, error) {
 	var parentID sql.NullInt64
 	var g Game
 	var data []byte
@@ -39,6 +52,23 @@ func gameByRow(row *sql.Row) (*Game, error) {
 		}
 	}
 
+	g.Ended = ended.Time
+
+	return &g, nil
+}
+
+// gameByRowNoData scans a game row selected with gamesColumnsNoData (the data
+// column omitted). The returned game's data field is left nil.
+func gameByRowNoData(row db.Scanner) (*Game, error) {
+	var parentID sql.NullInt64
+	var g Game
+	var ended sql.NullTime
+
+	if err := row.Scan(&g.ID, &parentID, &g.TableUUID, &g.GameType, &g.Created, &ended); err != nil {
+		return nil, err
+	}
+
+	g.ParentID = parentID.Int64
 	g.Ended = ended.Time
 
 	return &g, nil
@@ -127,4 +157,101 @@ RETURNING ended`
 	commit = true
 	g.Ended = ended
 	return nil
+}
+
+// GetGameByID returns a single game by its id, including the jsonb data column.
+func (r *GameRepo) GetGameByID(ctx context.Context, id int64) (*Game, error) {
+	const query = `
+SELECT ` + gamesColumns + `
+FROM games
+WHERE id = $1`
+
+	row := r.db.QueryRowContext(ctx, query, id)
+	return gameByRow(row)
+}
+
+// ListGamesByTable returns a paginated list of games at the table, ordered newest
+// first. The jsonb data column is omitted because game logs can be large; callers
+// that need a game's log fetch it individually via GetGameByID.
+func (r *GameRepo) ListGamesByTable(ctx context.Context, t *Table, offset int64, limit int) ([]*Game, error) {
+	const query = `
+SELECT ` + gamesColumnsNoData + `
+FROM games
+WHERE table_uuid = $1
+ORDER BY created DESC, id DESC
+OFFSET $2
+LIMIT $3`
+
+	rows, err := r.db.QueryContext(ctx, query, t.UUID, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	games := make([]*Game, 0)
+	for rows.Next() {
+		g, err := gameByRowNoData(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		games = append(games, g)
+	}
+
+	return games, nil
+}
+
+// GetGamesCountByTable returns the total number of games at the table for pagination.
+func (r *GameRepo) GetGamesCountByTable(ctx context.Context, t *Table) (int64, error) {
+	const query = `
+SELECT COUNT(id)
+FROM games
+WHERE table_uuid = $1`
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, t.UUID).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// GameAdjustment is a single player's balance adjustment within a game.
+type GameAdjustment struct {
+	PlayerID    int64
+	DisplayName string
+	Adjustment  int
+}
+
+// GetGameAdjustments returns the per-player balance adjustments for the given game
+// ids, keyed by game id. Within each game the adjustments are ordered by amount
+// descending (biggest winner first), with a secondary sort on player id for
+// deterministic ordering. Games with no ledger rows are absent from the map.
+func (r *GameRepo) GetGameAdjustments(ctx context.Context, gameIDs []int64) (map[int64][]*GameAdjustment, error) {
+	const query = `
+SELECT ptt.game_id, pt.player_id, players.display_name, ptt.adjustment
+FROM players_tables_transactions ptt
+INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+INNER JOIN players ON pt.player_id = players.id
+WHERE ptt.game_id = ANY($1)
+ORDER BY ptt.game_id ASC, ptt.adjustment DESC, pt.player_id ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(gameIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	adjustments := make(map[int64][]*GameAdjustment)
+	for rows.Next() {
+		var gameID int64
+		var ga GameAdjustment
+		if err := rows.Scan(&gameID, &ga.PlayerID, &ga.DisplayName, &ga.Adjustment); err != nil {
+			return nil, err
+		}
+
+		adjustments[gameID] = append(adjustments[gameID], &ga)
+	}
+
+	return adjustments, nil
 }
