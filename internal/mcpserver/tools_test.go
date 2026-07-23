@@ -13,6 +13,7 @@ import (
 
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/money"
+	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/room/gamefactory"
 )
 
@@ -491,27 +492,75 @@ func TestListGameTypes(t *testing.T) {
 	a.Equal("Texas Hold'em", byID["texas-hold-em"])
 }
 
-// TestListGameTypes_DisplayGroupExhaustive is a tripwire: every gamefactory id must
-// have a display-group mapping, and every mapping's group must be a value
-// model.GameTypeGroup can actually produce. A newly registered game type that ships
-// without a mapping (or with a group that drifts from GameTypeGroup) fails here.
+// TestListGameTypes_DisplayGroupExhaustive is a tripwire: for every gamefactory id,
+// the display group derived from the factory's DisplayName must match what
+// model.GameTypeGroup produces for the game's real display names (the strings
+// Details writes into the games.game_type column). A newly registered game type
+// whose DisplayName drifts from its stored display names fails here.
 func TestListGameTypes_DisplayGroupExhaustive(t *testing.T) {
 	a := assert.New(t)
 
-	for _, name := range gamefactory.Names() {
-		group, ok := gameTypeDisplayGroups[name]
-		a.Truef(ok, "gamefactory id %q has no display-group mapping in gameTypeDisplayGroups", name)
-		a.NotEmptyf(group, "gamefactory id %q maps to an empty display group", name)
+	// representative Details inputs per gamefactory id, covering each game's variants
+	detailsInputs := map[string][]playable.AdditionalData{
+		"bourre": {
+			{},
+			{"fiveSuit": true},
+		},
+		"seven-card": {
+			{},
+			{"variant": "stud"},
+			{"variant": "low-card-wild"},
+			{"variant": "baseball"},
+			{"variant": "follow-the-queen"},
+			{"variant": "high-chicago"},
+			{"variant": "chiggs"},
+			{"variant": "coupons-and-clippings"},
+		},
+		"pass-the-poop": {
+			{"ante": float64(25), "edition": "standard"},
+			{"ante": float64(25), "edition": "diarrhea"},
+			{"ante": float64(25), "edition": "pairs", "allowBlocks": true},
+		},
+		"little-l": {
+			{},
+			{"initialDeal": float64(5), "tradeIns": []float64{0, 1, 3}},
+		},
+		"acey-deucey": {
+			{},
+			{"gameType": "continuous shoe"},
+			{"gameType": "chaos"},
+			{"allowPass": true},
+		},
+		"texas-hold-em": {
+			{},
+			{"variant": "pineapple"},
+			{"variant": "lazy-pineapple"},
+		},
+		"guts": {
+			{},
+			{"cardCount": float64(3)},
+			{"bloodyGuts": true, "allowTrades": true},
+		},
 	}
 
-	// the canonical group strings must match model.GameTypeGroup's outputs
-	a.Equal("Bourre", model.GameTypeGroup("Bourré"))
-	a.Equal("Seven Card", model.GameTypeGroup("7-Card Stud"))
-	a.Equal("Texas Hold'em", model.GameTypeGroup("Texas Hold'em"))
-	a.Equal("Acey Deucey", model.GameTypeGroup("Acey Deucey"))
-	a.Equal("Pass the Poop", model.GameTypeGroup("Pass the Poop"))
-	a.Equal("Guts", model.GameTypeGroup("Guts"))
-	a.Equal("Little L", model.GameTypeGroup("Little L"))
+	for _, name := range gamefactory.Names() {
+		factory, err := gamefactory.Get(name)
+		a.NoError(err)
+
+		derived := model.GameTypeGroup(factory.DisplayName())
+		a.NotEmptyf(derived, "gamefactory id %q derives an empty display group", name)
+
+		inputs, ok := detailsInputs[name]
+		a.Truef(ok, "gamefactory id %q has no Details inputs in this test — add them", name)
+
+		for _, in := range inputs {
+			displayName, _, err := factory.Details(in)
+			a.NoErrorf(err, "gamefactory id %q: Details(%v) failed", name, in)
+			a.Equalf(derived, model.GameTypeGroup(displayName),
+				"gamefactory id %q: real display name %q groups to %q, but DisplayName %q derives %q",
+				name, displayName, model.GameTypeGroup(displayName), factory.DisplayName(), derived)
+		}
+	}
 }
 
 // -------------------- list_table_games --------------------

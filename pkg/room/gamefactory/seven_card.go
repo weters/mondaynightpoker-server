@@ -11,6 +11,10 @@ import (
 
 type sevenCardFactory struct{}
 
+func (s sevenCardFactory) DisplayName() string {
+	return "Seven-Card Stud"
+}
+
 func (s sevenCardFactory) Details(additionalData playable.AdditionalData) (name string, ante int, err error) {
 	opts, err := s.getOptions(additionalData)
 	if err != nil {

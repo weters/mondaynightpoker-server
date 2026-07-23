@@ -23,6 +23,11 @@ var factories = map[string]GameFactory{
 type GameFactory interface {
 	CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error)
 	Details(additionalData playable.AdditionalData) (name string, ante int, err error)
+
+	// DisplayName returns the canonical display name for the game type.
+	// model.GameTypeGroup(DisplayName()) must yield the same group as every
+	// real display name the factory's Details can produce.
+	DisplayName() string
 }
 
 // Get returns a factory by the given name

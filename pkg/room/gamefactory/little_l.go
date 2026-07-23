@@ -10,6 +10,10 @@ import (
 
 type littleLFactory struct{}
 
+func (l littleLFactory) DisplayName() string {
+	return "Little L"
+}
+
 func (l littleLFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts := getOptions(additionalData)
 	name, err := littlel.NameFromOptions(opts)

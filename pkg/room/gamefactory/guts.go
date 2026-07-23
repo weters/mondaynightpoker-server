@@ -10,6 +10,10 @@ import (
 
 type gutsFactory struct{}
 
+func (g gutsFactory) DisplayName() string {
+	return "Guts"
+}
+
 func (g gutsFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts := getGutsOptions(additionalData)
 	return guts.NameFromOptions(opts), opts.Ante, nil

@@ -405,21 +405,6 @@ func (s *server) getTableRoster(ctx context.Context, _ *mcp.CallToolRequest, cal
 	return getTableRosterOutput{Table: fromTable(table), Players: fromPlayerTables(players, caller)}, nil
 }
 
-// gameTypeDisplayGroups maps every gamefactory id to its canonical display group.
-// The group strings must exactly match model.GameTypeGroup's output (and therefore
-// the keys of the get_player_stats maps). An exhaustiveness test asserts every
-// gamefactory.Names() id has an entry here, so a newly registered game type cannot
-// ship without a mapping.
-var gameTypeDisplayGroups = map[string]string{
-	"bourre":        "Bourre",
-	"seven-card":    "Seven Card",
-	"pass-the-poop": "Pass the Poop",
-	"little-l":      "Little L",
-	"acey-deucey":   "Acey Deucey",
-	"texas-hold-em": "Texas Hold'em",
-	"guts":          "Guts",
-}
-
 // listGameTypesInput is the (empty) input for the list_game_types tool.
 type listGameTypesInput struct{}
 
@@ -432,7 +417,12 @@ func (s *server) listGameTypes(_ context.Context, _ *mcp.CallToolRequest, _ oaut
 	names := gamefactory.Names()
 	types := make([]GameTypeDTO, 0, len(names))
 	for _, name := range names {
-		types = append(types, GameTypeDTO{ID: name, DisplayGroup: gameTypeDisplayGroups[name]})
+		factory, err := gamefactory.Get(name)
+		if err != nil {
+			return listGameTypesOutput{}, err
+		}
+
+		types = append(types, GameTypeDTO{ID: name, DisplayGroup: model.GameTypeGroup(factory.DisplayName())})
 	}
 
 	return listGameTypesOutput{GameTypes: types}, nil

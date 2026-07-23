@@ -64,6 +64,18 @@ func Test_factorySlugsMatchPlayerState(t *testing.T) {
 	}
 }
 
+// Test_DisplayName ensures every registered factory reports a non-empty canonical
+// display name that model.GameTypeGroup maps to a display group.
+func Test_DisplayName(t *testing.T) {
+	for slug, factory := range factories {
+		t.Run(slug, func(t *testing.T) {
+			name := factory.DisplayName()
+			assert.NotEmpty(t, name, "factory %q must report a display name", slug)
+			assert.NotEmpty(t, model.GameTypeGroup(name), "factory %q display name %q must derive a display group", slug, name)
+		})
+	}
+}
+
 // Test_Names ensures Names returns exactly the registered slugs, sorted.
 func Test_Names(t *testing.T) {
 	expected := make([]string, 0, len(factories))

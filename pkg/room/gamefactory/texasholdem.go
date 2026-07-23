@@ -10,6 +10,10 @@ import (
 
 type texasHoldEmFactory struct{}
 
+func (t texasHoldEmFactory) DisplayName() string {
+	return "Texas Hold'em"
+}
+
 func (t texasHoldEmFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	p := getPlayersFromPlayerTableList(players)
 	return texasholdem.NewGame(logger, p, texasHoldEmOptions(additionalData))

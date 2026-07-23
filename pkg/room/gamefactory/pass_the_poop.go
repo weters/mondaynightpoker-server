@@ -12,6 +12,10 @@ import (
 
 type passThePoopFactory struct{}
 
+func (p passThePoopFactory) DisplayName() string {
+	return "Pass the Poop"
+}
+
 func (p passThePoopFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts, err := p.getOptions(additionalData)
 	if err != nil {

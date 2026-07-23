@@ -10,6 +10,10 @@ import (
 
 type aceyDeuceyFactory struct{}
 
+func (a aceyDeuceyFactory) DisplayName() string {
+	return "Acey Deucey"
+}
+
 func (a aceyDeuceyFactory) CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error) {
 	return aceydeucey.NewGameV2(logger, getPlayersFromPlayerTableList(players), getAceyDeuceyOptions(additionalData))
 }

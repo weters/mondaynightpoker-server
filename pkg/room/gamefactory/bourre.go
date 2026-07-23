@@ -10,6 +10,10 @@ import (
 
 type bourreFactory struct{}
 
+func (b bourreFactory) DisplayName() string {
+	return "Bourré"
+}
+
 func (b bourreFactory) Details(additionalData playable.AdditionalData) (string, int, error) {
 	opts := getBourreOptions(additionalData)
 	return bourre.NameFromOptions(opts), opts.Ante, nil
