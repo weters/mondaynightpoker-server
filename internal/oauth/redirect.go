@@ -1,6 +1,10 @@
 package oauth
 
-import "net/url"
+import (
+	"net"
+	"net/url"
+	"strconv"
+)
 
 // URI scheme constants for redirect URI validation.
 const (
@@ -8,9 +12,36 @@ const (
 	schemeHTTPS = "https"
 )
 
+// Loopback hosts permitted by OAuth 2.1 section 8.4.2.
+const (
+	hostIPv4Loopback = "127.0.0.1"
+	hostIPv6Loopback = "::1"
+	hostLocalhost    = "localhost"
+)
+
+// maxPort is the highest valid TCP port.
+const maxPort = 65535
+
+// loopbackHostLiteral maps an OAuth 2.1 loopback hostname onto its own constant. Returning
+// a literal rather than the argument keeps request-controlled text out of any URI rebuilt
+// from the result.
+func loopbackHostLiteral(hostname string) (string, bool) {
+	switch hostname {
+	case hostIPv4Loopback:
+		return hostIPv4Loopback, true
+	case hostIPv6Loopback:
+		return hostIPv6Loopback, true
+	case hostLocalhost:
+		return hostLocalhost, true
+	}
+
+	return "", false
+}
+
 // isLoopbackHost reports whether host is an OAuth 2.1 loopback host.
 func isLoopbackHost(host string) bool {
-	return host == "127.0.0.1" || host == "localhost" || host == "::1"
+	_, ok := loopbackHostLiteral(host)
+	return ok
 }
 
 // isValidRegistrationURI reports whether raw is an acceptable redirect URI for dynamic
@@ -31,42 +62,83 @@ func isValidRegistrationURI(raw string) bool {
 	}
 }
 
-// loopbackMatch reports whether provided matches a registered loopback redirect URI,
-// ignoring the port per OAuth 2.1 section 8.4.2.
-func loopbackMatch(registered, provided string) bool {
+// canonicalPort re-renders a port from its parsed numeric form, rejecting anything that is
+// not a valid TCP port. An empty port stays empty, meaning the scheme default.
+func canonicalPort(port string) (string, bool) {
+	if port == "" {
+		return "", true
+	}
+
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > maxPort {
+		return "", false
+	}
+
+	return strconv.Itoa(n), true
+}
+
+// loopbackRedirect reports whether provided matches a registered loopback redirect URI,
+// ignoring the port per OAuth 2.1 section 8.4.2, and returns the URI to redirect to. The
+// result is rebuilt from the registered entry plus the request's (revalidated) loopback
+// host and port, so the caller never echoes the raw request value back to the browser.
+func loopbackRedirect(registered, provided string) (string, bool) {
 	r, err := url.Parse(registered)
 	if err != nil {
-		return false
+		return "", false
 	}
 
 	p, err := url.Parse(provided)
 	if err != nil {
-		return false
+		return "", false
 	}
 
 	if r.Scheme != schemeHTTP || p.Scheme != schemeHTTP {
-		return false
+		return "", false
 	}
 
-	if !isLoopbackHost(r.Hostname()) || !isLoopbackHost(p.Hostname()) {
-		return false
+	if !isLoopbackHost(r.Hostname()) || r.Path != p.Path {
+		return "", false
 	}
 
-	return r.Path == p.Path
+	host, ok := loopbackHostLiteral(p.Hostname())
+	if !ok {
+		return "", false
+	}
+
+	port, ok := canonicalPort(p.Port())
+	if !ok {
+		return "", false
+	}
+
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if host == hostIPv6Loopback {
+		host = "[" + host + "]"
+	}
+
+	u := url.URL{Scheme: schemeHTTP, Host: host, Path: r.Path, RawQuery: r.RawQuery}
+
+	return u.String(), true
 }
 
-// redirectURIMatches reports whether provided exactly matches one of the registered
-// redirect URIs, or matches a registered loopback URI on any port.
-func redirectURIMatches(registered []string, provided string) bool {
+// resolveRedirectURI validates provided against the client's registered redirect URIs and
+// returns the URI the browser should be sent to. The returned value is always derived from
+// the registered entry (a loopback client additionally contributes its port), never from
+// the request, so it is safe to use as a redirect target.
+func resolveRedirectURI(registered []string, provided string) (string, bool) {
+	if provided == "" {
+		return "", false
+	}
+
 	for _, reg := range registered {
 		if reg == provided {
-			return true
+			return reg, true
 		}
 
-		if loopbackMatch(reg, provided) {
-			return true
+		if uri, ok := loopbackRedirect(reg, provided); ok {
+			return uri, true
 		}
 	}
 
-	return false
+	return "", false
 }

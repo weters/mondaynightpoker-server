@@ -799,3 +799,62 @@ func TestAuthorize_LoopbackAnyPort(t *testing.T) {
 	assert.Equal(t, "127.0.0.1:54321", loc.Host)
 	assert.NotEmpty(t, loc.Query().Get("code"))
 }
+
+func TestResolveRedirectURI(t *testing.T) {
+	registered := []string{"https://app.example.com/cb?v=1", "http://127.0.0.1:8080/callback"}
+
+	cases := map[string]struct {
+		provided string
+		want     string
+		ok       bool
+	}{
+		"exact https":        {"https://app.example.com/cb?v=1", "https://app.example.com/cb?v=1", true},
+		"loopback any port":  {"http://127.0.0.1:54321/callback", "http://127.0.0.1:54321/callback", true},
+		"loopback localhost": {"http://localhost:54321/callback", "http://localhost:54321/callback", true},
+		"loopback ipv6":      {"http://[::1]:54321/callback", "http://[::1]:54321/callback", true},
+		"loopback no port":   {"http://127.0.0.1/callback", "http://127.0.0.1/callback", true},
+		// the registered entry wins: nothing from the request survives beyond host and port
+		"query dropped":     {"http://127.0.0.1:9/callback?next=https://evil.example.com", "http://127.0.0.1:9/callback", true},
+		"empty":             {"", "", false},
+		"unregistered host": {"https://attacker.example.com/cb", "", false},
+		"scheme swapped":    {"http://app.example.com/cb?v=1", "", false},
+		"path mismatch":     {"http://127.0.0.1:8080/other", "", false},
+		"non-loopback http": {"http://evil.example.com:8080/callback", "", false},
+		"userinfo host":     {"http://127.0.0.1@evil.example.com/callback", "", false},
+		"port not numeric":  {"http://127.0.0.1:evil/callback", "", false},
+		"port out of range": {"http://127.0.0.1:70000/callback", "", false},
+		"missing query":     {"https://app.example.com/cb", "", false},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, ok := resolveRedirectURI(registered, tc.provided)
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestAuthorizeGet_ErrorRedirectUsesRegisteredURI(t *testing.T) {
+	s := newTestServer(t, nil)
+	client := seedClient(t, "http://127.0.0.1:8080/callback")
+
+	// a protocol error bounces back, but only to the rebuilt loopback URI
+	q := url.Values{}
+	q.Set("client_id", client.ClientID)
+	q.Set("redirect_uri", "http://localhost:54321/callback?next=https://evil.example.com")
+	q.Set("response_type", "token")
+	q.Set("state", "st")
+	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+q.Encode(), nil)
+	rr := httptest.NewRecorder()
+	s.Authorize()(rr, req)
+
+	require.Equal(t, http.StatusFound, rr.Code)
+	loc, err := url.Parse(rr.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:54321", loc.Host)
+	assert.Equal(t, "/callback", loc.Path)
+	assert.Empty(t, loc.Query().Get("next"))
+	assert.Equal(t, "unsupported_response_type", loc.Query().Get("error"))
+	assert.Equal(t, "st", loc.Query().Get("state"))
+}

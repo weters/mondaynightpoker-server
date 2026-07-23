@@ -28,7 +28,9 @@ func (s *Server) Authorize() http.HandlerFunc {
 			return
 		}
 
-		if redirectURI == "" || !redirectURIMatches(client.RedirectURIs, redirectURI) {
+		// safeRedirect is rebuilt from the registered URI, so it is never request-controlled.
+		safeRedirect, ok := resolveRedirectURI(client.RedirectURIs, redirectURI)
+		if !ok {
 			s.renderErrorPage(w, http.StatusBadRequest, "The redirect URI is not registered for this client.")
 			return
 		}
@@ -36,7 +38,7 @@ func (s *Server) Authorize() http.HandlerFunc {
 		// From here the redirect_uri is trusted, so protocol errors bounce back to the client.
 		state := q.Get("state")
 		if errCode := validateAuthParams(q.Get); errCode != "" {
-			s.redirectError(w, r, redirectURI, errCode, state)
+			s.redirectError(w, r, safeRedirect, errCode, state)
 			return
 		}
 
@@ -72,14 +74,15 @@ func (s *Server) AuthorizePost() http.HandlerFunc {
 			return
 		}
 
-		if redirectURI == "" || !redirectURIMatches(client.RedirectURIs, redirectURI) {
+		safeRedirect, ok := resolveRedirectURI(client.RedirectURIs, redirectURI)
+		if !ok {
 			s.renderErrorPage(w, http.StatusBadRequest, "The redirect URI is not registered for this client.")
 			return
 		}
 
 		state := r.FormValue("state")
 		if errCode := validateAuthParams(r.FormValue); errCode != "" {
-			s.redirectError(w, r, redirectURI, errCode, state)
+			s.redirectError(w, r, safeRedirect, errCode, state)
 			return
 		}
 
@@ -117,7 +120,7 @@ func (s *Server) AuthorizePost() http.HandlerFunc {
 			return
 		}
 
-		s.redirectSuccess(w, r, redirectURI, rawCode, state)
+		s.redirectSuccess(w, r, safeRedirect, rawCode, state)
 	}
 }
 
@@ -155,7 +158,8 @@ func loginPageDataFrom(get func(string) string, nonce, errMsg string) loginPageD
 	}
 }
 
-// redirectError bounces an OAuth error back to the client's redirect URI.
+// redirectError bounces an OAuth error back to the client's redirect URI. redirectURI must
+// come from resolveRedirectURI, never straight from the request.
 func (s *Server) redirectError(w http.ResponseWriter, r *http.Request, redirectURI, errCode, state string) {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
@@ -174,6 +178,7 @@ func (s *Server) redirectError(w http.ResponseWriter, r *http.Request, redirectU
 }
 
 // redirectSuccess bounces the issued authorization code back to the client's redirect URI.
+// redirectURI must come from resolveRedirectURI, never straight from the request.
 func (s *Server) redirectSuccess(w http.ResponseWriter, r *http.Request, redirectURI, code, state string) {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
