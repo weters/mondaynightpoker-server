@@ -121,7 +121,9 @@ func (s *server) listPlayers(ctx context.Context, _ *mcp.CallToolRequest, caller
 		return listPlayersOutput{}, err
 	}
 
-	total, err := s.repos.Players.GetPlayersCount(ctx, search)
+	total, hasMore, err := pageTotal(ctx, offset, limit, len(players), func(ctx context.Context) (int64, error) {
+		return s.repos.Players.GetPlayersCount(ctx, search)
+	})
 	if err != nil {
 		return listPlayersOutput{}, err
 	}
@@ -129,7 +131,7 @@ func (s *server) listPlayers(ctx context.Context, _ *mcp.CallToolRequest, caller
 	return listPlayersOutput{
 		Players: fromPlayers(players, caller),
 		Total:   total,
-		HasMore: offset+int64(len(players)) < total,
+		HasMore: hasMore,
 	}, nil
 }
 
@@ -240,33 +242,18 @@ func (s *server) listPlayerTables(ctx context.Context, _ *mcp.CallToolRequest, _
 		return listPlayerTablesOutput{}, err
 	}
 
-	// When no date range is provided, return the unfiltered list of tables.
-	if in.From == nil && in.To == nil {
-		player, err := s.repos.Players.GetPlayerByID(ctx, in.ID)
-		if err != nil {
-			return listPlayerTablesOutput{}, notFound(err, "player")
-		}
-
-		tables, err := s.repos.Players.GetTables(ctx, player, offset, limit)
-		if err != nil {
-			return listPlayerTablesOutput{}, err
-		}
-
-		total, err := s.repos.Players.GetTablesCount(ctx, player)
-		if err != nil {
-			return listPlayerTablesOutput{}, err
-		}
-
-		return listPlayerTablesOutput{
-			Tables:  fromTablesWithBalance(tables),
-			Total:   total,
-			HasMore: offset+int64(len(tables)) < total,
-		}, nil
-	}
-
+	// parseDateRange defaults to an epoch..now range, so the filtered query with the
+	// default bounds returns exactly the unfiltered list; there is no separate
+	// undated code path to keep in sync.
 	from, to, err := parseDateRange(in.From, in.To)
 	if err != nil {
 		return listPlayerTablesOutput{}, err
+	}
+
+	// Look the player up first so an unknown id is "player not found" rather than an
+	// indistinguishable empty list.
+	if _, err := s.repos.Players.GetPlayerByID(ctx, in.ID); err != nil {
+		return listPlayerTablesOutput{}, notFound(err, "player")
 	}
 
 	tables, err := s.repos.Players.GetPlayerTablesFiltered(ctx, in.ID, from, to, offset, limit)
@@ -274,7 +261,9 @@ func (s *server) listPlayerTables(ctx context.Context, _ *mcp.CallToolRequest, _
 		return listPlayerTablesOutput{}, err
 	}
 
-	total, err := s.repos.Players.GetPlayerTablesFilteredCount(ctx, in.ID, from, to)
+	total, hasMore, err := pageTotal(ctx, offset, limit, len(tables), func(ctx context.Context) (int64, error) {
+		return s.repos.Players.GetPlayerTablesFilteredCount(ctx, in.ID, from, to)
+	})
 	if err != nil {
 		return listPlayerTablesOutput{}, err
 	}
@@ -282,7 +271,7 @@ func (s *server) listPlayerTables(ctx context.Context, _ *mcp.CallToolRequest, _
 	return listPlayerTablesOutput{
 		Tables:  fromTablesWithBalance(tables),
 		Total:   total,
-		HasMore: offset+int64(len(tables)) < total,
+		HasMore: hasMore,
 	}, nil
 }
 
@@ -307,45 +296,26 @@ func (s *server) listTables(ctx context.Context, _ *mcp.CallToolRequest, caller 
 		return listTablesOutput{}, err
 	}
 
+	// parseDateRange defaults to an epoch..now range, so the filtered queries with the
+	// default bounds return exactly the unfiltered lists; there is no separate undated
+	// code path to keep in sync.
 	from, to, err := parseDateRange(in.From, in.To)
 	if err != nil {
 		return listTablesOutput{}, err
 	}
-	hasDateFilter := in.From != nil || in.To != nil
 
 	// Non-admin callers only see the tables they belong to, without creator emails. This is
 	// data-scoping, not access control: the tool is open to any authenticated player, but
 	// the result set is narrowed by the caller's membership.
 	if !caller.IsSiteAdmin {
-		if hasDateFilter {
-			tables, err := s.repos.Players.GetPlayerTablesFiltered(ctx, caller.PlayerID, from, to, offset, limit)
-			if err != nil {
-				return listTablesOutput{}, err
-			}
-
-			total, err := s.repos.Players.GetPlayerTablesFilteredCount(ctx, caller.PlayerID, from, to)
-			if err != nil {
-				return listTablesOutput{}, err
-			}
-
-			return listTablesOutput{
-				Tables:  fromTablesWithBalanceAsEmail(tables),
-				Total:   total,
-				HasMore: offset+int64(len(tables)) < total,
-			}, nil
-		}
-
-		player, err := s.repos.Players.GetPlayerByID(ctx, caller.PlayerID)
+		tables, err := s.repos.Players.GetPlayerTablesFiltered(ctx, caller.PlayerID, from, to, offset, limit)
 		if err != nil {
 			return listTablesOutput{}, err
 		}
 
-		tables, err := s.repos.Players.GetTables(ctx, player, offset, limit)
-		if err != nil {
-			return listTablesOutput{}, err
-		}
-
-		total, err := s.repos.Players.GetTablesCount(ctx, player)
+		total, hasMore, err := pageTotal(ctx, offset, limit, len(tables), func(ctx context.Context) (int64, error) {
+			return s.repos.Players.GetPlayerTablesFilteredCount(ctx, caller.PlayerID, from, to)
+		})
 		if err != nil {
 			return listTablesOutput{}, err
 		}
@@ -353,21 +323,18 @@ func (s *server) listTables(ctx context.Context, _ *mcp.CallToolRequest, caller 
 		return listTablesOutput{
 			Tables:  fromTablesWithBalanceAsEmail(tables),
 			Total:   total,
-			HasMore: offset+int64(len(tables)) < total,
+			HasMore: hasMore,
 		}, nil
 	}
 
-	var tables []*model.TableWithPlayerEmail
-	if hasDateFilter {
-		tables, err = s.repos.Tables.GetActiveTablesFiltered(ctx, from, to, offset, limit)
-	} else {
-		tables, err = s.repos.Tables.GetActiveTables(ctx, offset, limit)
-	}
+	tables, err := s.repos.Tables.GetActiveTablesFiltered(ctx, from, to, offset, limit)
 	if err != nil {
 		return listTablesOutput{}, err
 	}
 
-	total, err := s.repos.Tables.GetActiveTablesCount(ctx, from, to)
+	total, hasMore, err := pageTotal(ctx, offset, limit, len(tables), func(ctx context.Context) (int64, error) {
+		return s.repos.Tables.GetActiveTablesCount(ctx, from, to)
+	})
 	if err != nil {
 		return listTablesOutput{}, err
 	}
@@ -375,7 +342,7 @@ func (s *server) listTables(ctx context.Context, _ *mcp.CallToolRequest, caller 
 	return listTablesOutput{
 		Tables:  fromTablesWithEmail(tables, caller),
 		Total:   total,
-		HasMore: offset+int64(len(tables)) < total,
+		HasMore: hasMore,
 	}, nil
 }
 
@@ -501,7 +468,9 @@ func (s *server) listTableGames(ctx context.Context, _ *mcp.CallToolRequest, _ o
 		return listTableGamesOutput{}, err
 	}
 
-	total, err := s.repos.Games.GetGamesCountByTable(ctx, table)
+	total, hasMore, err := pageTotal(ctx, offset, limit, len(games), func(ctx context.Context) (int64, error) {
+		return s.repos.Tables.GetGamesCount(ctx, table)
+	})
 	if err != nil {
 		return listTableGamesOutput{}, err
 	}
@@ -524,7 +493,7 @@ func (s *server) listTableGames(ctx context.Context, _ *mcp.CallToolRequest, _ o
 	return listTableGamesOutput{
 		Games:   summaries,
 		Total:   total,
-		HasMore: offset+int64(len(games)) < total,
+		HasMore: hasMore,
 	}, nil
 }
 
@@ -547,7 +516,15 @@ func (s *server) getGame(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.Ca
 		return GameDTO{}, errNotFound("game")
 	}
 
-	game, err := s.repos.Games.GetGameByID(ctx, in.ID)
+	// Only fetch the (potentially large) jsonb log when the caller asked for it.
+	includeLog := in.IncludeLog != nil && *in.IncludeLog
+
+	var game *model.Game
+	if includeLog {
+		game, err = s.repos.Games.GetGameByID(ctx, in.ID)
+	} else {
+		game, err = s.repos.Games.GetGameByIDNoData(ctx, in.ID)
+	}
 	if err != nil {
 		// A missing game and a game belonging to another table are reported identically,
 		// so a caller cannot probe which part of the request was wrong (or learn that a
@@ -565,7 +542,7 @@ func (s *server) getGame(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.Ca
 	}
 
 	dto := GameDTO{GameSummaryDTO: fromGameSummary(game, adjustments[game.ID])}
-	if in.IncludeLog != nil && *in.IncludeLog {
+	if includeLog {
 		dto.Log = game.Data()
 	}
 
@@ -636,7 +613,9 @@ func (s *server) listPlayerTransactions(ctx context.Context, _ *mcp.CallToolRequ
 		return listPlayerTransactionsOutput{}, err
 	}
 
-	total, err := s.repos.Players.GetPlayerTransactionsCount(ctx, in.ID, in.TableUUID)
+	total, hasMore, err := pageTotal(ctx, offset, limit, len(transactions), func(ctx context.Context) (int64, error) {
+		return s.repos.Players.GetPlayerTransactionsCount(ctx, in.ID, in.TableUUID)
+	})
 	if err != nil {
 		return listPlayerTransactionsOutput{}, err
 	}
@@ -644,7 +623,7 @@ func (s *server) listPlayerTransactions(ctx context.Context, _ *mcp.CallToolRequ
 	return listPlayerTransactionsOutput{
 		Transactions: fromTransactions(transactions),
 		Total:        total,
-		HasMore:      offset+int64(len(transactions)) < total,
+		HasMore:      hasMore,
 	}, nil
 }
 

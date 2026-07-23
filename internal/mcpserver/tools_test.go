@@ -1,6 +1,8 @@
 package mcpserver
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strconv"
 	"testing"
@@ -962,4 +964,51 @@ func TestListPlayers_Pagination(t *testing.T) {
 	if out.Total > 1 {
 		a.True(out.HasMore)
 	}
+}
+
+// -------------------- pageTotal (shared pagination metadata) --------------------
+
+// TestPageTotal exercises the short-page shortcut and the count fallback directly,
+// since every list tool's pagination metadata flows through it.
+func TestPageTotal(t *testing.T) {
+	a := assert.New(t)
+
+	countCalls := 0
+	count := func(context.Context) (int64, error) {
+		countCalls++
+		return 10, nil
+	}
+
+	// a short page proves the total without a count query
+	total, hasMore, err := pageTotal(cbg, 4, 100, 3, count)
+	a.NoError(err)
+	a.Equal(int64(7), total)
+	a.False(hasMore)
+	a.Zero(countCalls)
+
+	// an empty first page proves an empty result set
+	total, hasMore, err = pageTotal(cbg, 0, 100, 0, count)
+	a.NoError(err)
+	a.Zero(total)
+	a.False(hasMore)
+	a.Zero(countCalls)
+
+	// a full page cannot prove the total; the count runs
+	total, hasMore, err = pageTotal(cbg, 0, 5, 5, count)
+	a.NoError(err)
+	a.Equal(int64(10), total)
+	a.True(hasMore)
+	a.Equal(1, countCalls)
+
+	// an empty page at a non-zero offset proves nothing; the count runs
+	total, hasMore, err = pageTotal(cbg, 50, 5, 0, count)
+	a.NoError(err)
+	a.Equal(int64(10), total)
+	a.False(hasMore)
+	a.Equal(2, countCalls)
+
+	// count errors propagate
+	boom := errors.New("boom")
+	_, _, err = pageTotal(cbg, 0, 5, 5, func(context.Context) (int64, error) { return 0, boom })
+	a.ErrorIs(err, boom)
 }

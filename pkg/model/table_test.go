@@ -44,34 +44,6 @@ func TestGetTableByUUID(t *testing.T) {
 	assert.Equal(t, tbl.Name, tbl2.Name)
 }
 
-func TestGetActiveTables(t *testing.T) {
-	a := assert.New(t)
-
-	// two tables under fresh, unique-email players so they can be picked back out
-	p1, _ := playerAndTable()
-	p2, deleted := playerAndTable()
-
-	deleted.Deleted = true
-	a.NoError(testRepos.Tables.Save(cbg, deleted))
-
-	all, err := testRepos.Tables.GetActiveTables(cbg, 0, 1000)
-	a.NoError(err)
-
-	var sawLive, sawDeleted bool
-	for _, tbl := range all {
-		a.False(tbl.Deleted)
-		switch tbl.Email {
-		case p1.Email:
-			sawLive = true
-		case p2.Email:
-			sawDeleted = true
-		}
-	}
-
-	a.True(sawLive, "expected the live table to be listed")
-	a.False(sawDeleted, "did not expect the deleted table to be listed")
-}
-
 func playerAndTable() (*Player, *Table) {
 	p := player()
 	t, err := testRepos.Tables.CreateTable(cbg, p, "test table")

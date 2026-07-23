@@ -229,26 +229,10 @@ LIMIT $2`
 	return scanTablesWithPlayerEmail(r.db.QueryContext(ctx, query, offset, limit))
 }
 
-// GetActiveTables returns a paginated list of non-deleted tables. The deleted
-// filter is applied in SQL so pagination stays consistent (offset/limit are not
-// distorted by a post-fetch filter).
-func (r *TableRepo) GetActiveTables(ctx context.Context, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
-	const query = `
-SELECT ` + tableColumns + `, players.email
-FROM tables
-INNER JOIN players ON tables.player_id = players.id
-WHERE NOT tables.deleted
-ORDER BY tables.created DESC, tables.uuid DESC
-OFFSET $1
-LIMIT $2`
-
-	return scanTablesWithPlayerEmail(r.db.QueryContext(ctx, query, offset, limit))
-}
-
 // scanTablesWithPlayerEmail collects the rows from a tables-with-email query
 // (the tableColumns plus players.email) into TableWithPlayerEmail records. It
-// takes the raw QueryContext result so the deleted/active variants differ only
-// in their SQL.
+// takes the raw QueryContext result so the all-tables/active variants differ
+// only in their SQL.
 func scanTablesWithPlayerEmail(rows *sql.Rows, err error) ([]*TableWithPlayerEmail, error) {
 	if err != nil {
 		return nil, err
@@ -273,9 +257,9 @@ func scanTablesWithPlayerEmail(rows *sql.Rows, err error) ([]*TableWithPlayerEma
 }
 
 // GetActiveTablesFiltered returns a paginated list of non-deleted tables created
-// within the given range. It is GetActiveTables with a date filter on
-// tables.created (a table is one night by convention). The deleted filter stays in
-// SQL so pagination is not distorted by a post-fetch filter.
+// within the given range (a table is one night by convention, so the date filter
+// is on tables.created; pass a permissive range for "all tables"). The deleted
+// filter stays in SQL so pagination is not distorted by a post-fetch filter.
 func (r *TableRepo) GetActiveTablesFiltered(ctx context.Context, from, to time.Time, offset int64, limit int) ([]*TableWithPlayerEmail, error) {
 	const query = `
 SELECT ` + tableColumns + `, players.email

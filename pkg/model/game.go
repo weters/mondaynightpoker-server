@@ -170,6 +170,17 @@ WHERE id = $1`
 	return gameByRow(row)
 }
 
+// GetGameByIDNoData returns a single game by its id without the jsonb data column,
+// for callers that don't need the (potentially large) game log.
+func (r *GameRepo) GetGameByIDNoData(ctx context.Context, id int64) (*Game, error) {
+	const query = `
+SELECT ` + gamesColumnsNoData + `
+FROM games
+WHERE id = $1`
+
+	return gameByRowNoData(r.db.QueryRowContext(ctx, query, id))
+}
+
 // ListGamesByTable returns a paginated list of games at the table, ordered newest
 // first. The jsonb data column is omitted because game logs can be large; callers
 // that need a game's log fetch it individually via GetGameByID.
@@ -199,21 +210,6 @@ LIMIT $3`
 	}
 
 	return games, nil
-}
-
-// GetGamesCountByTable returns the total number of games at the table for pagination.
-func (r *GameRepo) GetGamesCountByTable(ctx context.Context, t *Table) (int64, error) {
-	const query = `
-SELECT COUNT(id)
-FROM games
-WHERE table_uuid = $1`
-
-	var count int64
-	if err := r.db.QueryRowContext(ctx, query, t.UUID).Scan(&count); err != nil {
-		return 0, err
-	}
-
-	return count, nil
 }
 
 // GameAdjustment is a single player's balance adjustment within a game.

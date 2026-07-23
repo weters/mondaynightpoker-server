@@ -104,9 +104,15 @@ func TestGameRepo_ListGamesByTable(t *testing.T) {
 	a.Equal(1, len(page))
 	a.Equal(g2.ID, page[0].ID)
 
-	count, err := testRepos.Games.GetGamesCountByTable(cbg, tbl)
+	count, err := testRepos.Tables.GetGamesCount(cbg, tbl)
 	a.NoError(err)
 	a.Equal(int64(3), count)
+
+	// the no-data single-game fetch matches the list behavior: no log payload
+	noData, err := testRepos.Games.GetGameByIDNoData(cbg, g1.ID)
+	a.NoError(err)
+	a.Equal(g1.ID, noData.ID)
+	a.Nil(noData.Data())
 }
 
 func TestGameRepo_GetGameAdjustments(t *testing.T) {

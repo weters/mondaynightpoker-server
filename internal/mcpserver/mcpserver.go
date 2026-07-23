@@ -89,6 +89,24 @@ func parsePagination(start *int64, rows *int) (offset int64, limit int, err erro
 	return offset, limit, nil
 }
 
+// pageTotal resolves a paginated result's total row count and hasMore flag. A
+// short page already proves the total (offset + rows returned), so the count
+// query is skipped; a full page — or an empty page at a non-zero offset, which
+// proves nothing about the total — falls back to the count callback. Every list
+// tool computes its pagination metadata here so the arithmetic lives in one place.
+func pageTotal(ctx context.Context, offset int64, limit, returned int, count func(context.Context) (int64, error)) (total int64, hasMore bool, err error) {
+	if returned < limit && (returned > 0 || offset == 0) {
+		return offset + int64(returned), false, nil
+	}
+
+	total, err = count(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+
+	return total, offset+int64(returned) < total, nil
+}
+
 // parseDateRange resolves optional RFC3339 from/to inputs into a time range.
 // When omitted, from defaults to the Unix epoch and to defaults to now (with a
 // small margin, mirroring internal/mux). All times are normalized to UTC.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"mondaynightpoker-server/internal/util"
 	"mondaynightpoker-server/pkg/db"
 	"mondaynightpoker-server/pkg/mnptoken"
@@ -332,42 +333,36 @@ func getPlayers(rows *sql.Rows, err error) ([]*Player, error) {
 	return players, nil
 }
 
-// GetPlayersWithSearch will return a list of players match the specified search string
-func (r *PlayerRepo) GetPlayersWithSearch(ctx context.Context, search string, offset int64, limit int) ([]*Player, error) {
+// playersSearchFilter returns the WHERE clause (or "") and its args for a player
+// search. It is the single source of the search semantics, shared by
+// GetPlayersWithSearch and GetPlayersCount so the list and its pagination total
+// cannot drift. An empty search matches everyone; a positive numeric search
+// matches a single player id; anything else prefix-matches display name or email.
+func playersSearchFilter(search string) (string, []interface{}) {
 	if search == "" {
-		return r.GetPlayers(ctx, offset, limit)
+		return "", nil
 	}
 
 	if searchInt, _ := strconv.ParseInt(search, 10, 64); searchInt > 0 {
-		const query = `
-SELECT ` + playerColumns + `
-FROM players
-WHERE id = $1`
-
-		return getPlayers(r.db.QueryContext(ctx, query, searchInt))
+		return "WHERE id = $1", []interface{}{searchInt}
 	}
 
-	const query = `
-SELECT ` + playerColumns + `
-FROM players
-WHERE display_name LIKE $1 || '%' OR email LIKE $1 || '%'
-ORDER BY id ASC
-OFFSET $2
-LIMIT $3`
-
-	return getPlayers(r.db.QueryContext(ctx, query, search, offset, limit))
+	return "WHERE display_name LIKE $1 || '%' OR email LIKE $1 || '%'", []interface{}{search}
 }
 
-// GetPlayers returns a list of players
-func (r *PlayerRepo) GetPlayers(ctx context.Context, offset int64, limit int) ([]*Player, error) {
-	const query = `
-SELECT ` + playerColumns + `
+// GetPlayersWithSearch will return a list of players match the specified search string
+func (r *PlayerRepo) GetPlayersWithSearch(ctx context.Context, search string, offset int64, limit int) ([]*Player, error) {
+	where, args := playersSearchFilter(search)
+	query := fmt.Sprintf(`
+SELECT `+playerColumns+`
 FROM players
+%s
 ORDER BY id ASC
-OFFSET $1
-LIMIT $2`
+OFFSET $%d
+LIMIT $%d`, where, len(args)+1, len(args)+2)
 
-	return getPlayers(r.db.QueryContext(ctx, query, offset, limit))
+	args = append(args, offset, limit)
+	return getPlayers(r.db.QueryContext(ctx, query, args...))
 }
 
 // CreatePasswordResetRequest generates a new password request and returns the token
@@ -739,54 +734,13 @@ WHERE NOT tables.deleted
 }
 
 // GetPlayersCount returns the total number of players matching the search string,
-// mirroring the filter used by GetPlayersWithSearch, for pagination totals. A
-// numeric search matches a single player id (count of 0 or 1); a non-numeric
-// search prefix-matches display name or email; an empty search counts all players.
+// for pagination totals. It shares playersSearchFilter with GetPlayersWithSearch,
+// so the count always agrees with the list.
 func (r *PlayerRepo) GetPlayersCount(ctx context.Context, search string) (int64, error) {
-	var count int64
-
-	if search == "" {
-		const query = `SELECT COUNT(*) FROM players`
-		if err := r.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
-			return 0, err
-		}
-
-		return count, nil
-	}
-
-	if searchInt, _ := strconv.ParseInt(search, 10, 64); searchInt > 0 {
-		const query = `SELECT COUNT(*) FROM players WHERE id = $1`
-		if err := r.db.QueryRowContext(ctx, query, searchInt).Scan(&count); err != nil {
-			return 0, err
-		}
-
-		return count, nil
-	}
-
-	const query = `
-SELECT COUNT(*)
-FROM players
-WHERE display_name LIKE $1 || '%' OR email LIKE $1 || '%'`
-
-	if err := r.db.QueryRowContext(ctx, query, search).Scan(&count); err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-// GetTablesCount returns the total number of non-deleted tables the player belongs
-// to, mirroring the filter used by GetTables, for pagination totals.
-func (r *PlayerRepo) GetTablesCount(ctx context.Context, p *Player) (int64, error) {
-	const query = `
-SELECT COUNT(*)
-FROM tables
-INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
-WHERE NOT tables.deleted
-  AND players_tables.player_id = $1`
+	where, args := playersSearchFilter(search)
 
 	var count int64
-	if err := r.db.QueryRowContext(ctx, query, p.ID).Scan(&count); err != nil {
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM players "+where, args...).Scan(&count); err != nil {
 		return 0, err
 	}
 

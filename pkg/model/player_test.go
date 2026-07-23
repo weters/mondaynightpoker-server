@@ -200,15 +200,11 @@ func TestGetPlayers(t *testing.T) {
 	_ = player()
 	_ = player()
 
-	players, err := testRepos.Players.GetPlayers(cbg, 0, 4)
+	players, err := testRepos.Players.GetPlayersWithSearch(cbg, "", 0, 4)
 	assert.NoError(t, err)
 	assert.Equal(t, len(players), 4)
 
-	players, err = testRepos.Players.GetPlayersWithSearch(cbg, "", 0, 4)
-	assert.NoError(t, err)
-	assert.Equal(t, len(players), 4)
-
-	players, err = testRepos.Players.GetPlayers(cbg, 1, 1)
+	players, err = testRepos.Players.GetPlayersWithSearch(cbg, "", 1, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, len(players), 1)
 
@@ -644,29 +640,6 @@ func TestGetPlayersCount(t *testing.T) {
 	count, err = testRepos.Players.GetPlayersCount(cbg, "")
 	a.NoError(err)
 	a.Greater(count, int64(0))
-}
-
-func TestGetTablesCount(t *testing.T) {
-	a := assert.New(t)
-
-	p := player()
-	p.IsSiteAdmin = true // to rapidly create tables
-	_, err := testRepos.Tables.CreateTable(cbg, p, "Count Table 1")
-	require.NoError(t, err)
-	t2, err := testRepos.Tables.CreateTable(cbg, p, "Count Table 2")
-	require.NoError(t, err)
-
-	count, err := testRepos.Players.GetTablesCount(cbg, p)
-	a.NoError(err)
-	a.Equal(int64(2), count)
-
-	// soft-deleting a table removes it from the count
-	t2.Deleted = true
-	require.NoError(t, testRepos.Tables.Save(cbg, t2))
-
-	count, err = testRepos.Players.GetTablesCount(cbg, p)
-	a.NoError(err)
-	a.Equal(int64(1), count)
 }
 
 func TestGetPlayerTablesFilteredCount(t *testing.T) {
