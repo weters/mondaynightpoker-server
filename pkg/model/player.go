@@ -544,7 +544,19 @@ type PlayerProfile struct {
 	GraphData []*GraphPoint       `json:"graphData"`
 }
 
-// GetPlayerStats returns aggregate stats for a player within the given time range
+// GetPlayerStats returns aggregate stats for a player within the given time range.
+//
+// Every query joins tables and filters on NOT t.deleted. A soft-deleted table is
+// invisible across the whole read surface, and that includes aggregates like these
+// which never return a table record of their own: without the join, deleted-table
+// money still reaches the caller as a scalar in TotalWinnings.
+//
+// The date range is applied to tables.created, not to the transaction or membership
+// timestamps. A table is used for a single day by convention, so normalizing every
+// figure to the table's creation date puts stats, tables, and graph data on one axis;
+// filtering each by its own timestamp made the same from/to mean a different thing
+// per field, and the parts of a profile response could not be reconciled with
+// each other.
 func (r *PlayerRepo) GetPlayerStats(ctx context.Context, playerID int64, from, to time.Time) (*PlayerStats, error) {
 	stats := &PlayerStats{
 		WinningsByGame:   make(map[string]int),
@@ -558,7 +570,7 @@ FROM players_tables pt
 INNER JOIN tables t ON pt.table_uuid = t.uuid
 WHERE pt.player_id = $1
   AND NOT t.deleted
-  AND pt.created >= $2 AND pt.created <= $3`
+  AND t.created >= $2 AND t.created <= $3`
 
 	if err := r.db.QueryRowContext(ctx, tablesQuery, playerID, from, to).Scan(&stats.TablesJoined); err != nil {
 		return nil, err
@@ -569,9 +581,11 @@ WHERE pt.player_id = $1
 SELECT COUNT(DISTINCT ptt.game_id)
 FROM players_tables_transactions ptt
 INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+INNER JOIN tables t ON pt.table_uuid = t.uuid
 WHERE pt.player_id = $1
+  AND NOT t.deleted
   AND ptt.game_id IS NOT NULL
-  AND ptt.created >= $2 AND ptt.created <= $3`
+  AND t.created >= $2 AND t.created <= $3`
 
 	if err := r.db.QueryRowContext(ctx, gamesQuery, playerID, from, to).Scan(&stats.GamesPlayed); err != nil {
 		return nil, err
@@ -582,9 +596,11 @@ WHERE pt.player_id = $1
 SELECT COALESCE(SUM(ptt.adjustment), 0)
 FROM players_tables_transactions ptt
 INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+INNER JOIN tables t ON pt.table_uuid = t.uuid
 WHERE pt.player_id = $1
+  AND NOT t.deleted
   AND ptt.game_id IS NOT NULL
-  AND ptt.created >= $2 AND ptt.created <= $3`
+  AND t.created >= $2 AND t.created <= $3`
 
 	if err := r.db.QueryRowContext(ctx, winningsQuery, playerID, from, to).Scan(&stats.TotalWinnings); err != nil {
 		return nil, err
@@ -596,8 +612,10 @@ SELECT g.game_type, COALESCE(SUM(ptt.adjustment), 0) as total, COUNT(DISTINCT g.
 FROM players_tables_transactions ptt
 INNER JOIN games g ON ptt.game_id = g.id
 INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
+INNER JOIN tables t ON pt.table_uuid = t.uuid
 WHERE pt.player_id = $1
-  AND ptt.created >= $2 AND ptt.created <= $3
+  AND NOT t.deleted
+  AND t.created >= $2 AND t.created <= $3
 GROUP BY g.game_type`
 
 	rows, err := r.db.QueryContext(ctx, byGameQuery, playerID, from, to)
@@ -672,7 +690,7 @@ FROM tables
 INNER JOIN players_tables ON tables.uuid = players_tables.table_uuid
 WHERE NOT tables.deleted
   AND players_tables.player_id = $1
-  AND players_tables.created >= $2 AND players_tables.created <= $3
+  AND tables.created >= $2 AND tables.created <= $3
 ORDER BY players_tables.id DESC
 OFFSET $4
 LIMIT $5`
@@ -708,7 +726,7 @@ FROM players_tables
 INNER JOIN tables ON tables.uuid = players_tables.table_uuid
 WHERE NOT tables.deleted
   AND players_tables.player_id = $1
-  AND players_tables.created >= $2 AND players_tables.created <= $3
+  AND tables.created >= $2 AND tables.created <= $3
 ORDER BY players_tables.id ASC`
 
 	rows, err := r.db.QueryContext(ctx, query, playerID, from, to)

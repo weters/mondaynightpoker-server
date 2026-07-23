@@ -406,6 +406,89 @@ func TestGetPlayerStats(t *testing.T) {
 	a.Equal(0, len(stats.GamesCountByType))
 }
 
+// TestGetPlayerStats_ExcludesDeletedTables pins the invariant that a soft-deleted
+// table contributes nothing to any player stat. The scalar aggregates are the easy
+// ones to miss: they return no table record, so a deleted table leaks through them
+// as a number rather than as a visible row.
+func TestGetPlayerStats_ExcludesDeletedTables(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
+	live, _ := testRepos.Tables.CreateTable(cbg, p, "Stats Live Table")
+	gone, _ := testRepos.Tables.CreateTable(cbg, p, "Stats Deleted Table")
+
+	liveGame, _ := testRepos.Games.CreateGame(cbg, live, "Bourré")
+	_ = testRepos.Games.EndGame(cbg, liveGame, nil, map[int64]int{p.ID: 100})
+
+	goneGame, _ := testRepos.Games.CreateGame(cbg, gone, "Texas Hold'em (${25}/${50})")
+	_ = testRepos.Games.EndGame(cbg, goneGame, nil, map[int64]int{p.ID: 700})
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// while both tables are live, both contribute
+	stats, err := testRepos.Players.GetPlayerStats(cbg, p.ID, from, to)
+	a.NoError(err)
+	a.Equal(2, stats.TablesJoined)
+	a.Equal(2, stats.GamesPlayed)
+	a.Equal(800, stats.TotalWinnings)
+
+	gone.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, gone))
+
+	// once soft-deleted, the table is absent from every figure
+	stats, err = testRepos.Players.GetPlayerStats(cbg, p.ID, from, to)
+	a.NoError(err)
+	a.Equal(1, stats.TablesJoined)
+	a.Equal(1, stats.GamesPlayed)
+	a.Equal(100, stats.TotalWinnings)
+	a.Equal(100, stats.WinningsByGame["Bourre"])
+	a.Equal(1, stats.GamesCountByType["Bourre"])
+	a.NotContains(stats.WinningsByGame, "Texas Hold'em")
+	a.NotContains(stats.GamesCountByType, "Texas Hold'em")
+}
+
+// TestGetPlayerProfile_DeletedTableIsAbsentEverywhere checks the three parts of a
+// profile agree with each other. Before the fix, stats summed deleted-table money
+// while tables and graphData excluded it, so totalWinnings named a figure that no
+// visible session accounted for.
+func TestGetPlayerProfile_DeletedTableIsAbsentEverywhere(t *testing.T) {
+	a := assert.New(t)
+
+	p := player()
+	p.IsSiteAdmin = true // to rapidly create tables
+	live, _ := testRepos.Tables.CreateTable(cbg, p, "Profile Live Table")
+	gone, _ := testRepos.Tables.CreateTable(cbg, p, "Profile Deleted Table")
+
+	liveGame, _ := testRepos.Games.CreateGame(cbg, live, "bourre")
+	_ = testRepos.Games.EndGame(cbg, liveGame, nil, map[int64]int{p.ID: 250})
+
+	goneGame, _ := testRepos.Games.CreateGame(cbg, gone, "bourre")
+	_ = testRepos.Games.EndGame(cbg, goneGame, nil, map[int64]int{p.ID: 900})
+
+	gone.Deleted = true
+	a.NoError(testRepos.Tables.Save(cbg, gone))
+
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	profile, err := testRepos.Players.GetPlayerProfile(cbg, p.ID, from, to, 0, 100)
+	a.NoError(err)
+
+	a.Equal(250, profile.Stats.TotalWinnings)
+	a.Len(profile.Tables, 1)
+	a.Equal(live.UUID, profile.Tables[0].UUID)
+	a.Len(profile.GraphData, 1)
+
+	// the parts reconcile: the sessions on show account for the reported total
+	var graphTotal int
+	for _, gp := range profile.GraphData {
+		graphTotal += gp.Balance
+	}
+	a.Equal(profile.Stats.TotalWinnings, graphTotal)
+}
+
 func TestGetPlayerTablesFiltered(t *testing.T) {
 	a := assert.New(t)
 
