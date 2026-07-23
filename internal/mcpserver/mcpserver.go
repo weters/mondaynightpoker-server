@@ -4,6 +4,7 @@
 package mcpserver
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -128,4 +129,25 @@ func notFound(err error, entity string) error {
 // fetched but must not expose (for example a soft-deleted table) as absent.
 func errNotFound(entity string) error {
 	return fmt.Errorf("%s not found", entity)
+}
+
+// activeTable fetches a table by uuid and reports a soft-deleted one as absent.
+// It is the single door through which a tool may turn a uuid into a table:
+// TableRepo.GetTableByUUID returns deleted rows (the admin API needs them to
+// restore a table), so every MCP caller must reject them, and doing that check
+// per handler is what let the aggregates in GetPlayerStats keep summing
+// deleted-table money after the table tools had been fixed. Routing every
+// lookup through here means a new tool cannot forget the check, the same way
+// visibleEmail keeps a new tool from leaking an email.
+func (s *server) activeTable(ctx context.Context, uuid string) (*model.Table, error) {
+	table, err := s.repos.Tables.GetTableByUUID(ctx, uuid)
+	if err != nil {
+		return nil, notFound(err, "table")
+	}
+
+	if table.Deleted {
+		return nil, errNotFound("table")
+	}
+
+	return table, nil
 }

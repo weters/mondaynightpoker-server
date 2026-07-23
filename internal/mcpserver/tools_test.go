@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"os"
 	"strconv"
 	"testing"
 
@@ -438,6 +439,22 @@ func TestListTables_ExcludesDeleted(t *testing.T) {
 	}
 	a.True(sawLive, "expected the live table to be listed")
 	a.False(sawDeleted, "did not expect the deleted table to be listed")
+}
+
+// -------------------- deleted-table tripwire --------------------
+
+// TestTools_NoDirectTableLookup is a source-level tripwire. TableRepo.GetTableByUUID
+// returns soft-deleted rows, so a tool that calls it directly has to remember the
+// Deleted check; activeTable is the one door that cannot be forgotten. Behavioral
+// tests only cover the tools that exist today, and the original miss here was a
+// surface nobody thought to test, so this asserts the rule for tools not yet written.
+func TestTools_NoDirectTableLookup(t *testing.T) {
+	src, err := os.ReadFile("tools.go")
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(src), "GetTableByUUID",
+		"tool handlers must resolve a uuid through s.activeTable, which rejects soft-deleted "+
+			"tables; GetTableByUUID returns them and is reserved for the admin API")
 }
 
 // -------------------- list_game_types (data) --------------------
