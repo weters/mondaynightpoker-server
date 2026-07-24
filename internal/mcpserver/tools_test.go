@@ -22,6 +22,45 @@ func ptrInt(v int) *int       { return &v }
 func ptrStr(v string) *string { return &v }
 func ptrBool(v bool) *bool    { return &v }
 
+// -------------------- whoami (data) --------------------
+
+func TestWhoami_Data(t *testing.T) {
+	a := assert.New(t)
+	s := newServer()
+
+	p := createPlayer(t)
+
+	// the caller always gets their own record back, email included
+	out, err := s.whoami(cbg, nil, playerCaller(p.ID), whoamiInput{})
+	a.NoError(err)
+	a.Equal(p.ID, out.ID)
+	a.Equal(p.DisplayName, out.DisplayName)
+	a.False(out.IsSiteAdmin)
+	require.NotNil(t, out.Email)
+	a.Equal(p.Email, *out.Email)
+
+	// an admin caller gets their own record, not somebody else's
+	admin := createSiteAdmin(t)
+	out, err = s.whoami(cbg, nil, adminCaller(admin.ID), whoamiInput{})
+	a.NoError(err)
+	a.Equal(admin.ID, out.ID)
+	a.True(out.IsSiteAdmin)
+	require.NotNil(t, out.Email)
+	a.Equal(admin.Email, *out.Email)
+
+	// the record is read live, so the caller's claimed admin bit does not decide the
+	// reported one: a stale token claiming admin still reports the stored value
+	out, err = s.whoami(cbg, nil, adminCaller(p.ID), whoamiInput{})
+	a.NoError(err)
+	a.Equal(p.ID, out.ID)
+	a.False(out.IsSiteAdmin)
+
+	// a caller whose player record no longer exists is reported as absent
+	_, err = s.whoami(cbg, nil, playerCaller(-999), whoamiInput{})
+	a.Error(err)
+	a.Contains(err.Error(), "not found")
+}
+
 // -------------------- list_players (data + email visibility) --------------------
 
 func TestListPlayers_Data(t *testing.T) {

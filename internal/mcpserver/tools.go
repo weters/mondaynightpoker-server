@@ -16,6 +16,11 @@ import (
 // no authorization checks of their own and receive the already-authorized caller.
 func (s *server) registerTools(m *mcp.Server) {
 	registerTool(s, m, &mcp.Tool{
+		Name:        "whoami",
+		Description: "Identify the calling player: returns the player record for whoever the access token belongs to, including their email. Takes no arguments. Use this to resolve \"me\" or \"my\" into the numeric player id the other tools require.",
+	}, accessAuthenticated, s.whoami)
+
+	registerTool(s, m, &mcp.Tool{
 		Name:        "list_players",
 		Description: "List players, optionally filtered by a search string (matches id, display name, or email prefix). Site admin only.",
 	}, accessAdminOnly, s.listPlayers)
@@ -89,6 +94,24 @@ func (s *server) registerTools(m *mcp.Server) {
 		Name:        "list_game_types",
 		Description: "List the registered game types, each with its canonical display group.",
 	}, accessAuthenticated, s.listGameTypes)
+}
+
+// whoamiInput is the (empty) input for the whoami tool. It deliberately takes no player
+// id: the subject is always the caller carried by the access token, so there is nothing
+// for a client to get wrong and nothing to authorize beyond authentication.
+type whoamiInput struct{}
+
+func (s *server) whoami(ctx context.Context, _ *mcp.CallToolRequest, caller oauth.Caller, _ whoamiInput) (PlayerDTO, error) {
+	// Load the record live rather than reporting the token's claims back: a player whose
+	// admin bit or display name changed since the token was issued should see the current
+	// values, and a player deleted out from under a live token is reported as absent.
+	player, err := s.repos.Players.GetPlayerByID(ctx, caller.PlayerID)
+	if err != nil {
+		return PlayerDTO{}, notFound(err, "player")
+	}
+
+	// fromPlayer surfaces the email because the record's owner is the caller.
+	return fromPlayer(player, caller), nil
 }
 
 // listPlayersInput is the input for the list_players tool.

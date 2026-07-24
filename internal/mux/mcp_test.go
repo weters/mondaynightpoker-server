@@ -54,6 +54,7 @@ const (
 	rpcListGameTypes = `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_game_types","arguments":{}}}`
 	rpcListPlayers   = `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_players","arguments":{}}}`
 	rpcGetPlayerFmt  = `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_player","arguments":{"id":%d}}}`
+	rpcWhoami        = `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"whoami","arguments":{}}}`
 
 	errTextRequiresAdmin    = "requires site admin"
 	errTextPermissionDenied = "permission denied"
@@ -67,7 +68,7 @@ var mcpNonceRe = regexp.MustCompile(`name="nonce" value="([^"]+)"`)
 
 // allToolNames are the tools the MCP server must advertise via tools/list.
 var allToolNames = []string{
-	"list_players", "get_player", "get_player_by_email", "get_player_stats",
+	"whoami", "list_players", "get_player", "get_player_by_email", "get_player_stats",
 	"get_player_profile", "list_player_tables", "list_tables", "get_table",
 	"get_table_roster", "list_table_games", "get_game", "get_table_stats",
 	"list_player_transactions", "leaderboard", "list_game_types",
@@ -559,6 +560,14 @@ func TestMCP_NonAdminEndToEnd(t *testing.T) {
 	listPayload := mcpPayload(t, listRR.Body.String())
 	assert.Contains(t, listPayload, `"isError":true`)
 	assert.Contains(t, listPayload, errTextRequiresAdmin)
+
+	// whoami identifies the token's own player, email included, without an argument
+	whoRR := mcpPost(m, accessToken, rpcWhoami)
+	require.Equal(t, http.StatusOK, whoRR.Code)
+	whoPayload := mcpPayload(t, whoRR.Body.String())
+	assert.NotContains(t, whoPayload, `"isError":true`)
+	assert.Contains(t, whoPayload, nonAdmin.Email)
+	assert.NotContains(t, whoPayload, other.Email)
 
 	// list_game_types is open to everyone
 	gtRR := mcpPost(m, accessToken, rpcListGameTypes)

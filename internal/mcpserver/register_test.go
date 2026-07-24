@@ -148,6 +148,7 @@ func TestRegisterTool_PanicsPropagate(t *testing.T) {
 // must appear here with the correct policy. When adding a new tool, classify it here AND add
 // behavioral tests for its policy; otherwise this test fails.
 var expectedPolicies = map[string]accessPolicy{
+	"whoami":                   accessAuthenticated,
 	"list_players":             accessAdminOnly,
 	"get_player":               accessSelfScoped,
 	"get_player_by_email":      accessAdminOnly,
