@@ -126,7 +126,7 @@ type HandDTO struct {
 
 	AnteCents   int    `json:"anteCents" jsonschema:"the ante, in cents; zero when the game's log does not record one"`
 	AnteDisplay string `json:"anteDisplay" jsonschema:"the ante preformatted in dollars; show this rather than converting anteCents yourself"`
-	PotCents    int    `json:"potCents" jsonschema:"the pot, in cents"`
+	PotCents    int    `json:"potCents" jsonschema:"the pot, in cents. Single-pass poker variants report the final pot; round-based games (Guts, Acey Deucey) report the pot as of the last round rather than a lifetime total across every round; Little L reconstructs it as the sum of payouts"`
 	PotDisplay  string `json:"potDisplay" jsonschema:"the pot preformatted in dollars; show this rather than converting potCents yourself"`
 
 	Rounds int       `json:"rounds" jsonschema:"the number of rounds or hands the game ran; games that resolve in a single pass report 1"`

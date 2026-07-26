@@ -96,7 +96,7 @@ type getPlayerTendenciesOutput struct {
 	GamesAnalyzed int   `json:"gamesAnalyzed" jsonschema:"the number of game logs successfully parsed"`
 	GamesInRange  int64 `json:"gamesInRange" jsonschema:"the total number of the player's completed games in the range, ignoring the analysis cap. It counts every game type even when gameType narrows the analysis, so with a filter set it will normally exceed gamesAnalyzed"`
 	Truncated     bool  `json:"truncated" jsonschema:"whether the range held more games than could be examined; when true only the most recent games are reflected and the rates describe that subset. With gameType set this is computed before the filter, so a true value means the filtered profile may also be missing older matching games"`
-	GamesSkipped  int   `json:"gamesSkipped" jsonschema:"game logs that could not be parsed and were left out; a non-zero value means those games are missing from every figure here"`
+	GamesSkipped  int   `json:"gamesSkipped" jsonschema:"game logs left out of the analysis, either because the stored log could not be parsed or because it parsed fine but did not name this player (a ledger/log disagreement); a non-zero value means those games are missing from every figure here"`
 }
 
 // getPlayerTendencies aggregates a player's decisions across their game logs.

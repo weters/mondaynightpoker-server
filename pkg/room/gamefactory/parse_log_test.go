@@ -60,6 +60,11 @@ func TestParseGameLog_UnknownGameType(t *testing.T) {
 // game_type resolution depends on: every factory's display name must map back to
 // that same factory. A new game whose DisplayName does not land in its own group
 // would otherwise have its logs silently parsed by the wrong parser.
+//
+// This only proves each factory resolves to itself; it does not cover two
+// factories colliding into the same group, since that case never reaches a test
+// body at all — nameByGroup's package init panics as soon as it detects the
+// collision, failing the whole package before any test runs.
 func TestNameForStoredGameType_RoundTripsEveryFactory(t *testing.T) {
 	for _, name := range Names() {
 		t.Run(name, func(t *testing.T) {

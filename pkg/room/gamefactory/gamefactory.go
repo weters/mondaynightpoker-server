@@ -88,10 +88,23 @@ func ParseGameLog(gameType string, raw json.RawMessage) (*gamelog.Hand, error) {
 // produces it. It is derived from the factories themselves rather than written out
 // by hand, relying on the GameFactory contract that
 // model.GameTypeGroup(DisplayName()) yields the factory's group.
+//
+// That contract is enforced here: if two factories ever collapsed to the same
+// group, a plain map assignment would silently keep whichever factory the map
+// iteration visited last, and NameForStoredGameType would from then on resolve
+// every one of the other factory's stored logs to the wrong parser. Init panics
+// instead, since a colliding group is a programmer error (two factories whose
+// DisplayName values are indistinguishable after grouping) that should fail every
+// test immediately rather than surface as a subtly wrong parse later.
 var nameByGroup = func() map[string]string {
 	byGroup := make(map[string]string, len(factories))
 	for name, factory := range factories {
-		byGroup[model.GameTypeGroup(factory.DisplayName())] = name
+		group := model.GameTypeGroup(factory.DisplayName())
+		if existing, ok := byGroup[group]; ok {
+			panic(fmt.Sprintf("gamefactory: factories %q and %q both resolve to display-type group %q; NameForStoredGameType could not tell their stored logs apart", existing, name, group))
+		}
+
+		byGroup[group] = name
 	}
 
 	return byGroup

@@ -73,6 +73,10 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 	for _, round := range log.Rounds {
 		street := "round-" + strconv.Itoa(round.Round)
 
+		// The writer numbers rounds from 0, so round.Round == 0 is what identifies
+		// the first round here (unlike guts, which uses slice index instead of the
+		// persisted round number). If the writer ever changed its numbering, this
+		// check would silently attribute the wrong round's deal as starting cards.
 		if round.Round == 0 {
 			for _, h := range round.StartingHand {
 				hand.Participant(h.PlayerID).StartingCards = []*deck.Card{h.Card}
