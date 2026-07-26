@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -39,26 +38,12 @@ type getHandHistoryOutput struct {
 // another table, and a game whose log cannot be read are reported identically so a
 // caller cannot probe which part of the request was wrong.
 func (s *server) getHandHistory(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.Caller, in getHandHistoryInput) (getHandHistoryOutput, error) {
-	table, err := s.activeTable(ctx, in.UUID)
-	if err != nil {
-		return getHandHistoryOutput{}, errNotFound("game")
-	}
-
-	game, err := s.repos.Games.GetGameByID(ctx, in.ID)
-	if err != nil {
-		return getHandHistoryOutput{}, errNotFound("game")
-	}
-
-	if game.TableUUID != table.UUID {
-		return getHandHistoryOutput{}, errNotFound("game")
-	}
-
-	raw, err := rawGameData(game)
+	game, err := s.gameAtTable(ctx, in.UUID, in.ID, true)
 	if err != nil {
 		return getHandHistoryOutput{}, err
 	}
 
-	hand, err := gamefactory.ParseStoredGameLog(game.GameType, raw)
+	hand, err := gamefactory.ParseStoredGameLog(game.GameType, game.RawData())
 	if err != nil {
 		return getHandHistoryOutput{}, err
 	}
@@ -76,19 +61,6 @@ func (s *server) getHandHistory(ctx context.Context, _ *mcp.CallToolRequest, _ o
 	names, nets := adjustmentLookups(adjustments[game.ID])
 
 	return getHandHistoryOutput{Hand: fromHand(hand, game, names, nets)}, nil
-}
-
-// rawGameData re-encodes a game's decoded jsonb payload back into JSON for the
-// parsers. model.Game unmarshals the column into an interface{}, so this is a
-// round trip rather than the original bytes; it is faithful because the value came
-// from encoding/json in the first place.
-func rawGameData(game *model.Game) (json.RawMessage, error) {
-	data := game.Data()
-	if data == nil {
-		return nil, nil
-	}
-
-	return json.Marshal(data)
 }
 
 // adjustmentLookups turns a game's ledger rows into display-name and net lookups
@@ -122,8 +94,8 @@ type getPlayerTendenciesOutput struct {
 	ByGameType map[string]TendenciesDTO `json:"byGameType" jsonschema:"the same profile broken out per game-type identifier; the numbers are only comparable across game types for the poker variants, since games without a betting round have no true equivalent of a call or a raise"`
 
 	GamesAnalyzed int   `json:"gamesAnalyzed" jsonschema:"the number of game logs successfully parsed"`
-	GamesInRange  int64 `json:"gamesInRange" jsonschema:"the total number of the player's completed games in the range, ignoring the analysis cap"`
-	Truncated     bool  `json:"truncated" jsonschema:"whether the range held more games than were analyzed; when true only the most recent games are reflected and the rates describe that subset"`
+	GamesInRange  int64 `json:"gamesInRange" jsonschema:"the total number of the player's completed games in the range, ignoring the analysis cap. It counts every game type even when gameType narrows the analysis, so with a filter set it will normally exceed gamesAnalyzed"`
+	Truncated     bool  `json:"truncated" jsonschema:"whether the range held more games than could be examined; when true only the most recent games are reflected and the rates describe that subset. With gameType set this is computed before the filter, so a true value means the filtered profile may also be missing older matching games"`
 	GamesSkipped  int   `json:"gamesSkipped" jsonschema:"game logs that could not be parsed and were left out; a non-zero value means those games are missing from every figure here"`
 }
 
@@ -160,12 +132,7 @@ func (s *server) getPlayerTendencies(ctx context.Context, _ *mcp.CallToolRequest
 		gameTypeFilter = *in.GameType
 	}
 
-	records, err := s.repos.Players.GetPlayerGameLogs(ctx, in.ID, from, to, maxAnalyzedGameLogs)
-	if err != nil {
-		return getPlayerTendenciesOutput{}, err
-	}
-
-	total, err := s.repos.Players.GetPlayerGameLogsCount(ctx, in.ID, from, to)
+	records, total, err := s.repos.Players.GetPlayerGameLogs(ctx, in.ID, from, to, maxAnalyzedGameLogs)
 	if err != nil {
 		return getPlayerTendenciesOutput{}, err
 	}
@@ -176,17 +143,23 @@ func (s *server) getPlayerTendencies(ctx context.Context, _ *mcp.CallToolRequest
 	skipped := 0
 
 	for _, rec := range records {
+		// Resolve the stored display name before decoding: the filter is decidable
+		// from it alone, so a filtered request skips the jsonb parse for every game
+		// of another type instead of decoding it and throwing the result away.
+		if gameTypeFilter != "" {
+			name, err := gamefactory.NameForStoredGameType(rec.GameType)
+			if err != nil || name != gameTypeFilter {
+				continue
+			}
+		}
+
 		hand, err := gamefactory.ParseStoredGameLog(rec.GameType, rec.Data)
 		if err != nil || hand == nil {
 			skipped++
 			continue
 		}
 
-		if gameTypeFilter != "" && hand.GameType != gameTypeFilter {
-			continue
-		}
-
-		participation := findParticipation(hand, in.ID)
+		participation := hand.FindParticipant(in.ID)
 		if participation == nil {
 			// The ledger says the player was in this game but the log does not
 			// name them, so there is nothing to attribute.
@@ -220,18 +193,6 @@ func (s *server) getPlayerTendencies(ctx context.Context, _ *mcp.CallToolRequest
 	}
 
 	return out, nil
-}
-
-// findParticipation returns the player's participation record within the hand, or
-// nil when the log does not name them.
-func findParticipation(hand *gamelog.Hand, playerID int64) *gamelog.Participation {
-	for _, p := range hand.Participants {
-		if p.PlayerID == playerID {
-			return p
-		}
-	}
-
-	return nil
 }
 
 // getPlayerVarianceInput is the input for the get_player_variance tool.

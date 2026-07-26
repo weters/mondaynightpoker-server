@@ -12,12 +12,12 @@ import (
 // texasholdem package for why the persisted form is declared separately from the
 // live struct.
 type persistedLog struct {
-	Variant    string          `json:"variant"`
-	Ante       int             `json:"ante"`
-	Seats      []persistedSeat `json:"seats"`
-	Deals      []persistedDeal `json:"deals"`
-	Actions    []persistedAct  `json:"actions"`
-	FinalState persistedState  `json:"finalState"`
+	Variant    string                  `json:"variant"`
+	Ante       int                     `json:"ante"`
+	Seats      []persistedSeat         `json:"seats"`
+	Deals      []persistedDeal         `json:"deals"`
+	Actions    []gamelog.BettingAction `json:"actions"`
+	FinalState persistedState          `json:"finalState"`
 }
 
 type persistedSeat struct {
@@ -30,17 +30,7 @@ type persistedDealCard struct {
 }
 
 type persistedDeal struct {
-	Street string              `json:"street"`
-	Cards  []persistedDealCard `json:"cards"`
-}
-
-type persistedAct struct {
-	Street   string        `json:"street"`
-	PlayerID int64         `json:"playerId"`
-	Action   gamelog.RawID `json:"action"`
-	Amount   int           `json:"amount"`
-	Cards    []*deck.Card  `json:"cards"`
-	AllIn    bool          `json:"allIn"`
+	Cards []persistedDealCard `json:"cards"`
 }
 
 type persistedState struct {
@@ -84,18 +74,7 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		}
 	}
 
-	actions := make([]gamelog.BettingAction, 0, len(log.Actions))
-	for _, a := range log.Actions {
-		actions = append(actions, gamelog.BettingAction{
-			Street:   a.Street,
-			PlayerID: a.PlayerID,
-			Action:   a.Action,
-			Amount:   a.Amount,
-			Cards:    a.Cards,
-			AllIn:    a.AllIn,
-		})
-	}
-	hand.ApplyBettingActions(actions)
+	hand.ApplyBettingActions(log.Actions)
 
 	folded := make(map[int64]bool, len(log.FinalState.Participants))
 	for _, p := range log.FinalState.Participants {

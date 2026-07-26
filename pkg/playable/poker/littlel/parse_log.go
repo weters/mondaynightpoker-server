@@ -14,7 +14,6 @@ import (
 // live struct.
 type persistedLog struct {
 	Ante         int             `json:"ante"`
-	InitialDeal  int             `json:"initialDeal"`
 	Seats        []persistedSeat `json:"seats"`
 	Community    []*deck.Card    `json:"community"`
 	Actions      []persistedAct  `json:"actions"`
@@ -27,16 +26,12 @@ type persistedSeat struct {
 	StartingHand []*deck.Card `json:"startingHand"`
 }
 
-// persistedAct carries Round as an integer because littlel's round type is a plain
-// int with no custom marshalling, unlike the named streets the other poker
-// variants record.
+// persistedAct embeds the shared betting action and adds the one field Little L
+// records differently: a plain integer round rather than a named street. Street is
+// left empty by the decode and filled in below.
 type persistedAct struct {
-	Round    int           `json:"round"`
-	PlayerID int64         `json:"playerId"`
-	Action   gamelog.RawID `json:"action"`
-	Amount   int           `json:"amount"`
-	Cards    []*deck.Card  `json:"cards"`
-	AllIn    bool          `json:"allIn"`
+	gamelog.BettingAction
+	Round int `json:"round"`
 }
 
 type persistedPart struct {
@@ -64,14 +59,8 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 
 	actions := make([]gamelog.BettingAction, 0, len(log.Actions))
 	for _, a := range log.Actions {
-		actions = append(actions, gamelog.BettingAction{
-			Street:   "round-" + strconv.Itoa(a.Round),
-			PlayerID: a.PlayerID,
-			Action:   a.Action,
-			Amount:   a.Amount,
-			Cards:    a.Cards,
-			AllIn:    a.AllIn,
-		})
+		a.Street = "round-" + strconv.Itoa(a.Round)
+		actions = append(actions, a.BettingAction)
 	}
 	hand.ApplyBettingActions(actions)
 

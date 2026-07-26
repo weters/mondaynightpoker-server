@@ -21,7 +21,11 @@ var factories = map[string]GameFactory{
 	"guts":          gutsFactory{},
 }
 
-// GameFactory is a factory for creating games that implement the Playable interface
+// GameFactory is the registry entry for a game type. It creates games that
+// implement the Playable interface, and also carries the per-game-type knowledge
+// that has no other home: the canonical display name and how to read back a
+// persisted log. Everything keyed by a game-type identifier lives here so a new
+// game cannot be registered with half of it missing.
 type GameFactory interface {
 	CreateGame(logger logrus.FieldLogger, players []*model.PlayerTable, additionalData playable.AdditionalData) (playable.Playable, error)
 	Details(additionalData playable.AdditionalData) (name string, ante int, err error)

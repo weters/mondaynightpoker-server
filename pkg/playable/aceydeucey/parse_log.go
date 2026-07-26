@@ -61,17 +61,12 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		Rounds: len(rounds),
 	}
 
-	wagered := make(map[int64]bool)
-	turns := make(map[int64]int)
-
 	for i, round := range rounds {
 		street := "turn-" + strconv.Itoa(i+1)
 		hand.PotCents = round.Pot
 
 		p := hand.Participant(round.PlayerID)
 		for _, game := range round.Games {
-			turns[round.PlayerID]++
-
 			if game.FirstCard != nil && game.MiddleCard != nil && len(p.StartingCards) == 0 {
 				p.StartingCards = []*deck.Card{game.FirstCard, game.MiddleCard}
 			}
@@ -85,7 +80,6 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 				continue
 			}
 
-			wagered[round.PlayerID] = true
 			hand.AddAction(&gamelog.Action{
 				Street:      street,
 				PlayerID:    round.PlayerID,
@@ -103,9 +97,11 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		}
 	}
 
+	// Every turn records exactly one action, a bet or a pass, so the tallies already
+	// answer both questions and no parallel bookkeeping is needed.
 	for _, p := range hand.Participants {
-		p.VoluntarilyPlayed = wagered[p.PlayerID]
-		p.Folded = turns[p.PlayerID] > 0 && !wagered[p.PlayerID]
+		p.VoluntarilyPlayed = p.Counts[gamelog.KindBet] > 0
+		p.Folded = !p.VoluntarilyPlayed && p.Counts[gamelog.KindPass] > 0
 	}
 
 	return hand, nil

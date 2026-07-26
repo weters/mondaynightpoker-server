@@ -5,17 +5,17 @@ import "mondaynightpoker-server/pkg/deck"
 // BettingAction is the persisted form of a logged betting action.
 //
 // Texas Hold'em, Seven Card, and Little L each declare their own gameLogAction
-// struct, but all three record the same fields, so all three decode into this one
-// shape and share the normalization below. Only the name of the phase field
-// differs (a "street" in two of them, a "round" in Little L), which the parsers
-// resolve before handing the actions over.
+// struct, but all three write the same JSON, so the tags here let those parsers
+// decode straight into this type instead of restating the shape. Only Little L
+// differs: it records an integer round rather than a named street, so its parser
+// embeds this type and supplies the street itself.
 type BettingAction struct {
-	Street   string
-	PlayerID int64
-	Action   RawID
-	Amount   int
-	Cards    []*deck.Card
-	AllIn    bool
+	Street   string       `json:"street"`
+	PlayerID int64        `json:"playerId"`
+	Action   RawID        `json:"action"`
+	Amount   int          `json:"amount"`
+	Cards    []*deck.Card `json:"cards"`
+	AllIn    bool         `json:"allIn"`
 }
 
 // ApplyBettingActions normalizes a hand's betting actions onto h, in order.

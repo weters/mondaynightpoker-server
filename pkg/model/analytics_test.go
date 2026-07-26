@@ -65,45 +65,51 @@ func TestNewSpread(t *testing.T) {
 	assert.Greater(t, swingy.StdDevCents, 400.0)
 }
 
+// TestNewSpread_Values covers the field math across the shapes that behave
+// differently: an odd count, an even count (median averages the middle pair), a
+// lone result (deviation undefined, reported as zero rather than misleadingly
+// small), and nothing at all.
 func TestNewSpread_Values(t *testing.T) {
-	got := NewSpread([]int{100, -50, 25})
+	testCases := []struct {
+		name string
+		in   []int
+		want Spread
+	}{
+		{
+			name: "odd count",
+			in:   []int{100, -50, 25},
+			want: Spread{Count: 3, TotalCents: 75, MeanCents: 25, MedianCents: 25, StdDevCents: 75, BestCents: 100, WorstCents: -50},
+		},
+		{
+			name: "even count averages the middle pair",
+			in:   []int{10, 20, 30, 40},
+			want: Spread{Count: 4, TotalCents: 100, MeanCents: 25, MedianCents: 25, StdDevCents: 12.909944487358056, BestCents: 40, WorstCents: 10},
+		},
+		{
+			name: "single result has no deviation",
+			in:   []int{250},
+			want: Spread{Count: 1, TotalCents: 250, MeanCents: 250, MedianCents: 250, BestCents: 250, WorstCents: 250},
+		},
+		{
+			name: "empty",
+			in:   nil,
+			want: Spread{},
+		},
+	}
 
-	assert.Equal(t, 3, got.Count)
-	assert.Equal(t, 75, got.TotalCents)
-	assert.InDelta(t, 25.0, got.MeanCents, 0.001)
-	assert.Equal(t, 25.0, got.MedianCents)
-	assert.Equal(t, 100, got.BestCents)
-	assert.Equal(t, -50, got.WorstCents)
-	assert.InDelta(t, 75.0, got.StdDevCents, 0.001)
-}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewSpread(tc.in)
 
-func TestNewSpread_EvenCountMedian(t *testing.T) {
-	got := NewSpread([]int{10, 20, 30, 40})
-	assert.Equal(t, 25.0, got.MedianCents)
-}
-
-func TestNewSpread_Empty(t *testing.T) {
-	got := NewSpread(nil)
-
-	assert.Zero(t, got.Count)
-	assert.Zero(t, got.TotalCents)
-	assert.Zero(t, got.MeanCents)
-	assert.Zero(t, got.StdDevCents)
-	assert.Zero(t, got.BestCents)
-	assert.Zero(t, got.WorstCents)
-}
-
-// TestNewSpread_Single pins that a lone result reports no deviation rather than a
-// misleadingly small one: with one sample the standard deviation is undefined.
-func TestNewSpread_Single(t *testing.T) {
-	got := NewSpread([]int{250})
-
-	assert.Equal(t, 1, got.Count)
-	assert.Equal(t, 250.0, got.MeanCents)
-	assert.Equal(t, 250.0, got.MedianCents)
-	assert.Zero(t, got.StdDevCents)
-	assert.Equal(t, 250, got.BestCents)
-	assert.Equal(t, 250, got.WorstCents)
+			assert.Equal(t, tc.want.Count, got.Count)
+			assert.Equal(t, tc.want.TotalCents, got.TotalCents)
+			assert.Equal(t, tc.want.BestCents, got.BestCents)
+			assert.Equal(t, tc.want.WorstCents, got.WorstCents)
+			assert.InDelta(t, tc.want.MeanCents, got.MeanCents, 0.001)
+			assert.InDelta(t, tc.want.MedianCents, got.MedianCents, 0.001)
+			assert.InDelta(t, tc.want.StdDevCents, got.StdDevCents, 0.001)
+		})
+	}
 }
 
 // streakInputs builds a chronological series one day apart, so ordering is
@@ -293,10 +299,11 @@ func TestPlayerRepo_GetPlayerGameLogs(t *testing.T) {
 	require.NoError(t, err)
 
 	from, to := allTime()
-	logs, err := testRepos.Players.GetPlayerGameLogs(cbg, p.ID, from, to, 100)
+	logs, total, err := testRepos.Players.GetPlayerGameLogs(cbg, p.ID, from, to, 100)
 	require.NoError(t, err)
 
 	require.Len(t, logs, 1, "an unfinished game has no log to analyze")
+	assert.Equal(t, int64(1), total)
 	assert.Equal(t, withLog.ID, logs[0].GameID)
 	assert.Equal(t, tbl.UUID, logs[0].TableUUID)
 	assert.Equal(t, "Bourré", logs[0].GameType)
@@ -304,10 +311,6 @@ func TestPlayerRepo_GetPlayerGameLogs(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(logs[0].Data, &payload))
 	assert.Equal(t, float64(50), payload["ante"])
-
-	count, err := testRepos.Players.GetPlayerGameLogsCount(cbg, p.ID, from, to)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), count)
 }
 
 // TestPlayerRepo_GetPlayerGameLogs_Limit pins that the count reports the full
@@ -325,13 +328,12 @@ func TestPlayerRepo_GetPlayerGameLogs_Limit(t *testing.T) {
 	}
 
 	from, to := allTime()
-	logs, err := testRepos.Players.GetPlayerGameLogs(cbg, p.ID, from, to, 2)
+	// The window-function total reports the full match set even though the page is
+	// capped, which is what lets a caller say its analysis was partial.
+	logs, total, err := testRepos.Players.GetPlayerGameLogs(cbg, p.ID, from, to, 2)
 	require.NoError(t, err)
 	assert.Len(t, logs, 2)
-
-	count, err := testRepos.Players.GetPlayerGameLogsCount(cbg, p.ID, from, to)
-	require.NoError(t, err)
-	assert.Equal(t, int64(3), count)
+	assert.Equal(t, int64(3), total)
 }
 
 // TestPlayerRepo_GetPlayerGameLogs_ExcludesOtherPlayers pins that participation is
@@ -352,13 +354,14 @@ func TestPlayerRepo_GetPlayerGameLogs_ExcludesOtherPlayers(t *testing.T) {
 
 	from, to := allTime()
 
-	logs, err := testRepos.Players.GetPlayerGameLogs(cbg, p1.ID, from, to, 100)
+	logs, _, err := testRepos.Players.GetPlayerGameLogs(cbg, p1.ID, from, to, 100)
 	require.NoError(t, err)
 	assert.Len(t, logs, 1)
 
-	logs, err = testRepos.Players.GetPlayerGameLogs(cbg, p2.ID, from, to, 100)
+	logs, total, err := testRepos.Players.GetPlayerGameLogs(cbg, p2.ID, from, to, 100)
 	require.NoError(t, err)
 	assert.Empty(t, logs, "sitting at the table is not playing the game")
+	assert.Zero(t, total, "no rows means no window-function total")
 }
 
 func TestPlayerRepo_GetPlayerGameLogs_ExcludesDeletedTables(t *testing.T) {
@@ -375,7 +378,7 @@ func TestPlayerRepo_GetPlayerGameLogs_ExcludesDeletedTables(t *testing.T) {
 
 	from, to := allTime()
 
-	logs, err := testRepos.Players.GetPlayerGameLogs(cbg, p.ID, from, to, 100)
+	logs, _, err := testRepos.Players.GetPlayerGameLogs(cbg, p.ID, from, to, 100)
 	require.NoError(t, err)
 	assert.Empty(t, logs)
 

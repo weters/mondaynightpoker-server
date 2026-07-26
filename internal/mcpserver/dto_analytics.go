@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"mondaynightpoker-server/pkg/deck"
@@ -45,15 +46,6 @@ type CardDTO struct {
 	Display string `json:"display,omitempty" jsonschema:"the card preformatted for display; show this to the user. Omitted for a card whose suit is not recognized, which a hidden or placeholder card in an older log can be"`
 }
 
-// knownSuits are the suits deck.Card.String can render.
-var knownSuits = map[deck.Suit]bool{
-	deck.Hearts:   true,
-	deck.Clubs:    true,
-	deck.Diamonds: true,
-	deck.Spades:   true,
-	deck.Stars:    true,
-}
-
 // cardDisplay renders a card for display, returning an empty string rather than
 // letting deck.Card.String panic.
 //
@@ -63,7 +55,7 @@ var knownSuits = map[deck.Suit]bool{
 // on. Losing one display string is a fair trade for a tool that cannot be crashed
 // by a row in the database.
 func cardDisplay(c *deck.Card) string {
-	if !knownSuits[c.Suit] {
+	if !c.Suit.Valid() {
 		return ""
 	}
 
@@ -320,14 +312,11 @@ func fromSpread(s model.Spread) SpreadDTO {
 	}
 }
 
-// roundCents rounds a fractional cent amount to the nearest whole cent, halves
-// away from zero, for rendering through the shared money formatter.
+// roundCents rounds a fractional cent amount to the nearest whole cent for
+// rendering through the shared money formatter. math.Round rounds halves away
+// from zero, which is what the display wants in both directions.
 func roundCents(cents float64) int {
-	if cents < 0 {
-		return -int(-cents + 0.5)
-	}
-
-	return int(cents + 0.5)
+	return int(math.Round(cents))
 }
 
 // StreakDTO is an unbroken run of results with the same outcome.

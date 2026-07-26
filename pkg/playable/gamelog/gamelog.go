@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"mondaynightpoker-server/pkg/deck"
+	"mondaynightpoker-server/pkg/playable/poker/action"
 )
 
 // Kind is a normalized player action.
@@ -138,14 +139,25 @@ type Hand struct {
 	Actions      []*Action        `json:"actions"`
 }
 
-// Participant returns the participation record for the player, creating it if the
-// hand does not have one yet. Parsers use it to accumulate a player's involvement
-// without tracking insertion order themselves.
-func (h *Hand) Participant(playerID int64) *Participation {
+// FindParticipant returns the participation record for the player, or nil when the
+// hand does not name them. Use it to ask whether a player took part; use
+// Participant to accumulate their involvement.
+func (h *Hand) FindParticipant(playerID int64) *Participation {
 	for _, p := range h.Participants {
 		if p.PlayerID == playerID {
 			return p
 		}
+	}
+
+	return nil
+}
+
+// Participant returns the participation record for the player, creating it if the
+// hand does not have one yet. Parsers use it to accumulate a player's involvement
+// without tracking insertion order themselves.
+func (h *Hand) Participant(playerID int64) *Participation {
+	if p := h.FindParticipant(playerID); p != nil {
+		return p
 	}
 
 	p := &Participation{PlayerID: playerID}
@@ -208,21 +220,27 @@ func (r *RawID) UnmarshalJSON(b []byte) error {
 // identifiers return false so a parser can decide whether to skip the action or
 // fail; a log written by a newer game version should not break analysis of the
 // actions that are understood.
+//
+// The cases are the poker/action constants rather than string literals, so
+// renaming one there is a compile error here instead of a silently unrecognized
+// action. Seven Card declares its own action type with the same identifiers and
+// cannot be referenced from this package (it imports gamelog), but its parser
+// feeds the same strings through here.
 func (r RawID) Kind() (Kind, bool) {
-	switch string(r) {
-	case "fold":
+	switch action.Action(r) {
+	case action.Fold:
 		return KindFold, true
-	case "check":
+	case action.Check:
 		return KindCheck, true
-	case "call":
+	case action.Call:
 		return KindCall, true
-	case "bet":
+	case action.Bet:
 		return KindBet, true
-	case "raise":
+	case action.Raise:
 		return KindRaise, true
-	case "discard":
+	case action.Discard:
 		return KindDiscard, true
-	case "trade":
+	case action.Trade:
 		return KindTrade, true
 	}
 

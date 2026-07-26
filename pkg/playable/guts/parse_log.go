@@ -17,9 +17,8 @@ type persistedLog struct {
 	Options struct {
 		Ante int `json:"Ante"`
 	} `json:"options"`
-	InitialPot int              `json:"initialPot"`
-	Players    []int64          `json:"players"`
-	Rounds     []persistedRound `json:"rounds"`
+	Players []int64          `json:"players"`
+	Rounds  []persistedRound `json:"rounds"`
 }
 
 type persistedRound struct {
@@ -44,7 +43,6 @@ type persistedDecision struct {
 type persistedTrade struct {
 	PlayerID     int64        `json:"playerId"`
 	DiscardedOut []*deck.Card `json:"discardedOut"`
-	NewCards     []*deck.Card `json:"newCards"`
 }
 
 type persistedShowdown struct {
@@ -79,10 +77,6 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		hand.Participant(id)
 	}
 
-	// declaredOut tracks players who have chosen out at least once, so a player who
-	// never once declared in can be marked as having folded the game.
-	declaredIn := make(map[int64]bool)
-
 	for i, round := range log.Rounds {
 		street := "round-" + strconv.Itoa(round.Round)
 		hand.PotCents = round.Pot
@@ -97,7 +91,6 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 			kind := gamelog.KindDropOut
 			if d.In {
 				kind = gamelog.KindStayIn
-				declaredIn[d.PlayerID] = true
 			}
 
 			hand.AddAction(&gamelog.Action{
@@ -119,11 +112,14 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		applyShowdown(hand, round.Result)
 	}
 
+	// A stay-in action is recorded exactly when a player declared in, so the tally
+	// already answers this and no parallel map is needed. AddAction marks a player
+	// folded on any drop-out; only a player who never once declared in actually sat
+	// the whole game out.
 	for _, p := range hand.Participants {
-		p.VoluntarilyPlayed = declaredIn[p.PlayerID]
-		// AddAction marks a player folded on any drop-out; only a player who never
-		// declared in actually sat the whole game out.
-		p.Folded = !declaredIn[p.PlayerID]
+		declaredIn := p.Counts[gamelog.KindStayIn] > 0
+		p.VoluntarilyPlayed = declaredIn
+		p.Folded = !declaredIn
 	}
 
 	return hand, nil
@@ -137,9 +133,8 @@ func applyShowdown(hand *gamelog.Hand, result *persistedShowdown) {
 		return
 	}
 
-	contested := len(result.PlayersIn) > 1
-	for _, id := range result.PlayersIn {
-		if contested {
+	if len(result.PlayersIn) > 1 {
+		for _, id := range result.PlayersIn {
 			hand.Participant(id).WentToShowdown = true
 		}
 	}

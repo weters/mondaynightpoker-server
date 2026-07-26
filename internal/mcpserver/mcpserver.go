@@ -169,3 +169,41 @@ func (s *server) activeTable(ctx context.Context, uuid string) (*model.Table, er
 
 	return table, nil
 }
+
+// gameAtTable resolves a game that belongs to the given table, and is the single
+// place that enforces the capability rule for games.
+//
+// The table uuid is the capability. games.id is sequential, so keying on the id
+// alone would let any authenticated caller walk the id space and read every game
+// site-wide; a game is only returned when it actually belongs to the table whose
+// uuid the caller presented. Every outcome — an unknown or soft-deleted table, an
+// unknown game, or a game at some other table — reports "game not found"
+// identically, so a caller cannot probe which part of the request was wrong or
+// learn that a game with this id exists elsewhere.
+//
+// withData controls whether the (potentially large) jsonb log is fetched.
+// Routing every game lookup through here means a new tool cannot forget the
+// ownership comparison, the same way activeTable keeps one from forgetting the
+// deleted check.
+func (s *server) gameAtTable(ctx context.Context, uuid string, id int64, withData bool) (*model.Game, error) {
+	table, err := s.activeTable(ctx, uuid)
+	if err != nil {
+		return nil, errNotFound("game")
+	}
+
+	var game *model.Game
+	if withData {
+		game, err = s.repos.Games.GetGameByID(ctx, id)
+	} else {
+		game, err = s.repos.Games.GetGameByIDNoData(ctx, id)
+	}
+	if err != nil {
+		return nil, errNotFound("game")
+	}
+
+	if game.TableUUID != table.UUID {
+		return nil, errNotFound("game")
+	}
+
+	return game, nil
+}

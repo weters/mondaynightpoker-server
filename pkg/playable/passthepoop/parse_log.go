@@ -23,7 +23,6 @@ type persistedRound struct {
 	Round        int               `json:"round"`
 	StartingHand []persistedHand   `json:"startingHand"`
 	GameActions  []persistedAction `json:"gameActions"`
-	LoserGroups  []persistedLosers `json:"loserGroups"`
 }
 
 type persistedHand struct {
@@ -34,14 +33,6 @@ type persistedHand struct {
 type persistedAction struct {
 	GameAction gamelog.RawID `json:"gameAction"`
 	PlayerID   int64         `json:"playerId"`
-}
-
-type persistedLosers struct {
-	RoundLosers []persistedLoser `json:"roundLosers"`
-}
-
-type persistedLoser struct {
-	PlayerID int64 `json:"playerId"`
 }
 
 // ParseGameLog decodes a persisted Pass the Poop log into a normalized hand.
@@ -122,13 +113,23 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 // reports whether it was a discretionary choice. Accepting a trade and drawing
 // from the deck are forced consequences of another player's move, so they do not
 // count as discretionary.
+//
+// The identifier is resolved through GameActionFromID and matched against the
+// typed constants rather than against string literals, so renaming an action in
+// GameAction.ID is a compile error here instead of silently reclassifying every
+// action in every persisted log.
 func actionKind(raw gamelog.RawID) (kind gamelog.Kind, voluntary bool) {
-	switch string(raw) {
-	case "stay":
+	a, err := GameActionFromID(string(raw))
+	if err != nil {
+		return gamelog.KindPass, false
+	}
+
+	switch a {
+	case ActionStay:
 		return gamelog.KindStayIn, true
-	case "trade", "block-trade", "flip-king", "go-to-deck":
+	case ActionTrade, ActionBlockTrade, ActionFlipKing, ActionGoToDeck:
 		return gamelog.KindTrade, true
-	case "accept-trade", "draw-from-deck":
+	case ActionAccept, ActionDrawFromDeck:
 		return gamelog.KindTrade, false
 	}
 

@@ -13,14 +13,13 @@ import (
 // hand when a Bourré game continues across several hands, so a single persisted
 // log can carry a whole chain.
 type persistedLog struct {
-	Parent     *persistedLog      `json:"parent"`
-	Ante       int                `json:"ante"`
-	InitialPot int                `json:"initialPot"`
-	TrumpCard  *deck.Card         `json:"trumpCard"`
-	Seats      []persistedSeat    `json:"seats"`
-	Discards   []persistedDiscard `json:"discards"`
-	Tricks     []persistedTrick   `json:"tricks"`
-	Result     *persistedResult   `json:"result"`
+	Parent    *persistedLog      `json:"parent"`
+	Ante      int                `json:"ante"`
+	TrumpCard *deck.Card         `json:"trumpCard"`
+	Seats     []persistedSeat    `json:"seats"`
+	Discards  []persistedDiscard `json:"discards"`
+	Tricks    []persistedTrick   `json:"tricks"`
+	Result    *persistedResult   `json:"result"`
 }
 
 type persistedSeat struct {
@@ -35,9 +34,8 @@ type persistedDiscard struct {
 }
 
 type persistedTrick struct {
-	Number   int             `json:"number"`
-	Plays    []persistedPlay `json:"plays"`
-	WinnerID int64           `json:"winnerId"`
+	Number int             `json:"number"`
+	Plays  []persistedPlay `json:"plays"`
 }
 
 type persistedPlay struct {
@@ -49,10 +47,8 @@ type persistedPlay struct {
 // which has no JSON tags and exports only PlayerID, so it serializes with the Go
 // field name.
 type persistedResult struct {
-	Winners       []persistedPlayer `json:"Winners"`
-	Folded        []persistedPlayer `json:"Folded"`
-	WinningAmount int               `json:"WinningAmount"`
-	OldPot        int               `json:"OldPot"`
+	Winners []persistedPlayer `json:"Winners"`
+	OldPot  int               `json:"OldPot"`
 }
 
 type persistedPlayer struct {
@@ -101,6 +97,7 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 	folded := make(map[int64]bool, len(log.Discards))
 	for _, d := range log.Discards {
 		if d.Folded {
+			// AddAction records the fold; the map is what ResolveShowdown needs.
 			folded[d.PlayerID] = true
 			hand.AddAction(&gamelog.Action{
 				Street:   "trade-in",
@@ -130,22 +127,18 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		}
 	}
 
-	// Folding is the only way out of a Bourré hand, so everyone else contested it.
-	contested := 0
-	for _, p := range hand.Participants {
-		if !folded[p.PlayerID] {
-			contested++
-		}
-	}
+	// Folding is the only way out of a Bourré hand, so the shared showdown rule
+	// applies unchanged: everyone who did not fold contested it.
+	//
+	// The winnings map is nil because Bourré names its winners directly, and that
+	// list is authoritative even when the amount is zero — a hand can be won for
+	// nothing when the pot carries. Deriving Won from a payout would lose those.
+	hand.ResolveShowdown(folded, nil)
 
+	// Staying in past the trade-in is the commitment Bourré asks for; there is no
+	// separate wager to opt into.
 	for _, p := range hand.Participants {
-		if folded[p.PlayerID] {
-			p.Folded = true
-			continue
-		}
-
-		p.VoluntarilyPlayed = true
-		p.WentToShowdown = contested > 1
+		p.VoluntarilyPlayed = !p.Folded
 	}
 
 	if log.Result != nil {

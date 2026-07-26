@@ -21,7 +21,14 @@ type GameLogRecord struct {
 }
 
 // GetPlayerGameLogs returns the persisted logs of completed games the player took
-// part in, newest first, capped at limit rows.
+// part in, newest first, capped at limit rows. The second return value is how many
+// games matched in total, ignoring the cap, so a caller can report that its
+// analysis covered only part of the range rather than silently truncating.
+//
+// The total comes from a window function rather than a second query: window
+// functions are evaluated before LIMIT, so one statement yields both the page and
+// the full count from a single consistent snapshot. A separate count query would
+// have to repeat this predicate verbatim, and the two would drift.
 //
 // Games with no log are excluded: a game row is created when the game starts and
 // only receives its data payload when it ends, so an in-progress or terminated
@@ -33,9 +40,9 @@ type GameLogRecord struct {
 // matching GetPlayerStats: a table is a single night by convention, so normalizing
 // every figure onto the table's date keeps the analytics tools reconcilable with
 // each other.
-func (r *PlayerRepo) GetPlayerGameLogs(ctx context.Context, playerID int64, from, to time.Time, limit int) ([]*GameLogRecord, error) {
+func (r *PlayerRepo) GetPlayerGameLogs(ctx context.Context, playerID int64, from, to time.Time, limit int) (records []*GameLogRecord, total int64, err error) {
 	const query = `
-SELECT g.id, t.uuid, t.name, g.game_type, g.created, g.data
+SELECT g.id, t.uuid, t.name, g.game_type, g.created, g.data, COUNT(*) OVER () AS total
 FROM games g
 INNER JOIN tables t ON g.table_uuid = t.uuid
 WHERE NOT t.deleted
@@ -53,49 +60,21 @@ LIMIT $4`
 
 	rows, err := r.db.QueryContext(ctx, query, playerID, from, to, limit)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	records := make([]*GameLogRecord, 0)
+	records = make([]*GameLogRecord, 0)
 	for rows.Next() {
 		var rec GameLogRecord
-		if err := rows.Scan(&rec.GameID, &rec.TableUUID, &rec.TableName, &rec.GameType, &rec.Created, &rec.Data); err != nil {
-			return nil, err
+		if err := rows.Scan(&rec.GameID, &rec.TableUUID, &rec.TableName, &rec.GameType, &rec.Created, &rec.Data, &total); err != nil {
+			return nil, 0, err
 		}
 
 		records = append(records, &rec)
 	}
 
-	return records, rows.Err()
-}
-
-// GetPlayerGameLogsCount returns how many completed game logs match
-// GetPlayerGameLogs for the same arguments, ignoring its limit. It lets a caller
-// report that its analysis covered only part of the range rather than silently
-// truncating.
-func (r *PlayerRepo) GetPlayerGameLogsCount(ctx context.Context, playerID int64, from, to time.Time) (int64, error) {
-	const query = `
-SELECT COUNT(*)
-FROM games g
-INNER JOIN tables t ON g.table_uuid = t.uuid
-WHERE NOT t.deleted
-  AND g.data IS NOT NULL AND jsonb_typeof(g.data) <> 'null'
-  AND t.created >= $2 AND t.created <= $3
-  AND EXISTS (
-    SELECT 1
-    FROM players_tables_transactions ptt
-    INNER JOIN players_tables pt ON ptt.players_tables_id = pt.id
-    WHERE ptt.game_id = g.id
-      AND pt.player_id = $1
-  )`
-
-	var count int64
-	if err := r.db.QueryRowContext(ctx, query, playerID, from, to).Scan(&count); err != nil {
-		return 0, err
-	}
-
-	return count, nil
+	return records, total, rows.Err()
 }
 
 // PlayerGameResult is one game's net outcome for a player, in cents.
@@ -219,16 +198,8 @@ func NewSpread(values []int) Spread {
 		return s
 	}
 
-	s.BestCents = values[0]
-	s.WorstCents = values[0]
 	for _, v := range values {
 		s.TotalCents += v
-		if v > s.BestCents {
-			s.BestCents = v
-		}
-		if v < s.WorstCents {
-			s.WorstCents = v
-		}
 	}
 
 	s.MeanCents = float64(s.TotalCents) / float64(len(values))
@@ -246,6 +217,11 @@ func NewSpread(values []int) Spread {
 	sorted := make([]int, len(values))
 	copy(sorted, values)
 	sort.Ints(sorted)
+
+	// The median needs the values ordered anyway, so the extremes come from the
+	// ends of the sorted copy rather than from a second pass with two branches.
+	s.WorstCents = sorted[0]
+	s.BestCents = sorted[len(sorted)-1]
 
 	mid := len(sorted) / 2
 	if len(sorted)%2 == 0 {
@@ -372,24 +348,35 @@ func (r *PlayerRepo) GetPlayerVariance(ctx context.Context, playerID int64, from
 		return nil, err
 	}
 
-	gameValues := make([]int, 0, len(games))
-	gameStreakInput := make([]StreakInput, 0, len(games))
+	gameInput := make([]StreakInput, 0, len(games))
 	for _, g := range games {
-		gameValues = append(gameValues, g.NetCents)
-		gameStreakInput = append(gameStreakInput, StreakInput{NetCents: g.NetCents, At: g.Created})
+		gameInput = append(gameInput, StreakInput{NetCents: g.NetCents, At: g.Created})
 	}
 
-	sessionValues := make([]int, 0, len(sessions))
-	sessionStreakInput := make([]StreakInput, 0, len(sessions))
+	sessionInput := make([]StreakInput, 0, len(sessions))
 	for _, s := range sessions {
-		sessionValues = append(sessionValues, s.NetCents)
-		sessionStreakInput = append(sessionStreakInput, StreakInput{NetCents: s.NetCents, At: s.Created})
+		sessionInput = append(sessionInput, StreakInput{NetCents: s.NetCents, At: s.Created})
 	}
+
+	byGame, gameStreaks := spreadAndStreaks(gameInput)
+	bySession, sessionStreaks := spreadAndStreaks(sessionInput)
 
 	return &PlayerVariance{
-		ByGame:         NewSpread(gameValues),
-		BySession:      NewSpread(sessionValues),
-		GameStreaks:    ComputeStreaks(gameStreakInput),
-		SessionStreaks: ComputeStreaks(sessionStreakInput),
+		ByGame:         byGame,
+		BySession:      bySession,
+		GameStreaks:    gameStreaks,
+		SessionStreaks: sessionStreaks,
 	}, nil
+}
+
+// spreadAndStreaks derives both summaries from one chronological series. The
+// spread needs only the amounts, which StreakInput already carries, so this keeps
+// the two from being extracted separately and drifting apart.
+func spreadAndStreaks(results []StreakInput) (Spread, Streaks) {
+	values := make([]int, 0, len(results))
+	for _, res := range results {
+		values = append(values, res.NetCents)
+	}
+
+	return NewSpread(values), ComputeStreaks(results)
 }

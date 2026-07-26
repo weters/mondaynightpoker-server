@@ -536,32 +536,12 @@ type getGameInput struct {
 }
 
 func (s *server) getGame(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.Caller, in getGameInput) (GameDTO, error) {
-	// Resolve the table first: this both rejects soft-deleted/absent tables and pins the
-	// caller to the capability they hold. A caller who was never given this uuid cannot
-	// reach the game regardless of how they guessed its (sequential) id.
-	table, err := s.activeTable(ctx, in.UUID)
-	if err != nil {
-		return GameDTO{}, errNotFound("game")
-	}
-
 	// Only fetch the (potentially large) jsonb log when the caller asked for it.
 	includeLog := in.IncludeLog != nil && *in.IncludeLog
 
-	var game *model.Game
-	if includeLog {
-		game, err = s.repos.Games.GetGameByID(ctx, in.ID)
-	} else {
-		game, err = s.repos.Games.GetGameByIDNoData(ctx, in.ID)
-	}
+	game, err := s.gameAtTable(ctx, in.UUID, in.ID, includeLog)
 	if err != nil {
-		// A missing game and a game belonging to another table are reported identically,
-		// so a caller cannot probe which part of the request was wrong (or learn that a
-		// game with this id exists at some other table).
-		return GameDTO{}, errNotFound("game")
-	}
-
-	if game.TableUUID != table.UUID {
-		return GameDTO{}, errNotFound("game")
+		return GameDTO{}, err
 	}
 
 	adjustments, err := s.repos.Games.GetGameAdjustments(ctx, []int64{game.ID})

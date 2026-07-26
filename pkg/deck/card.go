@@ -47,6 +47,21 @@ const (
 	LowAce  = 1
 )
 
+// Valid reports whether the suit is one of the defined suits.
+//
+// It exists for values that did not come from a live deck: a Card decoded from
+// persisted JSON carries whatever string was stored, and String panics on a suit
+// it cannot render. Callers handling untrusted cards ask this first rather than
+// keeping their own copy of the suit list.
+func (s Suit) Valid() bool {
+	switch s {
+	case Hearts, Clubs, Diamonds, Spades, Stars:
+		return true
+	}
+
+	return false
+}
+
 func (c *Card) String() string {
 	var rank string
 	switch c.Rank {
