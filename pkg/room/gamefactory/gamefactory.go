@@ -80,6 +80,48 @@ func ParseGameLog(gameType string, raw json.RawMessage) (*gamelog.Hand, error) {
 	return hand, nil
 }
 
+// nameByGroup maps a canonical display group to the factory identifier that
+// produces it. It is derived from the factories themselves rather than written out
+// by hand, relying on the GameFactory contract that
+// model.GameTypeGroup(DisplayName()) yields the factory's group.
+var nameByGroup = func() map[string]string {
+	byGroup := make(map[string]string, len(factories))
+	for name, factory := range factories {
+		byGroup[model.GameTypeGroup(factory.DisplayName())] = name
+	}
+
+	return byGroup
+}()
+
+// NameForStoredGameType resolves a games.game_type value to a registered factory
+// identifier.
+//
+// The column stores a game's full display name rather than its identifier, and
+// that name varies with the options the game was created with ("4-Card Little L
+// (trade: 0, 2)", "Pineapple"). Resolution therefore goes through
+// model.GameTypeGroup, which collapses every display name a game can produce down
+// to one canonical group.
+func NameForStoredGameType(storedGameType string) (string, error) {
+	name, ok := nameByGroup[model.GameTypeGroup(storedGameType)]
+	if !ok {
+		return "", fmt.Errorf("no factory for stored game type: %s", storedGameType)
+	}
+
+	return name, nil
+}
+
+// ParseStoredGameLog decodes a persisted games.data payload into a normalized hand,
+// resolving the games.game_type display name to its factory first. It is the entry
+// point for anything reading logs back out of the database.
+func ParseStoredGameLog(storedGameType string, raw json.RawMessage) (*gamelog.Hand, error) {
+	name, err := NameForStoredGameType(storedGameType)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseGameLog(name, raw)
+}
+
 // Names returns the registered game-type identifiers, sorted.
 func Names() []string {
 	names := make([]string, 0, len(factories))
