@@ -1,8 +1,10 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 	"mondaynightpoker-server/pkg/playable/poker/littlel"
 
 	"github.com/sirupsen/logrus"
@@ -54,4 +56,9 @@ func getOptions(additionalData playable.AdditionalData) littlel.Options {
 	}
 
 	return opts
+}
+
+// ParseGameLog decodes a persisted Little L log into a normalized hand.
+func (l littleLFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return littlel.ParseGameLog(raw)
 }

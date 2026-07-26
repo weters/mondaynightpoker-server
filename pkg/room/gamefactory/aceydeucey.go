@@ -1,9 +1,11 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/aceydeucey"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 
 	"github.com/sirupsen/logrus"
 )
@@ -40,4 +42,9 @@ func getAceyDeuceyOptions(data playable.AdditionalData) aceydeucey.Options {
 	}
 
 	return opts
+}
+
+// ParseGameLog decodes a persisted Acey Deucey log into a normalized hand.
+func (a aceyDeuceyFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return aceydeucey.ParseGameLog(raw)
 }

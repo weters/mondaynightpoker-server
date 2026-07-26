@@ -1,9 +1,11 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"fmt"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 	"mondaynightpoker-server/pkg/playable/poker/sevencard"
 
 	"github.com/sirupsen/logrus"
@@ -72,4 +74,9 @@ func (s sevenCardFactory) getOptions(additionalData playable.AdditionalData) (se
 	}
 
 	return opts, nil
+}
+
+// ParseGameLog decodes a persisted Seven Card log into a normalized hand.
+func (s sevenCardFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return sevencard.ParseGameLog(raw)
 }

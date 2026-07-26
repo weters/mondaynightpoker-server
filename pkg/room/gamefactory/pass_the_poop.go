@@ -1,10 +1,12 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 	"mondaynightpoker-server/pkg/playable/passthepoop"
 
 	"github.com/sirupsen/logrus"
@@ -75,4 +77,9 @@ func (p passThePoopFactory) getOptions(additionalData playable.AdditionalData) (
 	opts.AllowBlocks = allowBlocks
 
 	return opts, nil
+}
+
+// ParseGameLog decodes a persisted Pass the Poop log into a normalized hand.
+func (p passThePoopFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return passthepoop.ParseGameLog(raw)
 }
