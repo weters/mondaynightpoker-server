@@ -136,6 +136,61 @@ func TestHand_ApplyBettingActions(t *testing.T) {
 	assert.True(t, hand.Participant(4).Folded)
 }
 
+func TestHand_ApplyBettingActionsFunc(t *testing.T) {
+	hand := &Hand{}
+	hand.ApplyBettingActionsFunc([]BettingAction{
+		{Street: "third-street", PlayerID: 1, Action: "bet", Amount: 50},
+		{Street: "third-street", PlayerID: 2, Action: "flip-mushroom"},
+		{Street: "third-street", PlayerID: 2, Action: "call", Amount: 50},
+		// Still unknown to both the shared vocabulary and the fallback.
+		{Street: "third-street", PlayerID: 3, Action: "teleport"},
+	}, func(raw RawID) (Kind, bool) {
+		if raw == "flip-mushroom" {
+			return KindPlayCard, true
+		}
+
+		return "", false
+	})
+
+	// The fallback action keeps its position between the two betting actions.
+	require.Len(t, hand.Actions, 3)
+	assert.Equal(t, KindPlayCard, hand.Actions[1].Kind)
+	assert.Equal(t, int64(2), hand.Actions[1].PlayerID)
+	assert.Equal(t, "third-street", hand.Actions[1].Street)
+	assert.Equal(t, 1, hand.Actions[1].Sequence)
+	assert.Equal(t, KindCall, hand.Actions[2].Kind)
+
+	// The fallback is never what makes a player voluntarily played; the call is.
+	assert.True(t, hand.Participant(2).VoluntarilyPlayed)
+	assert.Equal(t, 50, hand.Participant(2).AmountWageredCents)
+	assert.Nil(t, hand.FindParticipant(3), "the unresolved action added nobody")
+}
+
+func TestHand_ApplyBettingActionsFunc_FallbackIsNotVoluntary(t *testing.T) {
+	hand := &Hand{}
+	// A fallback that resolves to a kind the betting path would treat as voluntary
+	// must still not set the flag: only the shared vocabulary can.
+	hand.ApplyBettingActionsFunc([]BettingAction{
+		{PlayerID: 1, Action: "flip-mushroom", Amount: 0},
+	}, func(RawID) (Kind, bool) {
+		return KindRaise, true
+	})
+
+	require.Len(t, hand.Actions, 1)
+	assert.False(t, hand.Participant(1).VoluntarilyPlayed)
+}
+
+func TestHand_ApplyBettingActionsFunc_NilFallback(t *testing.T) {
+	hand := &Hand{}
+	hand.ApplyBettingActionsFunc([]BettingAction{
+		{PlayerID: 1, Action: "check"},
+		{PlayerID: 2, Action: "flip-mushroom"},
+	}, nil)
+
+	require.Len(t, hand.Actions, 1, "without a fallback the unknown action is skipped")
+	assert.Equal(t, KindCheck, hand.Actions[0].Kind)
+}
+
 func TestHand_ResolveShowdown(t *testing.T) {
 	t.Run("contested", func(t *testing.T) {
 		hand := &Hand{}

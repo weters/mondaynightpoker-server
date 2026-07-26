@@ -50,6 +50,11 @@ type persistedPart struct {
 // Seven Card has no single starting hand: cards arrive one per street, some face
 // up and some face down. The starting cards reported for each player are therefore
 // the cards from the initial deal only, reassembled from the deal records.
+//
+// The action stream carries more than the betting: a variant that implements
+// InteractiveVariant records its own moves into the same list, in the order they
+// were taken, so the parser hands ApplyBettingActionsFunc a mapping for them (see
+// variantActionKind) rather than letting them fall out of the history.
 func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 	var log persistedLog
 	if err := json.Unmarshal(raw, &log); err != nil {
@@ -74,7 +79,7 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 		}
 	}
 
-	hand.ApplyBettingActions(log.Actions)
+	hand.ApplyBettingActionsFunc(log.Actions, variantActionKind)
 
 	folded := make(map[int64]bool, len(log.FinalState.Participants))
 	for _, p := range log.FinalState.Participants {
@@ -84,4 +89,34 @@ func ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
 	hand.ResolveShowdown(folded, log.FinalState.Winners)
 
 	return hand, nil
+}
+
+// variantActionKind maps a Seven Card variant action identifier onto a normalized
+// kind. It is the fallback ParseGameLog gives ApplyBettingActionsFunc, so it only
+// ever sees identifiers that are not part of the shared betting vocabulary.
+//
+// Chiggs is the one variant with actions of its own: a player may flip a face-down
+// mushroom to force their neighbors out, and a neighbor holding an antidote may
+// play it to survive. Both are recorded by Game.Action into the same stream as the
+// betting and interleaved with it, so dropping them would leave a hand history that
+// silently skips the moves that decided the hand.
+//
+// Both normalize to KindPlayCard. Each commits a specific card from the player's
+// hand to change the state of the game, which is what KindPlayCard describes; the
+// alternatives are worse fits, since neither trades or discards a card for another
+// and neither is a wager. Neither puts money in the pot, and
+// ApplyBettingActionsFunc guarantees that an action resolved here never counts
+// toward VoluntarilyPlayed — the amount recorded for both is zero, so the wagered
+// totals are unaffected as well.
+//
+// The switch matches the typed constants rather than string literals, so renaming
+// one in action.go is a compile error here instead of an action that quietly
+// disappears from every hand history written afterward.
+func variantActionKind(raw gamelog.RawID) (gamelog.Kind, bool) {
+	switch Action(raw) {
+	case ActionFlipMushroom, ActionPlayAntidote:
+		return gamelog.KindPlayCard, true
+	}
+
+	return "", false
 }

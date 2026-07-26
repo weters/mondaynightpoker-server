@@ -30,10 +30,42 @@ type BettingAction struct {
 // error, so a log written by a newer game version still yields usable numbers for
 // the actions that are understood.
 func (h *Hand) ApplyBettingActions(actions []BettingAction) {
+	h.ApplyBettingActionsFunc(actions, nil)
+}
+
+// ApplyBettingActionsFunc is ApplyBettingActions with a fallback for action
+// identifiers outside the shared betting vocabulary.
+//
+// Some games interleave non-betting moves into the same action stream as the
+// wagering — Seven Card's Chiggs variant lets a player flip a mushroom or play an
+// antidote in the middle of a street. Those identifiers are declared in the game
+// package, and a game package imports gamelog rather than the other way around, so
+// this package cannot resolve them itself. The fallback lets the game's own parser
+// supply the mapping without either duplicating the bookkeeping below or losing the
+// action's position in the sequence, which is the only record of when it happened
+// relative to the betting.
+//
+// The fallback is consulted only for identifiers RawID.Kind rejects, and an action
+// it resolves never sets VoluntarilyPlayed: these are game mechanics rather than
+// wagers, and counting one as a voluntary play would make VPIP mean something
+// different for the players who happened to be dealt into a variant. An identifier
+// that neither RawID.Kind nor the fallback recognizes is skipped, as it is when
+// there is no fallback at all. Pass nil for fallback to get exactly
+// ApplyBettingActions' behavior.
+func (h *Hand) ApplyBettingActionsFunc(actions []BettingAction, fallback func(RawID) (Kind, bool)) {
 	for _, a := range actions {
-		kind, ok := a.Action.Kind()
-		if !ok {
-			continue
+		// betting records whether the identifier resolved through the shared
+		// vocabulary, because only those actions can put money in voluntarily.
+		kind, betting := a.Action.Kind()
+		if !betting {
+			if fallback == nil {
+				continue
+			}
+
+			var ok bool
+			if kind, ok = fallback(a.Action); !ok {
+				continue
+			}
 		}
 
 		h.AddAction(&Action{
@@ -45,7 +77,7 @@ func (h *Hand) ApplyBettingActions(actions []BettingAction) {
 			AllIn:       a.AllIn,
 		})
 
-		if kind == KindCall || kind.IsAggressive() {
+		if betting && (kind == KindCall || kind.IsAggressive()) {
 			h.Participant(a.PlayerID).VoluntarilyPlayed = true
 		}
 	}

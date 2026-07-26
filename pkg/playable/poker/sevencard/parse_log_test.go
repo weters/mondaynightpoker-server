@@ -115,6 +115,119 @@ func TestParseGameLog_Showdown(t *testing.T) {
 	assert.True(t, hand.Participant(2).Won)
 }
 
+// TestParseGameLog_VariantActions covers the Chiggs mushroom/antidote moves, which
+// Game.Action records into the same stream as the betting. They must survive
+// parsing with their position intact, since where they fall relative to the betting
+// is the only thing that says when the mushroom was flipped.
+func TestParseGameLog_VariantActions(t *testing.T) {
+	log := &gameLog{
+		Variant: "chiggs",
+		Ante:    25,
+		Seats:   []*gameLogSeat{{PlayerID: 1}, {PlayerID: 2}},
+		Actions: []*gameLogAction{
+			{Street: "fourth-street", PlayerID: 1, Action: ActionBet, Amount: 50},
+			{Street: "fourth-street", PlayerID: 2, Action: ActionFlipMushroom},
+			{Street: "fourth-street", PlayerID: 1, Action: ActionPlayAntidote},
+			{Street: "fourth-street", PlayerID: 2, Action: ActionCall, Amount: 50},
+		},
+		FinalState: GameState{
+			Pot:     150,
+			Winners: map[int64]int{1: 150},
+			Participants: []*participantJSON{
+				{PlayerID: 1},
+				{PlayerID: 2},
+			},
+		},
+	}
+
+	hand, err := ParseGameLog(marshalLog(t, log))
+	require.NoError(t, err)
+
+	require.Len(t, hand.Actions, 4, "no variant action is dropped")
+
+	// The two variant actions keep the sequence positions they were recorded in,
+	// interleaved with the betting rather than appended after it.
+	assert.Equal(t, gamelog.KindBet, hand.Actions[0].Kind)
+	assert.Equal(t, gamelog.KindPlayCard, hand.Actions[1].Kind)
+	assert.Equal(t, gamelog.KindPlayCard, hand.Actions[2].Kind)
+	assert.Equal(t, gamelog.KindCall, hand.Actions[3].Kind)
+
+	for i, a := range hand.Actions {
+		assert.Equal(t, i, a.Sequence)
+		assert.Equal(t, "fourth-street", a.Street)
+	}
+
+	assert.Equal(t, int64(2), hand.Actions[1].PlayerID, "player 2 flipped the mushroom")
+	assert.Equal(t, int64(1), hand.Actions[2].PlayerID, "player 1 played the antidote")
+
+	// Neither move puts money in the pot, so neither shows up in the wagered totals
+	// and neither can be what makes a player voluntarily played.
+	assert.Zero(t, hand.Actions[1].AmountCents)
+	assert.Zero(t, hand.Actions[2].AmountCents)
+
+	p1 := hand.Participant(1)
+	assert.Equal(t, 50, p1.AmountWageredCents)
+	assert.True(t, p1.VoluntarilyPlayed, "the bet is what qualifies, not the antidote")
+	assert.Equal(t, 1, p1.Counts[gamelog.KindPlayCard])
+	assert.False(t, p1.Folded)
+
+	p2 := hand.Participant(2)
+	assert.Equal(t, 50, p2.AmountWageredCents)
+	assert.True(t, p2.VoluntarilyPlayed, "the call is what qualifies, not the mushroom")
+	assert.Equal(t, 1, p2.Counts[gamelog.KindPlayCard])
+}
+
+// TestParseGameLog_VariantActionOnly proves the variant moves alone never make a
+// player count as having voluntarily played: only money in by choice does that.
+func TestParseGameLog_VariantActionOnly(t *testing.T) {
+	log := &gameLog{
+		Variant: "chiggs",
+		Ante:    25,
+		Seats:   []*gameLogSeat{{PlayerID: 1}, {PlayerID: 2}},
+		Actions: []*gameLogAction{
+			{Street: "third-street", PlayerID: 1, Action: ActionFlipMushroom},
+			{Street: "third-street", PlayerID: 2, Action: ActionPlayAntidote},
+			{Street: "third-street", PlayerID: 1, Action: ActionCheck},
+			{Street: "third-street", PlayerID: 2, Action: ActionCheck},
+		},
+		FinalState: GameState{
+			Pot:     50,
+			Winners: map[int64]int{1: 50},
+			Participants: []*participantJSON{
+				{PlayerID: 1},
+				{PlayerID: 2},
+			},
+		},
+	}
+
+	hand, err := ParseGameLog(marshalLog(t, log))
+	require.NoError(t, err)
+
+	require.Len(t, hand.Actions, 4)
+
+	for _, id := range []int64{1, 2} {
+		p := hand.Participant(id)
+		assert.False(t, p.VoluntarilyPlayed, "player %d only checked", id)
+		assert.Zero(t, p.AmountWageredCents)
+		assert.False(t, p.Folded)
+		assert.True(t, p.WentToShowdown)
+	}
+}
+
+// TestVariantActionKind pins the mapping itself, including the unknown-identifier
+// case that keeps a log from a newer game version readable.
+func TestVariantActionKind(t *testing.T) {
+	for _, a := range []Action{ActionFlipMushroom, ActionPlayAntidote} {
+		kind, ok := variantActionKind(gamelog.RawID(a))
+		assert.True(t, ok, "%s should map", a)
+		assert.Equal(t, gamelog.KindPlayCard, kind)
+	}
+
+	kind, ok := variantActionKind(gamelog.RawID("summon-chigg"))
+	assert.False(t, ok)
+	assert.Equal(t, gamelog.Kind(""), kind)
+}
+
 func TestParseGameLog_Invalid(t *testing.T) {
 	hand, err := ParseGameLog(json.RawMessage(`{"seats":"nope"}`))
 	assert.Nil(t, hand)
