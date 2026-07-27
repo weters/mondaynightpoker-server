@@ -1,9 +1,11 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
 	"mondaynightpoker-server/pkg/playable/bourre"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 
 	"github.com/sirupsen/logrus"
 )
@@ -44,4 +46,9 @@ func getBourreOptions(additionalData playable.AdditionalData) bourre.Options {
 	}
 
 	return opts
+}
+
+// ParseGameLog decodes a persisted Bourré log into a normalized hand.
+func (b bourreFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return bourre.ParseGameLog(raw)
 }

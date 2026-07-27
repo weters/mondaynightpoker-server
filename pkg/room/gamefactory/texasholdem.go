@@ -1,8 +1,10 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 	"mondaynightpoker-server/pkg/playable/poker/texasholdem"
 
 	"github.com/sirupsen/logrus"
@@ -50,4 +52,9 @@ func texasHoldEmOptions(additionData playable.AdditionalData) texasholdem.Option
 	}
 
 	return opts
+}
+
+// ParseGameLog decodes a persisted Texas Hold'em log into a normalized hand.
+func (t texasHoldEmFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return texasholdem.ParseGameLog(raw)
 }

@@ -18,6 +18,7 @@ type Game struct {
 	TableUUID string
 	GameType  string
 	data      interface{}
+	rawData   json.RawMessage
 	Created   time.Time
 	Ended     time.Time
 }
@@ -29,10 +30,20 @@ const gamesColumns = `id, parent_id, table_uuid, game_type, data, created, ended
 // log is actually needed.
 const gamesColumnsNoData = `id, parent_id, table_uuid, game_type, created, ended`
 
-// Data returns the game's log/state payload (the jsonb `data` column). It is nil
-// on games loaded without the data column (e.g. ListGamesByTable).
+// Data returns the game's log/state payload (the jsonb `data` column) decoded into
+// a generic value. It is nil on games loaded without the data column (e.g.
+// ListGamesByTable).
 func (g *Game) Data() interface{} {
 	return g.data
+}
+
+// RawData returns the game's log/state payload as the bytes stored in the column,
+// for callers that decode it into a type of their own. Taking the bytes directly
+// avoids marshalling Data back to JSON just to decode it again, and it preserves
+// values the generic decode flattens (integers become float64 in an interface{}).
+// It is nil on games loaded without the data column.
+func (g *Game) RawData() json.RawMessage {
+	return g.rawData
 }
 
 func gameByRow(row db.Scanner) (*Game, error) {
@@ -47,6 +58,7 @@ func gameByRow(row db.Scanner) (*Game, error) {
 
 	g.ParentID = parentID.Int64
 	if data != nil {
+		g.rawData = data
 		if err := json.Unmarshal(data, &g.data); err != nil {
 			return nil, err
 		}

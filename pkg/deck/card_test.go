@@ -203,3 +203,24 @@ func TestCard_UnsetAllBits(t *testing.T) {
 
 	assert.Equal(t, 0, c.BitField)
 }
+
+func TestSuit_Valid(t *testing.T) {
+	for _, suit := range []Suit{Hearts, Clubs, Diamonds, Spades, Stars} {
+		assert.True(t, suit.Valid(), "%s should be valid", suit)
+	}
+
+	// A suit decoded from persisted JSON can be anything; Valid is what lets a
+	// caller ask before String panics on it.
+	for _, suit := range []Suit{"", "swords", "HEARTS"} {
+		assert.False(t, suit.Valid(), "%q should not be valid", suit)
+	}
+}
+
+// TestSuit_Valid_MatchesString pins the two in step: every suit Valid accepts must
+// be one String can render, which is the whole point of the predicate.
+func TestSuit_Valid_MatchesString(t *testing.T) {
+	for _, suit := range []Suit{Hearts, Clubs, Diamonds, Spades, Stars} {
+		card := &Card{Rank: 5, Suit: suit}
+		assert.NotPanics(t, func() { _ = card.String() }, "%s", suit)
+	}
+}

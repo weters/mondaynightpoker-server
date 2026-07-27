@@ -94,6 +94,21 @@ func (s *server) registerTools(m *mcp.Server) {
 		Name:        "list_game_types",
 		Description: "List the registered game types, each with its canonical display group.",
 	}, accessAuthenticated, s.listGameTypes)
+
+	registerTool(s, m, &mcp.Tool{
+		Name:        "get_hand_history",
+		Description: "Get a single game's log decoded into a normalized hand: every player's cards and outcome plus the ordered list of actions they took. Unlike get_game with includeLog, the shape is the same for every game type, so hands can be read and compared without knowing each game's own log format. The table uuid is the capability: a game is only returned when it belongs to that table. Available to any authenticated player (capability-URL semantics).",
+	}, accessAuthenticated, s.getHandHistory)
+
+	registerTool(s, m, &mcp.Tool{
+		Name:        "get_player_tendencies",
+		Description: "Get a player's behavioral profile within an optional date range, derived from game logs rather than the ledger: how often they voluntarily played, folded, reached a showdown and won there, plus their aggression factor and action counts, overall and per game type. This is the counterpart to get_player_stats, which reports how much they won rather than how they played. Non-admin callers may only request their own player id.",
+	}, accessSelfScoped, s.getPlayerTendencies)
+
+	registerTool(s, m, &mcp.Tool{
+		Name:        "get_player_variance",
+		Description: "Get a player's consistency profile within an optional date range: the spread of their results (mean, median, standard deviation, best and worst) per game and per night, plus their longest winning and losing streaks and any streak currently running. Use this to tell whether a player's total reflects steady results or big swings. Non-admin callers may only request their own player id.",
+	}, accessSelfScoped, s.getPlayerVariance)
 }
 
 // whoamiInput is the (empty) input for the whoami tool. It deliberately takes no player
@@ -521,32 +536,12 @@ type getGameInput struct {
 }
 
 func (s *server) getGame(ctx context.Context, _ *mcp.CallToolRequest, _ oauth.Caller, in getGameInput) (GameDTO, error) {
-	// Resolve the table first: this both rejects soft-deleted/absent tables and pins the
-	// caller to the capability they hold. A caller who was never given this uuid cannot
-	// reach the game regardless of how they guessed its (sequential) id.
-	table, err := s.activeTable(ctx, in.UUID)
-	if err != nil {
-		return GameDTO{}, errNotFound("game")
-	}
-
 	// Only fetch the (potentially large) jsonb log when the caller asked for it.
 	includeLog := in.IncludeLog != nil && *in.IncludeLog
 
-	var game *model.Game
-	if includeLog {
-		game, err = s.repos.Games.GetGameByID(ctx, in.ID)
-	} else {
-		game, err = s.repos.Games.GetGameByIDNoData(ctx, in.ID)
-	}
+	game, err := s.gameAtTable(ctx, in.UUID, in.ID, includeLog)
 	if err != nil {
-		// A missing game and a game belonging to another table are reported identically,
-		// so a caller cannot probe which part of the request was wrong (or learn that a
-		// game with this id exists at some other table).
-		return GameDTO{}, errNotFound("game")
-	}
-
-	if game.TableUUID != table.UUID {
-		return GameDTO{}, errNotFound("game")
+		return GameDTO{}, err
 	}
 
 	adjustments, err := s.repos.Games.GetGameAdjustments(ctx, []int64{game.ID})

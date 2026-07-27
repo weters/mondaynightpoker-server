@@ -164,6 +164,9 @@ var expectedPolicies = map[string]accessPolicy{
 	"list_player_transactions": accessSelfScoped,
 	"leaderboard":              accessAuthenticated,
 	"list_game_types":          accessAuthenticated,
+	"get_hand_history":         accessAuthenticated,
+	"get_player_tendencies":    accessSelfScoped,
+	"get_player_variance":      accessSelfScoped,
 }
 
 func TestRegistry_MatchesExpectedPolicies(t *testing.T) {

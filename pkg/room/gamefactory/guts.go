@@ -1,8 +1,10 @@
 package gamefactory
 
 import (
+	"encoding/json"
 	"mondaynightpoker-server/pkg/model"
 	"mondaynightpoker-server/pkg/playable"
+	"mondaynightpoker-server/pkg/playable/gamelog"
 	"mondaynightpoker-server/pkg/playable/guts"
 
 	"github.com/sirupsen/logrus"
@@ -63,4 +65,9 @@ func getGutsOptions(additionalData playable.AdditionalData) guts.Options {
 	}
 
 	return opts
+}
+
+// ParseGameLog decodes a persisted Guts log into a normalized hand.
+func (g gutsFactory) ParseGameLog(raw json.RawMessage) (*gamelog.Hand, error) {
+	return guts.ParseGameLog(raw)
 }
