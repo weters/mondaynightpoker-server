@@ -135,6 +135,57 @@ func Test_postTableUUIDClone(t *testing.T) {
 	}
 }
 
+func Test_postTableUUIDName(t *testing.T) {
+	ts := httptest.NewServer(NewMux(testDeps()))
+	defer ts.Close()
+
+	owner, jOwner := player()
+	tbl, _ := testRepos.Tables.CreateTable(context.Background(), owner, "Original")
+
+	p2, j2 := player()
+	_, _ = testRepos.Tables.Join(context.Background(), p2, tbl)
+
+	_, j3 := player()
+
+	path := fmt.Sprintf("/table/%s/name", tbl.UUID)
+
+	// non-admin at the table is rejected
+	var errObj errorResponse
+	assertPost(t, ts, path, postTablePayload{Name: "New Name"}, &errObj, 400, j2)
+	assert.Equal(t, "only a table admin can rename a table", errObj.Message)
+
+	// player not at the table is rejected
+	errObj = errorResponse{}
+	assertPost(t, ts, path, postTablePayload{Name: "New Name"}, &errObj, 400, j3)
+	assert.Equal(t, "only a table admin can rename a table", errObj.Message)
+
+	// invalid names
+	errObj = errorResponse{}
+	assertPost(t, ts, path, postTablePayload{Name: "no"}, &errObj, 400, jOwner)
+	assert.Equal(t, "name must be 3-40 characters", errObj.Message)
+
+	errObj = errorResponse{}
+	assertPost(t, ts, path, postTablePayload{Name: strings.Repeat("A", 41)}, &errObj, 400, jOwner)
+	assert.Equal(t, "name must be 3-40 characters", errObj.Message)
+
+	// table admin can rename
+	var renamed *model.Table
+	assertPost(t, ts, path, postTablePayload{Name: "New Name"}, &renamed, 200, jOwner)
+	assert.Equal(t, "New Name", renamed.Name)
+	assert.Equal(t, tbl.UUID, renamed.UUID)
+
+	saved, err := testRepos.Tables.GetTableByUUID(context.Background(), tbl.UUID)
+	assert.NoError(t, err)
+	assert.Equal(t, "New Name", saved.Name)
+
+	// site admin can rename even if not at the table
+	siteAdmin, jAdmin := player()
+	_ = testRepos.Players.SetIsSiteAdmin(context.Background(), siteAdmin, true)
+	renamed = nil
+	assertPost(t, ts, path, postTablePayload{Name: "Admin Name"}, &renamed, 200, jAdmin)
+	assert.Equal(t, "Admin Name", renamed.Name)
+}
+
 func Test_getTableUUID(t *testing.T) {
 	ts := httptest.NewServer(NewMux(testDeps()))
 	defer ts.Close()

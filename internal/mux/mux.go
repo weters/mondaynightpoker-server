@@ -135,6 +135,7 @@ func NewMux(deps Deps) *Mux {
 		tr.Methods(http.MethodGet).Path("/ws").Handler(this.getTableUUIDWS())
 		tr.Methods(http.MethodPost).Path("/seat").Handler(this.postTableUUIDSeat())
 		tr.Methods(http.MethodPost).Path("/clone").Handler(this.postTableUUIDClone())
+		tr.Methods(http.MethodPost).Path("/name").Handler(this.postTableUUIDName())
 	}
 
 	// requires admin access

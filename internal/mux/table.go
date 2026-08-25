@@ -33,15 +33,21 @@ type postTablePayload struct {
 	Name string `json:"name"`
 }
 
+var tableNameWordChar = regexp.MustCompile(`\w`)
+
+// validTableName reports whether name is an acceptable table name
+func validTableName(name string) bool {
+	return tableNameWordChar.MatchString(name) && len(name) >= 3 && len(name) <= 40
+}
+
 func (m *Mux) postTable() http.HandlerFunc {
-	var wordChar = regexp.MustCompile(`\w`)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var pp postTablePayload
 		if !decodeRequest(w, r, &pp) {
 			return
 		}
 
-		if !wordChar.MatchString(pp.Name) || len(pp.Name) < 3 || len(pp.Name) > 40 {
+		if !validTableName(pp.Name) {
 			writeJSONError(w, http.StatusBadRequest, errors.New("name must be 3-40 characters"))
 			return
 		}
@@ -104,14 +110,13 @@ func (m *Mux) postTableUUIDSeat() http.Handler {
 }
 
 func (m *Mux) postTableUUIDClone() http.Handler {
-	var wordChar = regexp.MustCompile(`\w`)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var pp postTablePayload
 		if !decodeRequest(w, r, &pp) {
 			return
 		}
 
-		if !wordChar.MatchString(pp.Name) || len(pp.Name) < 3 || len(pp.Name) > 40 {
+		if !validTableName(pp.Name) {
 			writeJSONError(w, http.StatusBadRequest, errors.New("name must be 3-40 characters"))
 			return
 		}
@@ -119,17 +124,15 @@ func (m *Mux) postTableUUIDClone() http.Handler {
 		player := r.Context().Value(ctxPlayerKey).(*model.Player)
 		tbl := r.Context().Value(ctxTableKey).(*model.Table)
 
-		if !player.IsSiteAdmin {
-			pt, err := m.repos.Tables.GetPlayerTable(r.Context(), player, tbl)
-			if err != nil && !errors.Is(err, model.ErrPlayerNotAtTable) {
-				writeJSONError(w, http.StatusInternalServerError, err)
-				return
-			}
+		isAdmin, err := m.isTableAdmin(r.Context(), player, tbl)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
 
-			if pt == nil || !pt.IsTableAdmin {
-				writeJSONError(w, http.StatusBadRequest, model.UserError("only a table admin can clone a table"))
-				return
-			}
+		if !isAdmin {
+			writeJSONError(w, http.StatusBadRequest, model.UserError("only a table admin can clone a table"))
+			return
 		}
 
 		newTable, err := m.repos.Tables.CloneTable(r.Context(), player, tbl, pp.Name)
@@ -145,6 +148,64 @@ func (m *Mux) postTableUUIDClone() http.Handler {
 
 		writeJSON(w, http.StatusCreated, newTable)
 	})
+}
+
+func (m *Mux) postTableUUIDName() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var pp postTablePayload
+		if !decodeRequest(w, r, &pp) {
+			return
+		}
+
+		if !validTableName(pp.Name) {
+			writeJSONError(w, http.StatusBadRequest, errors.New("name must be 3-40 characters"))
+			return
+		}
+
+		player := r.Context().Value(ctxPlayerKey).(*model.Player)
+		tbl := r.Context().Value(ctxTableKey).(*model.Table)
+
+		isAdmin, err := m.isTableAdmin(r.Context(), player, tbl)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		if !isAdmin {
+			writeJSONError(w, http.StatusBadRequest, model.UserError("only a table admin can rename a table"))
+			return
+		}
+
+		tbl.Name = pp.Name
+		if err := m.repos.Tables.Save(r.Context(), tbl); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		// re-fetch so the response carries the updated modified timestamp
+		saved, err := m.repos.Tables.GetTableByUUID(r.Context(), tbl.UUID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, saved)
+	})
+}
+
+// isTableAdmin reports whether the player may perform table-admin actions on
+// the table. Site admins always may, even if they are not seated.
+func (m *Mux) isTableAdmin(ctx context.Context, player *model.Player, tbl *model.Table) (bool, error) {
+	if player.IsSiteAdmin {
+		return true, nil
+	}
+
+	pt, err := m.repos.Tables.GetPlayerTable(ctx, player, tbl)
+	if err != nil && !errors.Is(err, model.ErrPlayerNotAtTable) {
+		return false, err
+	}
+
+	return pt != nil && pt.IsTableAdmin, nil
 }
 
 func (m *Mux) tableMiddleware(next http.Handler) http.Handler {
